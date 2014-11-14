@@ -1,0 +1,133 @@
+[[http://blog.higher-order.com/blog/2010/10/14/scalaz-tutorial-enumeration-based-io-with-iteratees/][Scalaz Tutorial: Enumeration-based I/O With Iteratees]]
+
+
+* Motivation
+Problem with side-effects approach is that it is not modular. As we
+know, side-effects do not compose.
+
+Treating the stream of input as an enumeration is therefore desirable.
+It at least holds the lure of modularity, since we would be able to
+treat a File, from which we're reading values, in the same way that we
+would treat an ordinary List of values, for example.
+
+A naive approach to this is to use iterators, or rather, ~Iterable~.
+This is akin to the way that you would typically read a file in
+something like Ruby or Python. Basically you treat is as a collection
+of Strings:
+
+#+BEGIN_SRC scala
+  def getContents(fileName: String): Iterable[String] = {
+    val fr = new BufferedReader(new FileReader(fileName))
+
+    new Iterable[String] {
+      def iterator = new Iterator[String] {
+        def hasNest = line != null
+        def next = {
+          val retVal = line
+          line = getLine
+          retVal
+        }
+        def getLine = {
+          var line: String = null
+          try {
+            line = fr.readLine
+          } catch {
+            case _ => line = null
+          }
+          line
+        }
+        var line = getLine
+      }
+    }
+  }
+#+END_SRC
+
+What this is doing is a king of lazy I/O. Nothing is read from the
+file until it is requested, and we only hold one line in memory at a
+time. But there are some serious issues with this approach. It's not
+clear when you should close the file handle, or whose responsibility
+that is. You could have the Iterator close the file when it has read
+the last line, but what if you only want to read part of the file?
+Clearly this approach is not sufficient. There some things we can do
+to make this more sophisticated, but only at the expense of breaking
+the illusion that the file really is a collection of Strings.
+
+
+* The Idea
+Any red-blooded functional programmer should be thinking right about
+now: "Instead of getting Strings out of the file, just pass in a
+function that will serve as a handler for each new line!" Bingo. This
+is in the plot with Iteratees. *Instead of implementing an interface
+from which we request Strings by pulling* (ie: in ~Iterable[String]~
+we request next String by pulling using ~next~), we're going to *give
+an implementation of an interface that can receive Strings by
+pushing*.
+
+And indeed, this idea is nothing new. This is exactly what we do when
+we fold a list.
+
+#+BEGIN_SRC scala
+  def foldLeft[B](b: B)(f: (B, A) => B): B
+#+END_SRC
+
+The second argument is exactly that, a handler for each element in the
+list, along with a means of combining it with the accumulated value so
+far.
+
+Now, there are *two issues with an ordinary fold* that prevent it from
+being useful when enumerating file contents. Firstly, there is no way
+of *indicating that the fold should stop early*. Secondly, a *list is
+held all in memory at the same time*.
+
+/Note/ General idea behind is that you invert the control. Now the one
+in charge to manage the collection is not client but you leave the
+management to an extra structure. Thanks to that extra structure the
+client cannot have unexpected control, eg: reading a closing file
+buffer, because the extra structure avoid it. But the extra structure
+have to offer handler that lets the client using the elements of the
+collection but the control of the handler is leaved to the extra
+structure.
+
+* The Iteratee Solution
+Sclalaz defines the following two data structures
+
+#+BEGIN_SRC scala
+  trait Input[+E]
+  case class El[E](e: E) extends Input[E]
+  case object Empty extends Input[Nothing]
+  case object EOF extends Input[Nothing]
+
+  trait IterV[E,A] {
+    def run: A = ??? // Implementation omitted
+  }
+
+  case class Done[E,A](a: A, e: Input[E]) extends IterV[E,A]
+  case class Cont[E,A](k: Input[E] => IterV[E,A]) extends IterV[E,A]
+#+END_SRC
+
+So an input to an iteratee is represented by ~Input[E]~, where ~E~ is
+the element of the input source. It can be either an element (*the
+next element in the file or stream* ) or it's one of two signals:
+~Empty~ or ~EOF~. The ~Empty~ signal tells the iteratee that there is
+not an element available, but to expect more element later. The ~EOF~
+signal tells the iteratee that there are no more elements to be had.
+
+~IterV[E,A]~ represents a computation that can be in one of two
+states. It can ~Done~, in which case it will hold a result (the
+accumulated value) of type A. Or it can be wainting for more input of
+type ~E~, in which case it will hold a continuation that accepts the
+next input.
+
+Let's see how we would use this to process a ~List~. The following
+function takes a list and an iteratee and feeds the list's elements to
+the iteratee.
+
+#+BEGIN_SRC scala
+  def enumerate[E,A]: (List[E], IterV[E,A]) => IterV[E,A] = {
+    case (Nil, i) => i
+    case (_, i@Done(_, _)) => i
+    case (x :: xs, Cont(k)) => enumerate(xs, k(El(x)))
+  }
+#+END_SRC
+
+Now let's see some actual iteratee
