@@ -1,6 +1,6 @@
 #+TITLE: Scalaz Tutorial: Enumeration-based I/O With Iteratees
 #+AUTHOR: Rúnar Bjarnason
-#+SEE: http://blog.higher-order.com/blog/2010/10/14/scalaz-tutorial-enumeration-based-io-with-iteratees/
+#+Date: 2014-11-17
 
 [[http://blog.higher-order.com/blog/2010/10/14/scalaz-tutorial-enumeration-based-io-with-iteratees/][Scalaz Tutorial: Enumeration-based I/O With Iteratees]]
 
@@ -195,4 +195,163 @@ first and then gets the value.
 
 * Composing Iteratees
 Notice a couple of things here. With iteratees, the input source can
-send the signal that it has finished producing values.
+send the signal that it has finished producing values. And on the
+other side, the iteratee itself can signal to the input source that it
+has finished consuming values. So on one hand, we can leave an
+iteratee "running" by not sending it the ~EOF~ signal, so we can
+compose two input sources and feed them into the same iteratee. On the
+other hand, an iteratee can signal that it's done, at which point we
+can start sending any remaining elements to another iteratee. In other
+words, iteratees compose sequentially.
+
+In fact, ~IterV[E,A]~ is an instance of the Monad type class for each
+fixed ~E~, and composition is very similar to the way monadic parsers
+compose:
+
+#+BEGIN_SRC scala
+  def flatMap[B](f: A => IterV[E,B]) = this match {
+    case Done(x, e) => f(x) match {
+      case Done(y, _) => Done(y, e)
+      case Cont(k) => k(e)
+    }
+    case Cont(k) => Cont(e => k(e) flatMap f)
+  }
+#+END_SRC
+
+Here then is an example of composing iteratees with a
+for-comprehension:
+
+#+BEGIN_SRC scala
+  def drop1Keep1[E]: IterV[E, Option[E]] = for {
+    _ <- drop(1)
+    x <- head
+  } yield x
+#+END_SRC
+
+The iteratee above discard the first element it sees and returns the
+second one. The iteratee below does this ~n~ time, accumulating the
+kept elements into a list.
+
+#+BEGIN_SRC scala
+  def alternates[E](n: Int): IterV[E, List[E]] =
+    drop1Keep1[E].
+      replicate[List](n).
+      foldRight(Done(List[Option[E]](),Empty))((x,y) => for {
+        h <- x
+        t <- y
+      } yield h :: t).map(_.flatten)
+#+END_SRC
+
+Here's an example run:
+
+#+BEGIN_EXAMPLE
+scala> enumerate(List.range(1,15), alternates[Int](5)).run
+res85: List[Int] = List(2, 4, 6, 8, 10)
+#+END_EXAMPLE
+
+
+* File Input With Iteratees
+Using the iteratees to read from file input turns out to be incredibly
+easy. The only difference is in how the data source is enumerated, and
+in order to remain lazy (and not prematurely perform any
+side-effects), we must return out iteratee in a monad:
+
+#+BEGIN_SRC scala
+  def enumReader[A](r: BufferedReader,
+                    it: IterV[String, A]): IO[IterV[String, A]] = {
+    def loop: IterV[String, A] => IO[IterV[String, A]] = {
+      case i@Done(_,_) => IO { i }
+      case i@Cont(k) => for {
+        s <- IO { r.readline }
+        a <- if (s == null) IO { i } else loop(k(El(s)))
+      } yield a
+    }
+    loop(it)
+  }
+#+END_SRC
+
+The important thing to note is that the iteratee is completely obvious
+to the fact that it's being fed lines from a ~BufferedReader~ rather
+than a ~List~.
+
+Here is the ~IO~ monad using. As you can see, it's really just a lazy
+identity monad:
+
+#+BEGIN_SRC scala
+  object io {
+    sealed trait IO[A] { def unsafePerformIO: A }
+
+    object IO {
+      def apply[A](a: => A): IO[A] = new IO[A] {
+        def unsafePerformIO = a
+      }
+    }
+
+    implicit val IOMonad = new Monad[IO] {
+      def pure[A](a: => A): IO[A] = IO(a)
+      def bind[A,B](a: IO[A], f: A => IO[B]): IO[B] = IO {
+        implicitly[Monad[Function0]].bind(
+          () => a.unsafePerformIO,
+          (x:A) => () => f(x).unsafePerformIO)()
+      }
+    }
+  }
+#+END_SRC
+
+To read lines from a file, we'll do something like this:
+
+#+BEGIN_SRC scala
+  def bufferFile(f: File) = IO {
+    new BufferedReader(new FileReader(f))
+  }
+
+  def closeReader(r: Reader) = IO {
+    r.close
+  }
+
+  def bracket[A,B,C](init: IO[A],
+                     fin: A => IO[B],
+                     body: A => IO[C]): IO[C] =
+    for { a <- init
+          c <- body(a)
+          _ <- fin(a) }
+      yield c
+
+  def enumFile[A](f: File, i: IterV[String, A]): IO[IterV[String,A]] =
+    bracket(bufferFile(f),
+            closeReader(_:BufferedReader),
+            enumReader(_:BufferedReader, i))
+#+END_SRC
+
+The ~enumFile~ method uses bracketing to ensure that the file always
+gets closed. It's completely lazy though, so nothing actually happens
+until you call ~unsafePerformIO~ on the resulting ~IO~ action:
+
+#+BEGIN_EXAMPLE
+scala> enumFile(new File("/Users/runar/Documents/Iteratees.txt"), head) map (_.run)
+res2: io.IO[Option[String]] = io$IO@5f90b584
+
+scala> res2.unsafePerformIO
+res3: Option[String] = Some(Scalaz Tutorial: Enumeration-Based I/O
+#+END_EXAMPLE
+
+That uses the "head" iteratee from above to get the first line of the
+file that I'm using to edit this blog post.
+
+We can get the number of lines in two files combined, by composing two
+enumerations and using our "counter" iteratee from above:
+
+#+BEGIN_SRC scala
+  def lengthOfTwoFile(f1: File, f2: File): IO[Int] = for {
+    l1 <- enumFile(f1, counter)
+    l2 <- enumFile(f2, l1)
+  } yield l2.run
+#+END_SRC
+
+So what we have here is a uniform and compositional interface for
+enumerating both pure and effectful data sources. We can avoid holding
+on to the entire input in memory when we don't want to, and we have
+complete control over when to stop iterating. The iteratee can decide
+whether to consume elements, leave them intact, or even truncate the
+input. The enumerator can decide whether to shut the iteratee down by
+sending it the EOF signal, or to leave it open for other enumerators.
