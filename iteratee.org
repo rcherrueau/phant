@@ -62,8 +62,8 @@ now: "Instead of getting Strings out of the file, just pass in a
 function that will serve as a handler for each new line!" Bingo. This
 is in the plot with Iteratees. *Instead of implementing an interface
 from which we request Strings by pulling* (ie: in ~Iterable[String]~
-we request next String by pulling using ~next~), we're going to *give
-an implementation of an interface that can receive Strings by
+we request next String by pulling using ~next~), we're going to give
+an implementation of an interface that can *receive Strings by
 pushing*.
 
 And indeed, this idea is nothing new. This is exactly what we do when
