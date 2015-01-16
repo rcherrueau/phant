@@ -1,18 +1,5 @@
 package phant
 
-object PR {
-  type PR[P[X],R] = Nothing
-
-  def protect[P[_],R](r: R)(f: R => P[R]): PR[P,R] = ???
-  def unit[R](r: R): PR[Raw, R] = ???
-  def map[P1[_],R1,P2[_],R2](pr: PR[P1,R1])(
-                             f: P1[R1] => P2[R2]): PR[P2,R2] = ???
-  def run[P[_],R](pr: PR[P,R]): R = ???
-}
-
-case class Sym[A](get: A)
-case class Raw[A](get: A)
-
 object PhantPRTest extends App {
   import spire.algebra._
   import spire.implicits._
@@ -70,6 +57,8 @@ object PhantPRTest extends App {
   }
 
   // Fragmentation, Two can keep a secret + Symmetric encryption:
+  case class Sym[A](data: A)
+
   object Scenar2 {
     val split1: List[(Int, String)] =
       db.zipWithIndex.map { case ((d,_,_), v) => (v+1, d) }
@@ -107,7 +96,7 @@ object PhantPRTest extends App {
     new Order[HesOrder[F]] {
       override def compare(x: HesOrder[F], y: HesOrder[F]) =
         implicitly[Order[F]].compare(x.data, y.data)
-    }
+  }
 
   object HomomorphicOrder {
     val split1: List[(Int, String)] =
