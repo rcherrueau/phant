@@ -12,8 +12,6 @@ object PR {
 
 case class Sym[A](get: A)
 case class Raw[A](get: A)
-case class Split[A](value: List[A],
-                    spliter: List[A])
 
 object PhantPRTest extends App {
   import spire.algebra._
@@ -46,7 +44,6 @@ object PhantPRTest extends App {
     val split2: List[(Int, String, String)] =
       db.zipWithIndex.map { case ((_,n,a), v) => (v+1, n, a) }
 
-    // FIXME: Use Hes insteand of Sym
     val frag1: List[(Int, String)] = split1
     val frag2: List[(Int, Sym[String], String)] =
       split2 map { case (v,n,a) => (v, Sym(n), a) }
@@ -180,10 +177,14 @@ object PhantPRTest extends App {
 
       // SComposite, split the compute in two parts. First, gets
       // meetings.
-      val meetings = selectMeetings(frag2)
+      val meetings: List[(HesEq[String], String)] = selectMeetings(frag2)
 
       // TODO: Then, transform Name HesEq into Name HesOrder and finish the
       // calculi.
+      val hesEq2HesOrder =
+        meetings map { case (heseqN, a) => (HesOrder(heseqN.data), a) }
+
+      mostVisited(hesEq2HesOrder)
     }
   }
 
