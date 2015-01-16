@@ -20,8 +20,8 @@ object PhantPRTest extends App {
 
   object Agenda {
     // Has an Eq constraint on name.
-    def selectMeetings[N: Eq,A](names: List[N],
-                                db: List[(Int, N, A)]): List[(N, A)] =
+    def getMeetings[N: Eq,A](names: List[N],
+                             db: List[(Int, N, A)]): List[(N, A)] =
       db filter {
         // Operation `===` comes from Eq
         case (_, n, _) => names.exists(_ === n) } map {
@@ -37,7 +37,7 @@ object PhantPRTest extends App {
         count(tl.filter(hd =!= _))
     }
 
-    // Stats operation. Has an Order constraint on name.
+    // Has an Order constraint on name.
     def mostVisited[N: Order](db: List[(N, _)]): List[(N, Int)] = {
       // Operations `<` comes from Order
       count(db.map(_._1)) sortWith (_ < _)
@@ -84,7 +84,7 @@ object PhantPRTest extends App {
     val mostVisitedClients = {
       val names: List[String] = List("Bob", "Chuck")
 
-      Stats.mostVisited(Agenda.selectMeetings(names, frag2))
+      Stats.mostVisited(Agenda.getMeetings(names, frag2))
     }
   }
 
@@ -113,7 +113,7 @@ object PhantPRTest extends App {
       val names: List[HesOrder[String]] =
         List(HesOrder("Bob"), HesOrder("Chuck"))
 
-      Stats.mostVisited(Agenda.selectMeetings(names, frag2))
+      Stats.mostVisited(Agenda.getMeetings(names, frag2))
     }
   }
 
@@ -143,10 +143,9 @@ object PhantPRTest extends App {
       val names: List[HesEq[String]] =
         List(HesEq("Bob"), HesEq("Chuck"))
 
-      // SComposite, split the compute in two parts. First, gets
-      // meetings.
+      // Split the computation in two parts. First, gets meetings
       val meetings: List[(HesEq[String], String)] =
-        Agenda.selectMeetings(names, frag2)
+        Agenda.getMeetings(names, frag2)
 
       /// Then, transform Name HesEq into Name HesOrder
       val hesEq2HesOrder =
