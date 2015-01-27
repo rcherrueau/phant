@@ -1,12 +1,7 @@
 package phant
 package resources
+
 object db {
-
-  trait TypedFunction2[-T1, -T2, +R,
-                       F[_ <: T1, _ <: T2] <: R] {
-    def apply[P1 <: T1, P2 <: T2](p1: P1, p2: P2): F[P1, P2]
-  }
-
   import nat._
 
   sealed abstract class DB {
@@ -19,8 +14,7 @@ object db {
     def tail: Tail
 
     type Fold[U, F[_, _ <: U] <: U, Z <: U] <: U
-    def fold[U, F[_, _ <: U] <: U, Z <: U]
-      (f: TypedFunction2[Any, U, U, F], z: Z): Fold[U, F, Z]
+    def fold[U](f: (Any, U) => U, z: => U): U // f is Function2
 
     type Take[N <: Nat] <: DB
     def take[N <: Nat](n: N): Take[N] = DB._unsafe[Take[N]](this match {
@@ -39,16 +33,8 @@ object db {
     type Split[N <: Nat] = (Take[N], Drop[N])
     def split[N <: Nat](n: N): Split[N] = (take(n), drop(n))
 
-//    type Length = Fold[Nat, ({ type λ[_, N <: Nat] = N # ++ })#λ, Zero]
-    def length =
-      fold[Nat, ({ type λ[_, N <: Nat] = N # ++ })#λ, Zero](
-        new TypedFunction2[Any, Nat, Nat,
-                           ({ type λ[_, N <: Nat] = N # ++ })#λ] {
-          def apply[P1 <: Any, P2 <: Nat](p1: P1, p2: P2) = {
-            println("here " + p2.value)
-            p2 ++
-          }
-        }, Zero)
+    type Length = Fold[Nat, ({ type λ[_, N <: Nat] = N # ++ })#λ, Zero]
+    def length: Length = Nat._unsafe[Length](fold((_, n: Int) => n + 1, 0))
 
     def takeV(n: Int): This = DB._unsafe[This](this match {
       case |:(h, t) => |:(h.take(n), t.takeV(n))
@@ -81,10 +67,8 @@ object db {
                                               This,
                                               Tail # Drop[N # --]]
 
-    override type Fold[U, F[_, _ <: U] <: U, Z <: U] = F[Seq[Head], Tail#Fold[U, F, Z]]
-    override def fold[U, F[_, _ <: U] <: U, Z <: U]
-      (f: TypedFunction2[Any, U, U, F], z: Z): Fold[U, F, Z] =
-        f.apply[Seq[Head], T#Fold[U, F, Z]](head, tail.fold[U, F, Z](f, z))
+    override type Fold[U, F[_, _ <: U] <: U, Z <: U] = F[Head, T#Fold[U, F, Z]]
+    override def fold[U](f: (Any, U) => U, z: => U) = f(head, tail.fold[U](f, z))
   }
 
   final object EOCol extends DB {
@@ -98,9 +82,8 @@ object db {
     override type Take[N <: Nat] = EOCol
     override type Drop[N <: Nat] = EOCol
 
+    override def fold[U](f: (Any, U) => U, z: => U) = z
     override type Fold[U, F[_, _ <: U] <: U, Z <: U] = Z
-    override def fold[U, F[_, _ <: U] <: U, Z <: U]
-      (f: TypedFunction2[Any, U, U, F], z: Z) = z
   }
   type EOCol = EOCol.type
 
