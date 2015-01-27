@@ -5,6 +5,7 @@ object nat {
       type This >: this.type <: Nat
       type Fold[U, F[_ <: U] <: U, Z <: U] <: U
       type ++ = Succ[This]
+      type -- <: Nat
 
       // Combining Term- and Type-Level
       def value: Int
@@ -18,17 +19,16 @@ object nat {
         // the correct Nat.
         Nat._unsafe[+[X]](value + n.value)
 
-      def ++ : ++ = Succ(this.value)
+      def ++ : ++ = Succ[This](this.value + 1)
 
-      // -- For HList # Span
-      def --  = if (this.value == 0) throw new NoSuchElementException("_0 --")
-                else if (this.value == 1) Zero
-                else Succ(value - 1)
+      def -- : -- =
+        if (this.value == 0) throw new NoSuchElementException("_0 --")
+        else if (this.value == 1) Zero.asInstanceOf[--]
+        else Succ(value - 1).asInstanceOf[--]
 
       type GT_0[R, T <: R, F <: R] <: R
       type LTEq_0[R, T <: R, F <: R] <: R
 
-      type -- <: Nat
     }
     object Nat {
       def _unsafe[N <: Nat](v: Int) =

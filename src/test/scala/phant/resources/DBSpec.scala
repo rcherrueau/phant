@@ -33,6 +33,8 @@ class DBDpec extends FlatSpec with Matchers {
   }
 
   "A DB" should "drop columns left to rigth" in {
+    // BUG: Type inference is not available here due to scala 2.11
+    // bug. See, https://issues.scala-lang.org/browse/SI-8252
     val col3: String |: Option[String] |: Int |: EOCol = db.drop(_0)
     val col2: Option[String] |: Int |: EOCol = db.drop(_1)
     val col1: Int |: EOCol = db.drop(_2)
@@ -46,7 +48,7 @@ class DBDpec extends FlatSpec with Matchers {
 
   "A DB" should "be split correctly" in {
     val sp1: (EOCol, String |: Option[String] |: Int |: EOCol) = db.split(_0)
-    val sp2: (String |: EOCol, Option[String] |: Int |: EOCol) = db.split(_1)
+    val sp2 = db.split(_1)
     val sp3: (String |: Option[String] |: EOCol, Int |: EOCol) = db.split(_2)
     val sp4: (String |: Option[String] |: Int |: EOCol, EOCol) = db.split(_3)
   }
