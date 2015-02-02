@@ -2,8 +2,6 @@ package phant
 package resources
 
 object db {
-  import nat._
-
   sealed abstract class DB {
     type This >: this.type <: DB
 

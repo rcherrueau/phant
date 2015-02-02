@@ -29,7 +29,7 @@ scalacOptions += "-Xlog-implicits"
 libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value
 
 // Not available for scala 2.12.0-nigthly
-// libraryDependencies +=  "com.chuusai" %% "shapeless" % "2.0.0"
+libraryDependencies +=  "com.chuusai" %% "shapeless" % "2.0.0"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test"
 

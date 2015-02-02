@@ -3,74 +3,67 @@ package resources
 package ops
 
 object db {
-  //  import nat._
+  import shapeless._
+
   import resources.db.DB
   import resources.db.|:
   import resources.db.EOCol
-
-  trait Nat
-  case class Zero() extends Nat
-  case class Succ[N <: Nat](x: N) extends Nat
 
   /** Type class selects first `n` columns. */
   trait Taker[N <: Nat, Db <: DB] {
     type Out <: DB
 
-    def take(n: N, db: Db): Out
+    def take(db: Db): Out
   }
 
   object Taker {
-    def apply[N <: Nat, Db <: DB](n: N, db: Db)(implicit
-                                               taker: Taker[N,Db]):
-        taker.Out = taker.take(n, db)
+    def apply[N <: Nat, Db <: DB](db: Db)(implicit
+                                          taker: Taker[N,Db]):
+        taker.Out = taker.take(db)
 
-    implicit def ZeroTake[Db <: DB] = new Taker[Zero, Db] {
+    implicit def ZeroTake[Db <: DB] = new Taker[_0, Db] {
       type Out = EOCol
-      def take(n: Zero, db: Db) = EOCol
+      def take(db: Db) = EOCol
     }
 
     implicit def SuccTaker[N <: Nat, Db <: DB](implicit
                                                taker: Taker[N, Db#Tail]) =
       new Taker[Succ[N], Db] {
         type Out = |:[Db#Head, taker.Out]
-        def take(n: Succ[N], db: Db) = n match {
-          case Succ(i) => |:(db.head, taker.take(i, db.tail))
-        }
+        def take(db: Db) = |:(db.head, taker.take(db.tail))
       }
   }
 
   /** Type class selects all coliumns except first `n` ones. */
   trait Dpper[N <: Nat, Db <: DB] {
     type Out <: DB
-    def drop(n: N, db: Db): Out
+    def drop(db: Db): Out
   }
 
   object Dpper {
-    def apply[N <: Nat, Db <: DB](n: N, db: Db)(implicit
-                                                dpper: Dpper[N,Db]) =
-      dpper.drop(n, db)
+    def apply[N <: Nat, Db <: DB](db: Db)(implicit
+                                          dpper: Dpper[N,Db]) =
+      dpper.drop(db)
 
-    implicit def ZeroDpper[Db <: DB] = new Dpper[Zero, Db] {
+    implicit def ZeroDpper[Db <: DB] = new Dpper[_0, Db] {
       type Out = Db
-      def drop(n: Zero, db: Db) = db
+      def drop(db: Db) = db
     }
 
     implicit def SuccDpper[N <: Nat, Db <: DB](implicit
                                                dpper: Dpper[N, Db#Tail]) =
       new Dpper[Succ[N], Db] {
         type Out = dpper.Out
-        def drop(n: Succ[N], db: Db) = n match {
-          case Succ(i) => dpper.drop(i, db.tail)
-        }
+        def drop(db: Db) = dpper.drop(db.tail)
     }
   }
 
   /** Type class splits at `n` column. */
   object Splitter {
-    def apply[N <: Nat, Db <: DB](n: N, db: Db)(implicit
-                                                taker: Taker[N,Db],
-                                                dpper: Dpper[N,Db]) =
-      (Taker(n, db), Dpper(n, db))
+    def apply[N <: Nat, Db <: DB](db: Db)(implicit
+                                          taker: Taker[N,Db],
+                                          dpper: Dpper[N,Db]) =
+      (Taker(db), Dpper(db))
   }
 
   /** Type class selects first `n` lines. */

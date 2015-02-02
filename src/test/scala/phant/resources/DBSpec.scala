@@ -2,7 +2,6 @@ package phant
 package resources
 
 import db._
-import nat._
 
 import org.scalatest._
 

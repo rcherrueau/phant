@@ -2,12 +2,15 @@ package phant
 package resources
 package ops
 
+import shapeless._
 import resources.db._
 import db._
 
 import org.scalatest._
 
 class DBDpec extends FlatSpec with Matchers {
+  import Nat._
+
   val db: String |: Option[String] |: Int |: EOCol = DB(
     ("2014-01-01", Some("Bob"),   1),
     ("2014-01-02", Some("Chuck"), 2),
@@ -22,52 +25,51 @@ class DBDpec extends FlatSpec with Matchers {
     ("2014-01-10", Some("Chuck"), 7))
 
   "A DB" should "take columns left to rigth" in {
-    Taker(Zero(), db)
-    Taker(Succ(Zero()), db)
-    Taker(Succ(Succ(Zero())), db)
-    Taker(Succ(Succ(Succ(Zero()))), db)
+    Taker[_0, db.This](db)
+    Taker[_1, db.This](db)
+    Taker[_2, db.This](db)
+    Taker[_3, db.This](db)
 
-    val $t0: EOCol = Taker(Zero(), db)
-    val $t1: String |: EOCol = Taker(Succ(Zero()), db)
-    val $t2: String |: Option[String] |: EOCol = Taker(Succ(Succ(Zero())), db)
-    val $t3: String |: Option[String] |: Int |: EOCol =
-      Taker(Succ(Succ(Succ(Zero()))), db)
+    val $t0: EOCol = Taker[_0, db.This](db)
+    val $t1: String |: EOCol = Taker[_1, db.This](db)
+    val $t2: String |: Option[String] |: EOCol = Taker[_2, db.This](db)
+    val $t3: String |: Option[String] |: Int |: EOCol = Taker[_3, db.This](db)
     // FIXME:
     // val $t4: String |: Option[String] |: Int |: Nothing |: EOCol =
-    //   Taker(Succ(Succ(Succ(Succ(Zero())))), db)
+    //   Taker[_4, db.This](db)
   }
 
   "A DB" should "drop columns left to rigth" in {
-    Dpper(Zero(), db)
-    Dpper(Succ(Zero()), db)
-    Dpper(Succ(Succ(Zero())), db)
-    Dpper(Succ(Succ(Succ(Zero()))), db)
+    Dpper[_0, db.This](db)
+    Dpper[_1, db.This](db)
+    Dpper[_2, db.This](db)
+    Dpper[_3, db.This](db)
 
-    val $d0: String |: Option[String] |: Int |: EOCol = Dpper(Zero(), db)
-    val $d1: Option[String] |: Int |: EOCol = Dpper(Succ(Zero()), db)
-    val $d2: Int |: EOCol = Dpper(Succ(Succ(Zero())), db)
-    val $d3: EOCol = Dpper(Succ(Succ(Succ(Zero()))), db)
+    val $d0: String |: Option[String] |: Int |: EOCol = Dpper[_0, db.This](db)
+    val $d1: Option[String] |: Int |: EOCol = Dpper[_1, db.This](db)
+    val $d2: Int |: EOCol = Dpper[_2, db.This](db)
+    val $d3: EOCol = Dpper[_3, db.This](db)
     // FIXME:
-    // val $d4: EOCol = Dpper(Succ(Succ(Succ(Succ(Zero())))), db)
+    // val $d4: EOCol = Dpper[_4, db.This](db)
   }
 
   "A DB" should "be split correctly" in {
-    Splitter(Zero(), db)
-    Splitter(Succ(Zero()), db)
-    Splitter(Succ(Succ(Zero())), db)
-    Splitter(Succ(Succ(Succ(Zero()))), db)
+    Splitter[_0, db.This](db)
+    Splitter[_1, db.This](db)
+    Splitter[_2, db.This](db)
+    Splitter[_3, db.This](db)
 
     val $s0: (EOCol, String |: Option[String] |: Int |: EOCol) =
-      Splitter(Zero(), db)
+      Splitter[_0, db.This](db)
     val $s1: (String |: EOCol, Option[String] |: Int |: EOCol) =
-      Splitter(Succ(Zero()), db)
+      Splitter[_1, db.This](db)
     val $s2: (String |: Option[String] |: EOCol, Int |: EOCol) =
-      Splitter(Succ(Succ(Zero())), db)
+      Splitter[_2, db.This](db)
     val $s3: (String |: Option[String] |: Int |: EOCol, EOCol) =
-      Splitter(Succ(Succ(Succ(Zero()))), db)
+      Splitter[_3, db.This](db)
     // FIXME:
     // val $s4: (String |: Option[String] |: Int |: Nothing |:EOCol, EOCol) =
-    //   Splitter(Succ(Succ(Succ(Succ(Zero())))), db)
+    //   Splitter[_4, db.This](db)
   }
 
   "A DB" should "be take vertically from top to bottom" in {
