@@ -5,6 +5,11 @@ version := "0.1"
 // // For standard scala
 scalaVersion := "2.11.5"
 
+// Shows expansion of implicits:
+scalacOptions += "-Xlog-implicits"
+
+// scalacOptions += "-feature"
+
 // // For typelevel fork of scala
 // scalaVersion := "2.11.2-typelevel"
 //
@@ -20,8 +25,6 @@ scalaVersion := "2.11.5"
 // $ # check the presence of 2.12.0-nightly in ~/.m2/repository/org/scala-*
 // Then, in sbt with resolvers += Resolver.mavenLocal
 // scalaVersion := "2.12.0-nightly"
-
-scalacOptions in ThisBuild += "-Xlog-implicits"
 
 libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value
 
