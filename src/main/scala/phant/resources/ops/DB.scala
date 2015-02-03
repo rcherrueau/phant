@@ -31,24 +31,24 @@ object db {
   }
 
   /** Type class selects all coliumns except first `n` ones. */
-  trait Dpper[N <: Nat, Db <: DB] {
+  trait Dropper[N <: Nat, Db <: DB] {
     type Out <: DB
     def drop(db: Db): Out
   }
 
-  object Dpper {
+  object Dropper {
     def apply[N <: Nat, Db <: DB](db: Db)(implicit
-                                          dpper: Dpper[N,Db]) =
+                                          dpper: Dropper[N,Db]) =
       dpper.drop(db)
 
-    implicit def ZeroDpper[Db <: DB] = new Dpper[_0, Db] {
+    implicit def ZeroDropper[Db <: DB] = new Dropper[_0, Db] {
       type Out = Db
       def drop(db: Db) = db
     }
 
-    implicit def SuccDpper[N <: Nat, Db <: DB](implicit
-                                               dpper: Dpper[N, Db#Tail]) =
-      new Dpper[Succ[N], Db] {
+    implicit def SuccDropper[N <: Nat, Db <: DB](implicit
+                                               dpper: Dropper[N, Db#Tail]) =
+      new Dropper[Succ[N], Db] {
         type Out = dpper.Out
         def drop(db: Db) = dpper.drop(db.tail)
     }
@@ -58,8 +58,8 @@ object db {
   object Splitter {
     def apply[N <: Nat, Db <: DB](db: Db)(implicit
                                           taker: Taker[N,Db],
-                                          dpper: Dpper[N,Db]) =
-      (Taker(db), Dpper(db))
+                                          dpper: Dropper[N,Db]) =
+      (Taker(db), Dropper(db))
   }
 
   object TakerV {
@@ -70,16 +70,16 @@ object db {
       })
   }
 
-  object DpperV {
+  object DropperV {
     def apply[Db <: DB](n: Int, db: Db): Db#This = DB._unsafe[Db#This](
       db match {
-        case |:(h, t) => |:(h.drop(n), DpperV(n, t))
+        case |:(h, t) => |:(h.drop(n), DropperV(n, t))
         case _ => EOCol
       })
   }
 
   object SplitterV {
     def apply[Db <: DB](n: Int, db: Db) =
-      (TakerV(n, db), DpperV(n, db))
+      (TakerV(n, db), DropperV(n, db))
   }
 }

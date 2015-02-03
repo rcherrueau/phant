@@ -39,17 +39,18 @@ class DBDpec extends FlatSpec with Matchers {
   }
 
   "A DB" should "drop columns left to rigth" in {
-    Dpper[_0, db.This](db)
-    Dpper[_1, db.This](db)
-    Dpper[_2, db.This](db)
-    Dpper[_3, db.This](db)
+    Dropper[_0, db.This](db)
+    Dropper[_1, db.This](db)
+    Dropper[_2, db.This](db)
+    Dropper[_3, db.This](db)
 
-    val $d0: String |: Option[String] |: Int |: EOCol = Dpper[_0, db.This](db)
-    val $d1: Option[String] |: Int |: EOCol = Dpper[_1, db.This](db)
-    val $d2: Int |: EOCol = Dpper[_2, db.This](db)
-    val $d3: EOCol = Dpper[_3, db.This](db)
+    val $d0: String |: Option[String] |: Int |: EOCol =
+      Dropper[_0, db.This](db)
+    val $d1: Option[String] |: Int |: EOCol = Dropper[_1, db.This](db)
+    val $d2: Int |: EOCol = Dropper[_2, db.This](db)
+    val $d3: EOCol = Dropper[_3, db.This](db)
     // FIXME:
-    // val $d4: EOCol = Dpper[_4, db.This](db)
+    // val $d4: EOCol = Dropper[_4, db.This](db)
   }
 
   "A DB" should "be split correctly" in {
@@ -83,14 +84,14 @@ class DBDpec extends FlatSpec with Matchers {
   }
 
   "A DB" should "be drop vertically from top to bottom" in {
-    DpperV(0,              db)
-    DpperV(1,              db)
-    DpperV(db.head.length, db)
+    DropperV(0,              db)
+    DropperV(1,              db)
+    DropperV(db.head.length, db)
 
-    val $d0: String |: Option[String] |: Int |: EOCol = DpperV(0, db)
-    val $d1: String |: Option[String] |: Int |: EOCol = DpperV(1, db)
+    val $d0: String |: Option[String] |: Int |: EOCol = DropperV(0, db)
+    val $d1: String |: Option[String] |: Int |: EOCol = DropperV(1, db)
     val $dN: String |: Option[String] |: Int |: EOCol =
-      DpperV(db.head.length, db)
+      DropperV(db.head.length, db)
   }
 
   "A DB" should "be split vertically correctly" in {

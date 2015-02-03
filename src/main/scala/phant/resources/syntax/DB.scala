@@ -10,19 +10,19 @@ final class DBOps[Db <: DB](db: Db) {
 
   def take(n: Nat)(implicit taker: Taker[n.N, Db]) = Taker(db)
 
-  def drop[N <: Nat](implicit dpper: Dpper[N, Db]) = Dpper(db)
+  def drop[N <: Nat](implicit dpper: Dropper[N, Db]) = Dropper(db)
 
-  def drop(n: Nat)(implicit dpper: Dpper[n.N, Db]) = Dpper(db)
+  def drop(n: Nat)(implicit dpper: Dropper[n.N, Db]) = Dropper(db)
 
   def split[N <: Nat](implicit taker: Taker[N,Db],
-                               dpper: Dpper[N,Db]) = Splitter(db)
+                               dpper: Dropper[N,Db]) = Splitter(db)
 
   def split(n: Nat)(implicit taker: Taker[n.N,Db],
-                             dpper: Dpper[n.N,Db]) = Splitter(db)
+                             dpper: Dropper[n.N,Db]) = Splitter(db)
 
   def takeV(n: Int) = TakerV(n, db)
 
-  def dropV(n: Int) = DpperV(n, db)
+  def dropV(n: Int) = DropperV(n, db)
 
   def splitV(n: Int) = SplitterV(n, db)
 }
