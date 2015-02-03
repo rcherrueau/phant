@@ -8,7 +8,7 @@ scalaVersion := "2.11.5"
 // Shows expansion of implicits:
 scalacOptions += "-Xlog-implicits"
 
-// scalacOptions += "-feature"
+scalacOptions += "-feature"
 
 // // For typelevel fork of scala
 // scalaVersion := "2.11.2-typelevel"

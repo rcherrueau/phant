@@ -3,7 +3,6 @@ package resources
 package ops
 
 import shapeless._
-import resources.db._
 import db._
 
 import org.scalatest._
@@ -73,11 +72,38 @@ class DBDpec extends FlatSpec with Matchers {
   }
 
   "A DB" should "be take vertically from top to bottom" in {
+    TakerV(0,              db)
+    TakerV(1,              db)
+    TakerV(db.head.length, db)
+
+    val $t0: String |: Option[String] |: Int |: EOCol = TakerV(0, db)
+    val $t1: String |: Option[String] |: Int |: EOCol = TakerV(1, db)
+    val $tN: String |: Option[String] |: Int |: EOCol =
+      TakerV(db.head.length, db)
   }
 
   "A DB" should "be drop vertically from top to bottom" in {
+    DpperV(0,              db)
+    DpperV(1,              db)
+    DpperV(db.head.length, db)
+
+    val $d0: String |: Option[String] |: Int |: EOCol = DpperV(0, db)
+    val $d1: String |: Option[String] |: Int |: EOCol = DpperV(1, db)
+    val $dN: String |: Option[String] |: Int |: EOCol =
+      DpperV(db.head.length, db)
   }
 
   "A DB" should "be split vertically correctly" in {
+    SplitterV(0,              db)
+    SplitterV(1,              db)
+    SplitterV(db.head.length, db)
+
+    val $s0: (String |: Option[String] |: Int |: EOCol,
+              String |: Option[String] |: Int |: EOCol) = SplitterV(0, db)
+    val $s1: (String |: Option[String] |: Int |: EOCol,
+              String |: Option[String] |: Int |: EOCol) = SplitterV(1, db)
+    val $sN: (String |: Option[String] |: Int |: EOCol,
+              String |: Option[String] |: Int |: EOCol) =
+      SplitterV(db.head.length, db)
   }
 }
