@@ -10,6 +10,14 @@ sealed trait Site
 trait SiteA extends Site
 trait SiteB extends Site
 
+@annotation.implicitNotFound(msg = "${S1} and ${S2} are different site whereas they should be the same")
+trait SameSite[S1 <: Site, S2 <: Site]
+object SameSite {
+  implicit def sameSite[S1 <: Site, S2 <: Site](implicit
+                                                $ev: S1 =:= S2) =
+    new SameSite[S1,S2] {}
+}
+
 final class Frag[Db <: DB, S <: Site](db: Db) {
 
 }
@@ -27,7 +35,7 @@ object Frag {
            S1 <: Site, S2 <: Site](f1: Frag[Db1, S1],
                                    f2: Frag[Db2, S2])(
                                    implicit
-                                   $samesite: S1 =:= S2) = ???
+                                   $ev: SameSite[S1,S2]) = ???
 }
 
 object Test {
@@ -48,5 +56,8 @@ object Test {
 
   val (f1, f2) = Frag.split[db.This, SiteA, SiteA](_2, db)
   Frag.join(f1, f2)
+
+  val (f3, f4) = Frag.split[db.This, SiteA, SiteB](_2, db)
+  // Frag.join(f3, f4) // Doesn't compile
 
 }
