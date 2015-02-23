@@ -4,6 +4,12 @@ import scala.language.higherKinds
 import spire.algebra._
 import spire.implicits._
 
+import resources._
+import ops.db._
+
+import shapeless._
+
+
 /*
 monad Guardian[P[R],A]
  return: A => Guardian[P[R],A]
@@ -46,7 +52,7 @@ onFrag1: Guardian[P[R1], Unit] => Guardian[(P[R1],P[R2]), Unit]
 */
 
 case class Guardian[S1,S2,+A](run: S1 => (A, S2)) {
-  def flatMap[B,S3](f: A => Guardian[S2,S3,B]): Guardian[S1,S3,B] = Guardian(
+  def flatMap[S3,B](f: A => Guardian[S2,S3,B]): Guardian[S1,S3,B] = Guardian(
     (s1: S1) => {
       val (a, s2) = this.run(s1)
       f(a).run(s2)
@@ -60,7 +66,25 @@ object Guardian {
   case class Atom[S1,S2](s1: S1, s2: S2) // State is splitable onto S1, S2
   type HEq[R]
 
-  def unit[S,A](a: A): Guardian[S,S,A] = Guardian(s => (a, s))
+  def run[S,A](s: S): Guardian[S,S,A] = ???
+
+  def flatMap[S1,S2,S3,
+              A,B](g: Guardian[S1,S2,A])(
+                   f: A => Guardian[S2,S3,B]): Guardian[S1,S3,B] =
+    Guardian((s1: S1) => {
+               val (a, s2) = g.run(s1)
+                 f(a).run(s2)
+             })
+
+  def map[S1,S2,A,B](g: Guardian[S1,S2,A])(
+                     f: A => B): Guardian[S1,S2,B] =
+    g flatMap { a => unit(f(a)) }
+
+  def init[S]: Guardian[S,S,S] =
+    Guardian(s => (s, s))
+
+  def unit[S,A](a: A): Guardian[S,S,A] =
+    Guardian(s => (a, s))
 
   def crypt[S,P[_]]: Guardian[S,P[S],Unit] = ???
   def cryptHEq[S]: Guardian[S,HEq[S],Unit] = ???
@@ -74,9 +98,30 @@ object Guardian {
   // }
   // def frag[S](implicit atom: Atom[S]): Guardian[S, (atom.S1, atom.S2), Unit] = ???
   // unit("abc") flatMap { x => frag }: Guardian[Unit, (Unit, Unit), Unit]
-  def frag[S1,S2]: Guardian[Atom[S1,S2], (S1,S2), Unit] = ???
+  def frag[S1,S2]: Guardian[Atom[S1,S2], (S1,S2), Unit] =
+    Guardian(s => ((), (s.s1, s.s2)))
 
-  def defrag[S1,S2]: Guardian[(S1,S2), Atom[S1,S2], Unit] = ???
+  (for {
+    _ <- init[Atom[String,String]]
+    _ <- frag
+    s <- unit("abc")
+    d <- unit(s + "def")
+  } yield d) : Guardian[Atom[String, String], (String, String), String]
+
+  // Why run method doesn't drive the type inference here?
+  // See http://pchiusano.blogspot.fr/2011/05/making-most-of-scalas-extremely-limited.html
+  // See https://github.com/ljwagerfield/scala-type-inference
+  // (for {
+  //    s <- init[String |: Option[String] |: Int |: EOCol]
+  //    _ <- frag(_1)
+  //  } yield ()) run (DB(("2014-01-01", Some("Bob"), 1))): (Unit, (String |: EOCol,
+  //                                                                Option[String] |: Int |: EOCol))
+  // import Nat._
+  // def frag[S <: DB](n: Nat)(implicit tk: Taker[n.N, S]): Guardian[S, tk.Out, Unit] =
+  //   Guardian( (db: S) => ((), db.take[n.N]))
+
+  def defrag[S1,S2]: Guardian[(S1,S2), Atom[S1,S2], Unit] =
+    Guardian({ case (s1, s2) => ((), Atom(s1, s2)) })
 
   def onFrag1[S1,S2,S3,A](g: Guardian[S1,S3,A]): Guardian[(S1,S2),(S3,S2),A] = ???
 
@@ -114,10 +159,23 @@ object Guardian {
      } yield y) run (()): (String, HEq[HEq[Unit]])
 
     (for {
+       x <- unit[Atom[Unit,Unit], String]("abc")
+       _ <- frag
+       y <- unit(x + "def")
+     } yield y) run (Atom((),())): (String, (Unit, Unit))
+
+    (for {
        x <- unit("abc")
+       // If we ommit type parameter in the first statement, then type
+       // parameter is mandatory in frag.
        _ <- frag[Unit, Unit]
        y <- unit(x + "def")
      } yield y) run (Atom((),())): (String, (Unit, Unit))
+
+    // (for {
+    //    _ <- frag
+    //    x <- unit("abc")
+    //  } yield ()) run (Atom((),()))
 
     (for {
        x <- unit("abc")
