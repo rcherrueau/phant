@@ -51,7 +51,7 @@ join: Guardian[(P[R1],P[R2]), Unit] => Guardian[P[(R1,R2)], Unit]
 onFrag1: Guardian[P[R1], Unit] => Guardian[(P[R1],P[R2]), Unit]
 */
 
-case class Guardian[S1,S2,+A](run: S1 => (A, S2)) {
+case class Guardian[-S1,S2,+A](run: S1 => (A, S2)) {
   def flatMap[S3,B](f: A => Guardian[S2,S3,B]): Guardian[S1,S3,B] = Guardian(
     (s1: S1) => {
       val (a, s2) = this.run(s1)
@@ -104,9 +104,10 @@ object Guardian {
   (for {
     _ <- init[Atom[String,String]]
     _ <- frag
-    s <- unit("abc")
-    d <- unit(s + "def")
-  } yield d) : Guardian[Atom[String, String], (String, String), String]
+    x <- unit("abc")
+    y <- unit(x + "def")
+  } yield y) : Guardian[Atom[String, String], (String, String), String]
+
 
   // Why run method doesn't drive the type inference here?
   // See http://pchiusano.blogspot.fr/2011/05/making-most-of-scalas-extremely-limited.html
@@ -119,6 +120,25 @@ object Guardian {
   // import Nat._
   // def frag[S <: DB](n: Nat)(implicit tk: Taker[n.N, S]): Guardian[S, tk.Out, Unit] =
   //   Guardian( (db: S) => ((), db.take[n.N]))
+
+  import Nat._
+  def fragDB[S <: DB](n: Nat)(implicit
+                              tk: Taker[n.N, S]): Guardian[S, tk.Out, Unit] = ???
+
+
+  fragDB[String |: EOCol](_1)
+
+  (for {
+    _ <- init[String |: EOCol]
+    x <- unit("abc")
+    y <- unit(x + "def")
+    _ <- fragDB[String |: EOCol](_1)
+  } yield y)
+
+  // (init[String |: EOCol] flatMap { _ =>
+  //   fragDB(_0) map { _ => "abc" }
+  // }) run (DB(("abc"))) : (String, EOCol)
+
 
   def defrag[S1,S2]: Guardian[(S1,S2), Atom[S1,S2], Unit] =
     Guardian({ case (s1, s2) => ((), Atom(s1, s2)) })
