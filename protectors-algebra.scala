@@ -91,67 +91,38 @@ object Guardian {
 
   def decrypt[P[_], S]: Guardian[P[S], S, Unit] = ???
 
-  // TODO: Dependent type on Atom
-  // trait Atom[S] {type S1 type S2}
-  // object Atom {
-  //   implicit object UAtom extends Atom[Unit] { type S1 = Unit ; type S2 = Unit }
-  // }
-  // def frag[S](implicit atom: Atom[S]): Guardian[S, (atom.S1, atom.S2), Unit] = ???
-  // unit("abc") flatMap { x => frag }: Guardian[Unit, (Unit, Unit), Unit]
   def frag[S1,S2]: Guardian[Atom[S1,S2], (S1,S2), Unit] =
     Guardian(s => ((), (s.s1, s.s2)))
 
-  (for {
-    _ <- init[Atom[String,String]]
-    _ <- frag
-    x <- unit("abc")
-    y <- unit(x + "def")
-  } yield y) : Guardian[Atom[String, String], (String, String), String]
+  def defrag[S1,S2]: Guardian[(S1,S2), Atom[S1,S2], Unit] =
+    Guardian({ case (s1, s2) => ((), Atom(s1, s2)) })
 
-
+  // FIXME:
   // Why run method doesn't drive the type inference here?
   // See http://pchiusano.blogspot.fr/2011/05/making-most-of-scalas-extremely-limited.html
   // See https://github.com/ljwagerfield/scala-type-inference
+  // See http://stackoverflow.com/q/28679016/2072144
   // (for {
-  //    s <- init[String |: Option[String] |: Int |: EOCol]
-  //    _ <- frag(_1)
-  //  } yield ()) run (DB(("2014-01-01", Some("Bob"), 1))): (Unit, (String |: EOCol,
-  //                                                                Option[String] |: Int |: EOCol))
-  // import Nat._
-  // def frag[S <: DB](n: Nat)(implicit tk: Taker[n.N, S]): Guardian[S, tk.Out, Unit] =
-  //   Guardian( (db: S) => ((), db.take[n.N]))
-
+  //   _ <- init[String |: EOCol] flatMap { _ => fragDB(_1) }
+  //   x <- unit("abc")
+  //   y <- unit(x + "def")
+  // } yield y)
   import Nat._
-  def fragDB[S <: DB](n: Nat)(implicit
-                              tk: Taker[n.N, S]): Guardian[S, tk.Out, Unit] = ???
-
-
-  fragDB[String |: EOCol](_1)
-
-  (for {
-    _ <- init[String |: EOCol]
-    x <- unit("abc")
-    y <- unit(x + "def")
-    _ <- fragDB[String |: EOCol](_1)
-  } yield y)
-
-  // (init[String |: EOCol] flatMap { _ =>
-  //   fragDB(_0) map { _ => "abc" }
-  // }) run (DB(("abc"))) : (String, EOCol)
-
-
-  def defrag[S1,S2]: Guardian[(S1,S2), Atom[S1,S2], Unit] =
-    Guardian({ case (s1, s2) => ((), Atom(s1, s2)) })
+  def fragDB[S <: DB](n: Nat)(
+                      implicit
+                      tk: Taker[n.N, S]): Guardian[S, tk.Out, Unit] = ???
 
   def onFrag1[S1,S2,S3,A](g: Guardian[S1,S3,A]): Guardian[(S1,S2),(S3,S2),A] = ???
 
   object Test {
     (for {
-       x <- unit[Unit, String]("abc")
+       _ <- init[Unit]
+       x <- unit("abc")
        y <- unit(x + "def")
      } yield y) run (()): (String, Unit)
 
     (for {
+       _ <- init[Unit]
        _ <- crypt[Unit, HEq]
        x <- unit("abc")
        y <- unit(x + "def")
@@ -165,6 +136,7 @@ object Guardian {
     }: Guardian[Unit, HEq[Unit], String]
 
     (for {
+       _ <- init[Unit]
        _ <- crypt[Unit, HEq]
        x <- unit[HEq[Unit], String]("abc")
        _ <- decrypt[HEq, Unit]
@@ -172,6 +144,7 @@ object Guardian {
      } yield y) run (()): (String, Unit)
 
     (for {
+       _ <- init[Unit]
        _ <- crypt[Unit, HEq]
        _ <- crypt[HEq[Unit], HEq]
        x <- unit("abc")
@@ -179,42 +152,40 @@ object Guardian {
      } yield y) run (()): (String, HEq[HEq[Unit]])
 
     (for {
-       x <- unit[Atom[Unit,Unit], String]("abc")
+       _ <- init[Atom[Unit,Unit]]
+       x <- unit("abc")
        _ <- frag
        y <- unit(x + "def")
      } yield y) run (Atom((),())): (String, (Unit, Unit))
 
     (for {
+       _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
-       // If we ommit type parameter in the first statement, then type
-       // parameter is mandatory in frag.
-       _ <- frag[Unit, Unit]
+       _ <- frag
        y <- unit(x + "def")
      } yield y) run (Atom((),())): (String, (Unit, Unit))
 
-    // (for {
-    //    _ <- frag
-    //    x <- unit("abc")
-    //  } yield ()) run (Atom((),()))
-
     (for {
+       _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
-       _ <- frag[Unit, Unit]
+       _ <- frag
        y <- unit(x + "def")
        _ <- defrag
      } yield y) run (Atom((),())): (String, Atom[Unit,Unit])
 
     (for {
+       _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
-       _ <- frag[Unit, Unit]
+       _ <- frag
        _ <- onFrag1(crypt[Unit, HEq])
        z <- unit(x + "def")
        _ <- defrag
      } yield z) run (Atom((),())): (String, Atom[HEq[Unit],Unit])
 
     (for {
+       _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
-       _ <- frag[Unit, Unit]
+       _ <- frag
        _ <- onFrag1(for {
                       _ <- crypt[Unit, HEq]
                       _ <- crypt[HEq[Unit], HEq]
@@ -224,8 +195,9 @@ object Guardian {
      } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
 
     (for {
+       _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
-       _ <- frag[Unit, Unit]
+       _ <- frag
        _ <- onFrag1(for {
                       _ <- crypt[Unit, HEq]
                       _ <- crypt[HEq[Unit], HEq]
@@ -235,8 +207,9 @@ object Guardian {
      } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
 
     (for {
+       _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
-       _ <- frag[Unit, Unit]
+       _ <- frag
        y <- onFrag1(for {
                       _ <- crypt[Unit, HEq]
                       _ <- crypt[HEq[Unit], HEq]
@@ -246,8 +219,9 @@ object Guardian {
      } yield y) run (Atom(Unit,Unit)): (String, (HEq[HEq[Unit]], Unit))
 
     (for {
+       _ <- init[Atom[Atom[Unit,Unit],Unit]]
        x <- unit("abc")
-       _ <- frag[Atom[Unit,Unit], Unit]
+       _ <- frag
        _ <- onFrag1(for {
                       _ <- frag[Unit, Unit]
                       _ <- onFrag1(crypt[Unit, HEq])
