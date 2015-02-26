@@ -24,8 +24,8 @@ class DBDpec extends FlatSpec with Matchers {
     ("2014-01-10", Some("Chuck"), 7))
 
   "A DB" should "take columns left to rigth" in {
-    Taker[_0, db.This](db)
-    Taker[_1, db.This](db)
+    Taker[_0, db.This](db): EOCol
+    Taker[_1, db.This](db): String |: EOCol
     Taker[_2, db.This](db)
     Taker[_3, db.This](db)
 
@@ -70,6 +70,15 @@ class DBDpec extends FlatSpec with Matchers {
     // FIXME:
     // val $s4: (String |: Option[String] |: Int |: Nothing |:EOCol, EOCol) =
     //   Splitter[_4, db.This](db)
+  }
+
+  "A DB" should "be map on a column correctly" in {
+    // ColMapper[_0, db.This, String, Option[String]](db, Some(_)) // Doesn't type checks
+    ColMapper[_1, db.This, String, Option[String]](db, Some(_)):
+        Option[String] |: Option[String] |: Int |: EOCol
+    // ColMapper[_1, db.This, Int, Option[Int]](db, Some(_)) // Doesn't type checks
+    ColMapper[_2, db.This, Option[String], String](db, _.getOrElse(""))
+    ColMapper[_3, db.This, Int, Unit](db,{ _ => ()})
   }
 
   "A DB" should "be take vertically from top to bottom" in {

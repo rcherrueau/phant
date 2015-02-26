@@ -24,8 +24,7 @@ final class Frag[Db <: DB, S <: Site](db: Db) {
 
 object Frag {
   def split[Db <: DB, S1 <: Site, S2 <: Site](n: Nat, db: Db)(
-    implicit tk: Taker[n.N, Db],
-             dp: Dropper[n.N, Db]) = {
+    implicit sp: Splitter[n.N, Db]) = {
     val (sp1, sp2) = db.split(n)
 
     (new Frag[sp1.This,S1](sp1), new Frag[sp2.This,S2](sp2))
