@@ -86,7 +86,7 @@ object db {
       }
   }
 
-  /** Type class that withdraw the `n`th colum. */
+  /** Type class that withdraws the `n`th colum. */
   trait Withdrawer[N <: Nat, Db <: DB] {
     type Col
     type WithdrawDb <: DB
@@ -146,28 +146,28 @@ object db {
   /** Type class that maps over a column at the `n`th position. */
   trait ColMapper[N <: Nat, Db <: DB, T, R] {
     type Out <: DB
-    def map(db: Db, f: T => R): Out
+    def map(db: Db)(f: T => R): Out
   }
 
   object ColMapper {
-    def apply[N <: Nat,Db <: DB, T, R](db: Db,
+    def apply[N <: Nat,Db <: DB, T, R](db: Db)(
                                        f: T => R)(
                                        implicit
                                        cmper: ColMapper[N,Db,T,R]) =
-      cmper.map(db, f)
+      cmper.map(db)(f)
 
     implicit def UnColMapper[Db <: DB, T, R](implicit
                                              evApply: Db#Head <:< T) =
       new ColMapper[_1,Db,T,R] {
         type Out = |:[R, Db#Tail]
-        def map(db: Db, f: T => R) = |:(db.head.map{ h => f(h.asInstanceOf[T])}, db.tail)
+        def map(db: Db)(f: T => R) = |:(db.head.map{ h => f(h.asInstanceOf[T])}, db.tail)
       }
 
     implicit def SuccColMapper[N <: Nat, Db <: DB, T, R](implicit
                                                          cmper: ColMapper[N,Db#Tail,T,R]) =
       new ColMapper[Succ[N],Db,T,R] {
         type Out = |:[Db#Head, cmper.Out]
-        def map(db: Db, f: T => R) = |:(db.head, cmper.map(db.tail,f))
+        def map(db: Db)(f: T => R) = |:(db.head, cmper.map(db.tail)(f))
       }
   }
 

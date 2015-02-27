@@ -29,10 +29,10 @@ final class DBOps[Db <: DB](db: Db) {
     Injector(db, col)
 
   def mapCol[N <: Nat,T,R](f: T => R)(implicit cmper: ColMapper[N,Db,T,R]) =
-    ColMapper(db, f)
+    ColMapper(db)(f)
 
   def mapCol[T,R](f: T => R, n: Nat)(implicit cmper: ColMapper[n.N,Db,T,R]) =
-    ColMapper(db, f)
+    ColMapper(db)(f)
 
   def takeV(n: Int) = TakerV(n, db)
 

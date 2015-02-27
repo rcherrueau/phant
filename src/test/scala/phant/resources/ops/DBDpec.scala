@@ -74,11 +74,11 @@ class DBDpec extends FlatSpec with Matchers {
 
   "A DB" should "be map on a column correctly" in {
     // ColMapper[_0, db.This, String, Option[String]](db, Some(_)) // Doesn't type checks
-    ColMapper[_1, db.This, String, Option[String]](db, Some(_)):
+    ColMapper[_1, db.This, String, Option[String]](db)(Some(_)):
         Option[String] |: Option[String] |: Int |: EOCol
     // ColMapper[_1, db.This, Int, Option[Int]](db, Some(_)) // Doesn't type checks
-    ColMapper[_2, db.This, Option[String], String](db, _.getOrElse(""))
-    ColMapper[_3, db.This, Int, Unit](db,{ _ => ()})
+    ColMapper[_2, db.This, Option[String], String](db)(_.getOrElse(""))
+    ColMapper[_3, db.This, Int, Unit](db)({ _ => ()})
   }
 
   "A DB" should "be take vertically from top to bottom" in {
