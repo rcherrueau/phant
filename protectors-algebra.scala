@@ -11,28 +11,28 @@ import shapeless._
 
 
 /*
-monad Guardian[P[R],A]
- return: A => Guardian[P[R],A]
- bind: Guardian[P[R]A] => (A => Guardian[P[R],B]) => Guardian[P[R],B]
- crypt: P => R => Guardian[P[R],_] // put
- decrypt: P => Guardian[P[R],R] // get
- modify: (R => R) => Guardian[P[R],_]
+monad Guard[P[R],A]
+ return: A => Guard[P[R],A]
+ bind: Guard[P[R]A] => (A => Guard[P[R],B]) => Guard[P[R],B]
+ crypt: P => R => Guard[P[R],_] // put
+ decrypt: P => Guard[P[R],R] // get
+ modify: (R => R) => Guard[P[R],_]
 
 String => List[(A, String)]
 List[String => (A, String)]
 
-Guardian[P1[R],A] => Guardian[P2[R],A] => Guardian[P2[P1[R]],A]
+Guard[P1[R],A] => Guard[P2[R],A] => Guard[P2[P1[R]],A]
 
-frag: Int => DB => Guardian[Frag[(DB.frag1, DB.frag2)],A]
+frag: Int => DB => Guard[Frag[(DB.frag1, DB.frag2)],A]
 join:
 
-Guardian[Frag[(DB.frag1, DB.frag2)],A]
+Guard[Frag[(DB.frag1, DB.frag2)],A]
 
 // 1. Fragment,
 // 2. chiffre AES (Symmetric) cols 1er frag
 // 3. pull cols 2em frag chez owner.
 
-frag1: Guardian[DB.frag1,A] => Guardian[Frag[(DB.frag1, DB.frag2)],A]
+frag1: Guard[DB.frag1,A] => Guard[Frag[(DB.frag1, DB.frag2)],A]
 
 // 2 choix:
 // 1. L'état représente l'évolution de la structure de la rsc.
@@ -42,103 +42,166 @@ frag1: Guardian[DB.frag1,A] => Guardian[Frag[(DB.frag1, DB.frag2)],A]
 // =>
 
 // Split state in two parts:
-frag: Guardian[P[(R1,R2)], Unit] => Guardian[(P[R1],P[R2]), Unit]
-frag: Guardian[C[R1 F: R2], Unit] => Guardian[C[R1] F: C[R2], Unit]
+frag: Guard[P[(R1,R2)], Unit] => Guard[(P[R1],P[R2]), Unit]
+frag: Guard[C[R1 F: R2], Unit] => Guard[C[R1] F: C[R2], Unit]
 
-join: Guardian[(P[R1],P[R2]), Unit] => Guardian[P[(R1,R2)], Unit]
+join: Guard[(P[R1],P[R2]), Unit] => Guard[P[(R1,R2)], Unit]
 
 // Does some calculi on first frag
-onFrag1: Guardian[P[R1], Unit] => Guardian[(P[R1],P[R2]), Unit]
+onFrag1: Guard[P[R1], Unit] => Guard[(P[R1],P[R2]), Unit]
 */
 
-case class Guardian[-S1,S2,+A](run: S1 => (A, S2)) {
-  def flatMap[S3,B](f: A => Guardian[S2,S3,B]): Guardian[S1,S3,B] = Guardian(
+case class Guard[-S1,S2,+A](run: S1 => (A, S2)) {
+  def flatMap[S3,B](f: A => Guard[S2,S3,B]): Guard[S1,S3,B] = Guard(
     (s1: S1) => {
       val (a, s2) = this.run(s1)
       f(a).run(s2)
     })
 
-  def map[B](f: A => B): Guardian[S1,S2,B] =
-     this flatMap { a => Guardian.unit(f(a)) }
+  def map[B](f: A => B): Guard[S1,S2,B] =
+     this flatMap { a => Guard.unit(f(a)) }
 }
 
-object Guardian {
-  case class Atom[S1,S2](s1: S1, s2: S2) // State is splitable onto S1, S2
+object Guard extends App {
+  // State is splitable onto S1, S2
+  case class Atom[S1,S2](s1: S1, s2: S2)
   type HEq[R]
 
-  def run[S,A](s: S): Guardian[S,S,A] = ???
+  def run[S,A](s: S): Guard[S,S,A] = ???
 
-  def flatMap[S1,S2,S3,
-              A,B](g: Guardian[S1,S2,A])(
-                   f: A => Guardian[S2,S3,B]): Guardian[S1,S3,B] =
-    Guardian((s1: S1) => {
-               val (a, s2) = g.run(s1)
-                 f(a).run(s2)
-             })
+  def init[S]: Guard[S,S,S] =
+    Guard(s => (s, s))
 
-  def map[S1,S2,A,B](g: Guardian[S1,S2,A])(
-                     f: A => B): Guardian[S1,S2,B] =
-    g flatMap { a => unit(f(a)) }
+  def init[S](s: S): Guard[S,S,S] =
+    Guard(s => (s, s))
 
-  def init[S]: Guardian[S,S,S] =
-    Guardian(s => (s, s))
+  def get[S]: Guard[S,S,S] =
+    Guard(s => (s,s))
 
-  def unit[S,A](a: A): Guardian[S,S,A] =
-    Guardian(s => (a, s))
+  def unit[S,A](a: A): Guard[S,S,A] =
+    Guard(s => (a, s))
 
-  def crypt[S,P[_]]: Guardian[S,P[S],Unit] = ???
-  def cryptHEq[S]: Guardian[S,HEq[S],Unit] = ???
+  def crypt[S,P[_]]: Guard[S,P[S],Unit] = ???
+  def cryptHEq[S]: Guard[S,HEq[S],Unit] = ???
 
-  def decrypt[P[_], S]: Guardian[P[S], S, Unit] = ???
+  def decrypt[P[_], S]: Guard[P[S], S, Unit] = ???
 
-  def frag[S1,S2]: Guardian[Atom[S1,S2], (S1,S2), Unit] =
-    Guardian(s => ((), (s.s1, s.s2)))
+  def frag[S1,S2]: Guard[Atom[S1,S2], (S1,S2), Unit] =
+    Guard(s => ((), (s.s1, s.s2)))
 
-  def defrag[S1,S2]: Guardian[(S1,S2), Atom[S1,S2], Unit] =
-    Guardian({ case (s1, s2) => ((), Atom(s1, s2)) })
+  def frag1: Guard[List[(String,String,String)],
+                   (List[(String,Int)],
+                    List[(String,String,Int)]),
+                   Unit] = Guard(db =>
+                     ((), (db.zipWithIndex.map {
+                                 case ((d,_,_), v) => (d, v)
+                               },
+                               db.zipWithIndex.map {
+                                 case ((_,n,a), v) => (n, a, v)
+                               })))
+
+
+  def defrag[S1,S2]: Guard[(S1,S2), Atom[S1,S2], Unit] =
+    Guard({ case (s1, s2) => ((), Atom(s1, s2)) })
 
   // FIXME:
   // Why run method doesn't drive the type inference here?
   // See http://pchiusano.blogspot.fr/2011/05/making-most-of-scalas-extremely-limited.html
   // See https://github.com/ljwagerfield/scala-type-inference
   // See http://stackoverflow.com/q/28679016/2072144
-  // (for {
-  //   _ <- init[String |: EOCol] flatMap { _ => fragDB(_1) }
-  //   x <- unit("abc")
-  //   y <- unit(x + "def")
-  // } yield y)
   import Nat._
+  (for {
+    _ <- init[String |: EOCol] flatMap { _ => fragDB(_1) }
+    x <- unit("abc")
+    y <- unit(x + "def")
+  } yield y): Guard[String |: EOCol, (String |: EOCol, EOCol), _]
+
   def fragDB[S <: DB](n: Nat)(
                       implicit
-                      tk: Taker[n.N, S]): Guardian[S, tk.Out, Unit] = ???
+                      tk: Taker[n.N, S],
+                      dp: Dropper[n.N, S]): Guard[S, (tk.Out, dp.Out), Unit] = ???
 
-  def onFrag1[S1,S2,S3,A](g: Guardian[S1,S3,A]): Guardian[(S1,S2),(S3,S2),A] = ???
+  // At start right is S1 and left is S2
+  // After right is S3 and left is S2
+  def onRFrag[S1,S2,S3,A](g: Guard[S1,S3,A]): Guard[(S1,S2),(S3,S2),A] = ???
 
-  object Test {
+  def onLFrag[S1,S2,S3,A](g: Guard[S2,S3,A]): Guard[(S1,S2),(S1,S3),A] = ???
+
+  def onFrag[S1,S2,S3,S4,A](gR: Guard[S1,S3,A],
+                            gL: Guard[S2,S4,A]):
+      Guard[(S1,S2), (S3,S4), A] =
+    onRFrag[S1,S2,S3,A](gR) flatMap { _ => onLFrag[S3,S2,S4,A](gL) }
+
     (for {
        _ <- init[Unit]
        x <- unit("abc")
        y <- unit(x + "def")
      } yield y) run (()): (String, Unit)
 
-    (for {
-       _ <- init[Unit]
-       _ <- crypt[Unit, HEq]
-       x <- unit("abc")
-       y <- unit(x + "def")
-     } yield y) run (()): (String, HEq[Unit])
+
+    val db: List[(String, String, String)] = List(
+      ("2014-01-01", "Bob",   "a"),
+      ("2014-01-02", "Chuck", "b"),
+      ("2014-01-03", "Bob",   "c"),
+      ("2014-01-04", "Chuck", "d"),
+      ("2014-01-05", "Bob",   "e"),
+      ("2014-01-06", "Bob",   "e"),
+      ("2014-01-07", "Bob",   "e"),
+      ("2014-01-08", "Bob",   "f"),
+      ("2014-01-08", "Daan",  "f"),
+      ("2014-01-09", "Chuck", "b"),
+      ("2014-01-10", "Chuck", "g"))
+
+  println((for {
+             _ <- init[db.type]
+             d1 <- get[db.type]
+             d2 = d1 map ({ case (d,n,a) => (d,n) })
+             d3 = d2 filter({case (d,n) =>
+                              List("Chuck", "Bob").exists({ _ == n }) })
+           } yield d3) run (db) _1)
+
+  def unFrag1(d1: List[(String, Int)], d2: List[(String, Int)]):
+      List[(String,String,Int)] = {
+    for {
+      (x, i) <- d1
+      (y, j) <- d2
+      if i == j
+    } yield (x,y,i)
+  }
+
+  println((for {
+             _ <- init[db.type]
+             _ <- frag1
+             d1 <- get[(List[(String, Int)], List[(String, String, Int)])]
+             // d2 = d1 map ({ case (d,n,a) => (d,n) })
+             d21 = d1._1 map ({ case (d,i) => (d,i) })
+             d22 = d1._2 map ({ case (n,a,i) => (n,i) })
+             // d3 = d2 filter({case (d,n) =>
+             //                  List("Chuck", "Bob").exists({ _ == n }) })
+             d31 = d22 filter ({case (n,i) =>
+                                 List("Chuck", "Bob").exists({ _ == n }) })
+             d32 = unFrag1(d21,d31)
+           } yield d32) run (db) _1)
+
+
+  (for {
+     _ <- init[Unit]
+     _ <- crypt[Unit, HEq]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, HEq[Unit])
 
 
     unit("abc") flatMap { s =>
       crypt[Unit, HEq] flatMap { _ =>
-        unit("def") map     { d => s + d }: Guardian[HEq[Unit], HEq[Unit], String]
-      }: Guardian[Unit, HEq[Unit], String]
-    }: Guardian[Unit, HEq[Unit], String]
+        unit("def") map     { d => s + d }: Guard[HEq[Unit], HEq[Unit], String]
+      }: Guard[Unit, HEq[Unit], String]
+    }: Guard[Unit, HEq[Unit], String]
 
     (for {
        _ <- init[Unit]
        _ <- crypt[Unit, HEq]
-       x <- unit[HEq[Unit], String]("abc")
+       x <- unit("abc")
        _ <- decrypt[HEq, Unit]
        y <- unit(x + "def")
      } yield y) run (()): (String, Unit)
@@ -177,7 +240,7 @@ object Guardian {
        _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
        _ <- frag
-       _ <- onFrag1(crypt[Unit, HEq])
+       _ <- onRFrag(crypt[Unit, HEq])
        z <- unit(x + "def")
        _ <- defrag
      } yield z) run (Atom((),())): (String, Atom[HEq[Unit],Unit])
@@ -186,7 +249,7 @@ object Guardian {
        _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
        _ <- frag
-       _ <- onFrag1(for {
+       _ <- onRFrag(for {
                       _ <- crypt[Unit, HEq]
                       _ <- crypt[HEq[Unit], HEq]
                     } yield ())
@@ -198,19 +261,7 @@ object Guardian {
        _ <- init[Atom[Unit,Unit]]
        x <- unit("abc")
        _ <- frag
-       _ <- onFrag1(for {
-                      _ <- crypt[Unit, HEq]
-                      _ <- crypt[HEq[Unit], HEq]
-                    } yield ())
-       z <- unit(x + "def")
-       _ <- defrag
-     } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
-
-    (for {
-       _ <- init[Atom[Unit,Unit]]
-       x <- unit("abc")
-       _ <- frag
-       y <- onFrag1(for {
+       y <- onRFrag(for {
                       _ <- crypt[Unit, HEq]
                       _ <- crypt[HEq[Unit], HEq]
                       s <- unit("def")
@@ -222,15 +273,37 @@ object Guardian {
        _ <- init[Atom[Atom[Unit,Unit],Unit]]
        x <- unit("abc")
        _ <- frag
-       _ <- onFrag1(for {
+       _ <- onRFrag(for {
                       _ <- frag[Unit, Unit]
-                      _ <- onFrag1(crypt[Unit, HEq])
+                      _ <- onRFrag(crypt[Unit, HEq])
                     } yield ())
        z <- unit(x + "def")
        _ <- defrag
      } yield z) run (Atom((Atom((),())),())): (String,
                                                Atom[(HEq[Unit],Unit), Unit])
-  }
+
+
+    // type Col1 = String
+    // type Col2 = String
+    // type Col3 = String
+
+    // val db: Col1 |: Col2 |: Col3 |: EOCol = DB(
+    //   ("2014-01-01", "Bob",   "a"),
+    //   ("2014-01-02", "Chuck", "b"),
+    //   ("2014-01-03", "Bob",   "c"),
+    //   ("2014-01-04", "Chuck", "d"),
+    //   ("2014-01-05", "Bob",   "e"),
+    //   ("2014-01-06", "Bob",   "e"),
+    //   ("2014-01-07", "Bob",   "e"),
+    //   ("2014-01-08", "Bob",   "f"),
+    //   ("2014-01-08", "Daan",  "f"),
+    //   ("2014-01-09", "Chuck", "b"),
+    //   ("2014-01-10", "Chuck", "g"))
+
+    // (for {
+    //    _ <- init(db)
+    //    _ <- fragDB[String |: String |: String |: EOCol](_1)
+    //  } yield ())
 }
 
 object Attic {

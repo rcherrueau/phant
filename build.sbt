@@ -8,7 +8,11 @@ scalaVersion := "2.11.5"
 // Shows expansion of implicits:
 // scalacOptions += "-Xlog-implicits"
 
-scalacOptions += "-feature"
+// scalacOptions += "-Xprint:typer"
+
+// scalacOptions += "-Ytyper-debug"
+
+// scalacOptions += "-feature"
 
 // // Import State from chap06
 unmanagedSourceDirectories in Compile +=
