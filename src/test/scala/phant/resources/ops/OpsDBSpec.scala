@@ -2,13 +2,13 @@ package phant
 package resources
 package ops
 
+import utils._
 import db._
-import shapeless._
 
 import org.scalatest._
 
 class OpsDBSpec extends FlatSpec with Matchers {
-  import Nat._
+  import shapeless.Nat._
 
   val db: String |: Option[String] |: Int |: EOCol = DB(
     ("2014-01-01", Some("Bob"),   1),
@@ -24,87 +24,83 @@ class OpsDBSpec extends FlatSpec with Matchers {
     ("2014-01-10", Some("Chuck"), 7))
 
   "Taker" should "take columns left to rigth at type level" in {
-    Taker[_0, db.This](db)
-    Taker[_1, db.This](db)
-    Taker[_2, db.This](db)
-    Taker[_3, db.This](db)
+    Taker[_0, db.This](db): EOCol
+    Taker[_1, db.This](db): String |: EOCol
+    Taker[_2, db.This](db): String |: Option[String] |: EOCol
+    Taker[_3, db.This](db): String |: Option[String] |: Int |: EOCol
 
-    val $t0: EOCol = Taker[_0, db.This](db)
-    val $t1: String |: EOCol = Taker[_1, db.This](db)
-    val $t2: String |: Option[String] |: EOCol = Taker[_2, db.This](db)
-    val $t3: String |: Option[String] |: Int |: EOCol = Taker[_3, db.This](db)
     // FIXME:
-    // val $t4: String |: Option[String] |: Int |: Nothing |: EOCol =
+    // illTyped("""
+    //   // No implicit for _4
     //   Taker[_4, db.This](db)
+    //   """)
   }
 
   "Dropper" should "drop columns left to rigth at type level" in {
-    Dropper[_0, db.This](db)
-    Dropper[_1, db.This](db)
-    Dropper[_2, db.This](db)
-    Dropper[_3, db.This](db)
+    Dropper[_0, db.This](db): String |: Option[String] |: Int |: EOCol
+    Dropper[_1, db.This](db): Option[String] |: Int |: EOCol
+    Dropper[_2, db.This](db): Int |: EOCol
+    Dropper[_3, db.This](db): EOCol
 
-    val $d0: String |: Option[String] |: Int |: EOCol =
-      Dropper[_0, db.This](db)
-    val $d1: Option[String] |: Int |: EOCol = Dropper[_1, db.This](db)
-    val $d2: Int |: EOCol = Dropper[_2, db.This](db)
-    val $d3: EOCol = Dropper[_3, db.This](db)
     // FIXME:
-    // val $d4: EOCol = Dropper[_4, db.This](db)
+    // illTyped("""
+    //   // No implicit for _4
+    //   Dropper[_4, db.This](db)
+    //   """)
   }
 
   "Splitter" should "split at type level at position `n`" in {
-    Splitter[_0, db.This](db)
-    Splitter[_1, db.This](db)
-    Splitter[_2, db.This](db)
-    Splitter[_3, db.This](db)
+    Splitter[_0, db.This](db): (EOCol,
+                                String |: Option[String] |: Int |: EOCol)
+    Splitter[_1, db.This](db): (String |: EOCol,
+                                Option[String] |: Int |: EOCol)
+    Splitter[_2, db.This](db): (String |: Option[String] |: EOCol,
+                                Int |: EOCol)
+    Splitter[_3, db.This](db): (String |: Option[String] |: Int |: EOCol,
+                                EOCol)
 
-    val $s0: (EOCol, String |: Option[String] |: Int |: EOCol) =
-      Splitter[_0, db.This](db)
-    val $s1: (String |: EOCol, Option[String] |: Int |: EOCol) =
-      Splitter[_1, db.This](db)
-    val $s2: (String |: Option[String] |: EOCol, Int |: EOCol) =
-      Splitter[_2, db.This](db)
-    val $s3: (String |: Option[String] |: Int |: EOCol, EOCol) =
-      Splitter[_3, db.This](db)
     // FIXME:
-    // val $s4: (String |: Option[String] |: Int |: Nothing |:EOCol, EOCol) =
+    // illTyped("""
+    //   // No implicit for _4
     //   Splitter[_4, db.This](db)
+    //   """)
+  }
+
+  "ColMapper" should "map over the `n`th columnq" in {
+    ColMapper[_1, db.This, String, Option[String]](db)(Some(_)):
+        Option[String] |: Option[String] |: Int |: EOCol
+    ColMapper[_2, db.This, Option[String], String](db)(_.getOrElse("")):
+        String |: String |: Int |: EOCol
+    ColMapper[_3, db.This, Int, Unit](db)({ _ => ()}):
+        String |: Option[String] |: Unit |: EOCol
+
+    illTyped("""
+      // No implicit for _0
+      ColMapper[_0, db.This, Unit, Unit](db)(_ => ())
+      """)
+    illTyped("""
+      // Expected type for column _1 is String
+      ColMapper[_1, db.This, Int, Option[Int]](db)(Some(_))""")
   }
 
   "TakerV" should "produce chunck of DB type" in {
-    TakerV(0,              db)
-    TakerV(1,              db)
-    TakerV(db.head.length, db)
-
-    val $t0: String |: Option[String] |: Int |: EOCol = TakerV(0, db)
-    val $t1: String |: Option[String] |: Int |: EOCol = TakerV(1, db)
-    val $tN: String |: Option[String] |: Int |: EOCol =
-      TakerV(db.head.length, db)
+    TakerV(0,              db): String |: Option[String] |: Int |: EOCol
+    TakerV(1,              db): String |: Option[String] |: Int |: EOCol
+    TakerV(db.head.length, db): String |: Option[String] |: Int |: EOCol
   }
 
   "DropperV" should "produce chunck of DB type" in {
-    DropperV(0,              db)
-    DropperV(1,              db)
-    DropperV(db.head.length, db)
-
-    val $d0: String |: Option[String] |: Int |: EOCol = DropperV(0, db)
-    val $d1: String |: Option[String] |: Int |: EOCol = DropperV(1, db)
-    val $dN: String |: Option[String] |: Int |: EOCol =
-      DropperV(db.head.length, db)
+    DropperV(0,              db): String |: Option[String] |: Int |: EOCol
+    DropperV(1,              db): String |: Option[String] |: Int |: EOCol
+    DropperV(db.head.length, db): String |: Option[String] |: Int |: EOCol
   }
 
   "SplitterV" should "produce two chuncks typed as DB type" in {
-    SplitterV(0,              db)
-    SplitterV(1,              db)
-    SplitterV(db.head.length, db)
-
-    val $s0: (String |: Option[String] |: Int |: EOCol,
-              String |: Option[String] |: Int |: EOCol) = SplitterV(0, db)
-    val $s1: (String |: Option[String] |: Int |: EOCol,
-              String |: Option[String] |: Int |: EOCol) = SplitterV(1, db)
-    val $sN: (String |: Option[String] |: Int |: EOCol,
-              String |: Option[String] |: Int |: EOCol) =
-      SplitterV(db.head.length, db)
+    SplitterV(0,              db): (String |: Option[String] |: Int |: EOCol,
+                                    String |: Option[String] |: Int |: EOCol)
+    SplitterV(1,              db): (String |: Option[String] |: Int |: EOCol,
+                                    String |: Option[String] |: Int |: EOCol)
+    SplitterV(db.head.length, db): (String |: Option[String] |: Int |: EOCol,
+                                    String |: Option[String] |: Int |: EOCol)
   }
 }

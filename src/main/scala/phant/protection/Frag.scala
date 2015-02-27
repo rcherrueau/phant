@@ -29,9 +29,9 @@ object Frag {
             S2 <: Site](n: Nat,
                         db: Db,
                         s1: S1,
-                        s2: S2)(implicit
-                                tk: Taker[n.N, Db],
-                                dp: Dropper[n.N, Db]) = {
+                        s2: S2)(
+                        implicit
+                        sp: Splitter[n.N, Db]) = {
     val (sp1, sp2) = db.split(n)
 
     (new Frag(sp1, s1), new Frag(sp2, s2))
