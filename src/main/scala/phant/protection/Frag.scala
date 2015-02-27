@@ -7,10 +7,11 @@ import ops.db._
 import shapeless._
 
 sealed trait Site
-trait SiteA extends Site
-trait SiteB extends Site
+object SiteA extends Site
+object SiteB extends Site
 
-@annotation.implicitNotFound(msg = "${S1} and ${S2} are different site whereas they should be the same")
+@annotation.implicitNotFound(msg = "${S1} and ${S2} are different site, " +
+                                   "whereas they should be equivalent")
 trait SameSite[S1 <: Site, S2 <: Site]
 object SameSite {
   implicit def sameSite[S1 <: Site, S2 <: Site](implicit
@@ -18,24 +19,29 @@ object SameSite {
     new SameSite[S1,S2] {}
 }
 
-final class Frag[Db <: DB, S <: Site](db: Db) {
-
+final class Frag[Db <: DB, S <: Site](inDb: Db, s: S) {
+  def db: |:[Int, Db] = |:(List.range(0, inDb.head.length), inDb)
 }
 
 object Frag {
-  def split[Db <: DB, S1 <: Site, S2 <: Site](n: Nat, db: Db)(
-    implicit tk: Taker[n.N, Db],
-             dp: Dropper[n.N, Db]) = {
+  def split[Db <: DB,
+            S1 <: Site,
+            S2 <: Site](n: Nat,
+                        db: Db,
+                        s1: S1,
+                        s2: S2)(implicit
+                                tk: Taker[n.N, Db],
+                                dp: Dropper[n.N, Db]) = {
     val (sp1, sp2) = db.split(n)
 
-    (new Frag[sp1.This,S1](sp1), new Frag[sp2.This,S2](sp2))
+    (new Frag(sp1, s1), new Frag(sp2, s2))
   }
 
   def join[Db1 <: DB, Db2 <: DB,
            S1 <: Site, S2 <: Site](f1: Frag[Db1, S1],
                                    f2: Frag[Db2, S2])(
                                    implicit
-                                   $ev: SameSite[S1,S2]) = ???
+                                   ev: SameSite[S1,S2]) = ???
 }
 
 object Test {
@@ -54,10 +60,9 @@ object Test {
     ("2014-01-09", Some("Chuck"), 2),
     ("2014-01-10", Some("Chuck"), 7))
 
-  val (f1, f2) = Frag.split[db.This, SiteA, SiteA](_2, db)
+  val (f1, f2) = Frag.split(_2, db, SiteA, SiteA)
   Frag.join(f1, f2)
 
-  val (f3, f4) = Frag.split[db.This, SiteA, SiteB](_2, db)
-  // Frag.join(f3, f4) // Doesn't compile
-
+  // val (f3, f4) = Frag.split(_2, db, SiteA, SiteB)
+  // Frag.join(f3, f4) // Doesn't type check
 }

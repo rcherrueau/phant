@@ -6,9 +6,9 @@ version := "0.1"
 scalaVersion := "2.11.5"
 
 // Shows expansion of implicits:
-scalacOptions += "-Xlog-implicits"
+// scalacOptions += "-Xlog-implicits"
 
-scalacOptions += "-feature"
+// scalacOptions += "-feature"
 
 // // For typelevel fork of scala
 // scalaVersion := "2.11.2-typelevel"
@@ -30,6 +30,8 @@ libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value
 
 // Not available for scala 2.12.0-nigthly
 libraryDependencies +=  "com.chuusai" %% "shapeless" % "2.0.0"
+
+libraryDependencies += "org.spire-math" %% "spire" % "0.9.0"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test"
 
