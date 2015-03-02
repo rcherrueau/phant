@@ -3,7 +3,7 @@ package resources
 package ops
 
 object db {
-  import shapeless.Nat, shapeless.Succ, Nat._
+  import shapeless._, Nat._
 
   /** Type class selects first `n` columns. */
   trait Taker[N <: Nat, Db <: DB] {
@@ -178,6 +178,33 @@ object db {
         def map(db: Db)(f: T => R) = |:(db.head, cmper.map(db.tail)(f))
       }
   }
+
+  /** Type class that returns the first line */
+  trait HLister[Db <: DB] {
+    type Out <: HList
+    def toHList(db: Db): Out
+  }
+
+  object HLister {
+    def apply[Db <: DB](db: Db)(implicit
+                                hlter: HLister[Db]) =
+      hlter.toHList(db)
+
+    implicit def EOColHLister = new HLister[EOCol] {
+      type Out = HNil
+      def toHList(db: EOCol) = HNil
+    }
+
+    implicit def DbHLister[Db <: DB](implicit
+                                     hlter: HLister[Db#Tail]) =
+      new HLister[Db] {
+        type Out = Db#Head :: hlter.Out
+        def toHList(db: Db) = db.head.head :: hlter.toHList(db.tail)
+      }
+  }
+
+  /** Type class that selects all elements which satisfy a predicate. */
+  trait Filter[Db <: DB]
 
   object TakerH {
     def apply[Db <: DB](n: Int, db: Db): Db#This = DB._unsafe[Db#This](

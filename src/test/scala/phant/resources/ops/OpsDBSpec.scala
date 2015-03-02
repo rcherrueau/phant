@@ -8,7 +8,7 @@ import db._
 import org.scalatest._
 
 class OpsDBSpec extends FlatSpec with Matchers {
-  import shapeless.Nat._
+  import shapeless._, Nat._
 
   val db: String |: Option[String] |: Int |: EOCol = DB(
     ("2014-01-01", Some("Bob"),   1),
@@ -81,6 +81,10 @@ class OpsDBSpec extends FlatSpec with Matchers {
     illTyped("""
       // Expected type for column _1 is String
       ColMapper[_1, db.This, Int, Option[Int]](db)(Some(_))""")
+  }
+
+  "HLister" should "return the first line of the DB" in {
+    HLister(db): String :: Option[String] :: Int :: HNil
   }
 
   "TakerH" should "produce chunck of DB type" in {
