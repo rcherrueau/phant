@@ -9,6 +9,9 @@ sealed abstract class DB {
 
   type Tail <: DB
   def tail: Tail
+
+  def isEmpty: Boolean = head.isEmpty
+  def lines: Int = head.length
 }
 
 final case class |:[H, T <: DB](val head: Seq[H],
@@ -31,6 +34,8 @@ trait EOCol extends DB {
 
   def head = throw new NoSuchElementException("DB.head")
   def tail = throw new NoSuchElementException("DB.tail")
+  override def isEmpty = true
+  override def lines = throw new NoSuchElementException("DB.lines")
 
   override def toString = "EOCol"
   override def equals(o: Any): Boolean = o match {
@@ -70,7 +75,7 @@ object DB {
     |:(t1s.reverse, |:(t2s.reverse, |:(t3s.reverse, EOCol)))
   }
 
-  // Convert this DB into DBOps "pimp-my-library" pattern
+  // Convert this DB into DBOps: "pimp-my-library" pattern
   import syntax.DBOps
   import scala.language.implicitConversions
   implicit def db2dbOps[Db <: DB](db: Db): DBOps[Db] =
