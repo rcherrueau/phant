@@ -83,24 +83,24 @@ class OpsDBSpec extends FlatSpec with Matchers {
       ColMapper[_1, db.This, Int, Option[Int]](db)(Some(_))""")
   }
 
-  "TakerV" should "produce chunck of DB type" in {
-    TakerV(0,              db): String |: Option[String] |: Int |: EOCol
-    TakerV(1,              db): String |: Option[String] |: Int |: EOCol
-    TakerV(db.head.length, db): String |: Option[String] |: Int |: EOCol
+  "TakerH" should "produce chunck of DB type" in {
+    TakerH(0,              db): String |: Option[String] |: Int |: EOCol
+    TakerH(1,              db): String |: Option[String] |: Int |: EOCol
+    TakerH(db.head.length, db): String |: Option[String] |: Int |: EOCol
   }
 
-  "DropperV" should "produce chunck of DB type" in {
-    DropperV(0,              db): String |: Option[String] |: Int |: EOCol
-    DropperV(1,              db): String |: Option[String] |: Int |: EOCol
-    DropperV(db.head.length, db): String |: Option[String] |: Int |: EOCol
+  "DropperH" should "produce chunck of DB type" in {
+    DropperH(0,              db): String |: Option[String] |: Int |: EOCol
+    DropperH(1,              db): String |: Option[String] |: Int |: EOCol
+    DropperH(db.head.length, db): String |: Option[String] |: Int |: EOCol
   }
 
-  "SplitterV" should "produce two chuncks typed as DB type" in {
-    SplitterV(0,              db): (String |: Option[String] |: Int |: EOCol,
+  "SplitterH" should "produce two chuncks typed as DB type" in {
+    SplitterH(0,              db): (String |: Option[String] |: Int |: EOCol,
                                     String |: Option[String] |: Int |: EOCol)
-    SplitterV(1,              db): (String |: Option[String] |: Int |: EOCol,
+    SplitterH(1,              db): (String |: Option[String] |: Int |: EOCol,
                                     String |: Option[String] |: Int |: EOCol)
-    SplitterV(db.head.length, db): (String |: Option[String] |: Int |: EOCol,
+    SplitterH(db.head.length, db): (String |: Option[String] |: Int |: EOCol,
                                     String |: Option[String] |: Int |: EOCol)
   }
 }

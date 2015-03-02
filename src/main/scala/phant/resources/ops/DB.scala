@@ -179,24 +179,24 @@ object db {
       }
   }
 
-  object TakerV {
+  object TakerH {
     def apply[Db <: DB](n: Int, db: Db): Db#This = DB._unsafe[Db#This](
       db match {
-        case |:(h, t) => |:(h.take(n), TakerV(n, t))
+        case |:(h, t) => |:(h.take(n), TakerH(n, t))
         case _ => EOCol
       })
   }
 
-  object DropperV {
+  object DropperH {
     def apply[Db <: DB](n: Int, db: Db): Db#This = DB._unsafe[Db#This](
       db match {
-        case |:(h, t) => |:(h.drop(n), DropperV(n, t))
+        case |:(h, t) => |:(h.drop(n), DropperH(n, t))
         case _ => EOCol
       })
   }
 
-  object SplitterV {
+  object SplitterH {
     def apply[Db <: DB](n: Int, db: Db) =
-      (TakerV(n, db), DropperV(n, db))
+      (TakerH(n, db), DropperH(n, db))
   }
 }

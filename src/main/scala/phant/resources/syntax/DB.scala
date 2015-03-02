@@ -34,9 +34,9 @@ final class DBOps[Db <: DB](db: Db) {
   def mapCol[T,R](f: T => R, n: Nat)(implicit cmper: ColMapper[n.N,Db,T,R]) =
     ColMapper(db)(f)
 
-  def takeV(n: Int) = TakerV(n, db)
+  def takeH(n: Int) = TakerH(n, db)
 
-  def dropV(n: Int) = DropperV(n, db)
+  def dropH(n: Int) = DropperH(n, db)
 
-  def splitV(n: Int) = SplitterV(n, db)
+  def splitH(n: Int) = SplitterH(n, db)
 }

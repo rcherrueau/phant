@@ -176,17 +176,17 @@ class DBSpec extends FlatSpec with Matchers {
   }
 
   "A DB" should "take lines from top to bottom" in {
-    db.takeV(0) should be (DB[String, Option[String], Int](Nil:_*))
+    db.takeH(0) should be (DB[String, Option[String], Int](Nil:_*))
 
-    db.takeV(1) should be (DB(("2014-01-01", Some("Bob"),1)))
+    db.takeH(1) should be (DB(("2014-01-01", Some("Bob"),1)))
 
-    db.takeV(db.head.length) should be (db)
+    db.takeH(db.head.length) should be (db)
   }
 
   "A DB" should "drop lines from top to bottom" in {
-    db.dropV(0) should be (db)
+    db.dropH(0) should be (db)
 
-    db.dropV(1) should be (DB(("2014-01-02", Some("Chuck"), 2),
+    db.dropH(1) should be (DB(("2014-01-02", Some("Chuck"), 2),
                               ("2014-01-03", Some("Bob"),   3),
                               ("2014-01-04", Some("Chuck"), 4),
                               ("2014-01-05", Some("Bob"),   5),
@@ -197,14 +197,14 @@ class DBSpec extends FlatSpec with Matchers {
                               ("2014-01-09", Some("Chuck"), 2),
                               ("2014-01-10", Some("Chuck"), 7)))
 
-    db.dropV(db.head.length) should be (DB[String, Option[String], Int](
+    db.dropH(db.head.length) should be (DB[String, Option[String], Int](
                                           Nil:_*))
   }
 
-  "A DB" should "produce two chuncks of DB on splitV" in {
-    db.splitV(0) should be ((DB[String, Option[String], Int](Nil:_*), db))
+  "A DB" should "produce two chuncks of DB on splitH" in {
+    db.splitH(0) should be ((DB[String, Option[String], Int](Nil:_*), db))
 
-    db.splitV(1) should be ((DB(("2014-01-01", Some("Bob"),1)),
+    db.splitH(1) should be ((DB(("2014-01-01", Some("Bob"),1)),
                              DB(("2014-01-02", Some("Chuck"), 2),
                                 ("2014-01-03", Some("Bob"),   3),
                                 ("2014-01-04", Some("Chuck"), 4),
@@ -216,7 +216,7 @@ class DBSpec extends FlatSpec with Matchers {
                                 ("2014-01-09", Some("Chuck"), 2),
                                 ("2014-01-10", Some("Chuck"), 7))))
 
-    db.splitV(db.head.length) should be ((db,
+    db.splitH(db.head.length) should be ((db,
                                           DB[String, Option[String], Int](
                                             Nil:_*)))
   }
