@@ -20,17 +20,6 @@ object Guard extends App {
   case class Atom[S1,S2](s1: S1, s2: S2)
   type HEq[R]
 
-  def run[S,A](s: S): Guard[S,S,A] = ???
-
-  def init[S]: Guard[S,S,S] =
-    Guard(s => (s, s))
-
-  def init[S](s: S): Guard[S,S,S] =
-    Guard(s => (s, s))
-
-  def get[S]: Guard[S,S,S] =
-    Guard(s => (s,s))
-
   def unit[S,A](a: A): Guard[S,S,A] =
     Guard(s => (a, s))
 
@@ -42,159 +31,441 @@ object Guard extends App {
   def frag[S1,S2]: Guard[Atom[S1,S2], (S1,S2), Unit] =
     Guard(s => ((), (s.s1, s.s2)))
 
-  // def frag1: Guard[List[(String,String,String)],
-  //                  (List[(String,Int)],
-  //                   List[(String,String,Int)]),
-  //                  Unit] = Guard(db =>
-  //                    ((), (db.zipWithIndex.map {
-  //                                case ((d,_,_), v) => (d, v)
-  //                              },
-  //                              db.zipWithIndex.map {
-  //                                case ((_,n,a), v) => (n, a, v)
-  //                              })))
-
-
   def defrag[S1,S2]: Guard[(S1,S2), Atom[S1,S2], Unit] =
     Guard({ case (s1, s2) => ((), Atom(s1, s2)) })
 
-  // At start right is S1 and left is S2
-  // After right is S3 and left is S2
-  def onRFrag[S1,S2,S3,A](g: Guard[S1,S3,A]): Guard[(S1,S2),(S3,S2),A] = ???
+  // At start left is S1 and right is S2
+  // After left is S3 and right is S2
+  def onLFrag[S1,S2,S3,A](g: Guard[S1,S3,A]): Guard[(S1,S2),(S3,S2),A] = ???
 
-  def onLFrag[S1,S2,S3,A](g: Guard[S2,S3,A]): Guard[(S1,S2),(S1,S3),A] = ???
+  // At start left is S1 and right is S2
+  // After left is S1 and right is S3
+  def onRFrag[S1,S2,S3,A](g: Guard[S2,S3,A]): Guard[(S1,S2),(S1,S3),A] = ???
 
-  def onFrag[S1,S2,S3,S4,A](gR: Guard[S1,S3,A],
-                            gL: Guard[S2,S4,A]):
+  def onFrag[S1,S2,S3,S4,A](gL: Guard[S1,S3,A],
+                            gR: Guard[S2,S4,A]):
       Guard[(S1,S2), (S3,S4), A] =
-    onRFrag[S1,S2,S3,A](gR) flatMap { _ => onLFrag[S3,S2,S4,A](gL) }
+    onLFrag[S1,S2,S3,A](gL) flatMap { _ => onRFrag[S3,S2,S4,A](gR) }
+}
 
-    (for {
-       _ <- init[Unit]
-       x <- unit("abc")
-       y <- unit(x + "def")
-     } yield y) run (()): (String, Unit)
+/** Monad hides the database and applies modification in place. */
+object V1 {
+  import Guard._
 
-
-    val db: List[(String, String, String)] = List(
-      ("2014-01-01", "Bob",   "a"),
-      ("2014-01-02", "Chuck", "b"),
-      ("2014-01-03", "Bob",   "c"),
-      ("2014-01-04", "Chuck", "d"),
-      ("2014-01-05", "Bob",   "e"),
-      ("2014-01-06", "Bob",   "e"),
-      ("2014-01-07", "Bob",   "e"),
-      ("2014-01-08", "Bob",   "f"),
-      ("2014-01-08", "Daan",  "f"),
-      ("2014-01-09", "Chuck", "b"),
-      ("2014-01-10", "Chuck", "g"))
+  (for {
+     x <- unit[Unit, String]("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, Unit)
 
 
   (for {
-     _ <- init[db.type]
-     d1 <- get[db.type]
-     d2 = d1 map ({ case (d,n,a) => (d,n) })
-     d3 = d2 filter({case (d,n) =>
-                      List("Chuck", "Bob").exists({ _ == n }) })
-   } yield d3)
+     _ <- crypt[Unit, HEq]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, HEq[Unit])
+
+  unit("abc") flatMap { s =>
+    crypt[Unit, HEq] flatMap { _ =>
+      unit("def") map     { d => s + d }: Guard[HEq[Unit], HEq[Unit], String]
+    }: Guard[Unit, HEq[Unit], String]
+  }: Guard[Unit, HEq[Unit], String]
+
+  (for {
+     _ <- crypt[Unit, HEq]
+     x <- unit[HEq[Unit], String]("abc")
+     _ <- decrypt[HEq, Unit]
+     y <- unit(x + "def")
+   } yield y) run (()): (String, Unit)
+
+  (for {
+     _ <- crypt[Unit, HEq]
+     _ <- crypt[HEq[Unit], HEq]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, HEq[HEq[Unit]])
+
+  (for {
+     x <- unit("abc")
+     _ <- frag[Unit, Unit]
+     y <- unit(x + "def")
+   } yield y) run (Atom((),())): (String, (Unit, Unit))
+
+  (for {
+     x <- unit("abc")
+     _ <- frag[Unit, Unit]
+     y <- unit(x + "def")
+     _ <- defrag
+   } yield y) run (Atom((),())): (String, Atom[Unit,Unit])
+
+  (for {
+     x <- unit("abc")
+     _ <- frag[Unit, Unit]
+     _ <- onLFrag(crypt[Unit, HEq])
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom((),())): (String, Atom[HEq[Unit],Unit])
+
+  (for {
+     x <- unit("abc")
+     _ <- frag[Unit, Unit]
+     _ <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                  } yield ())
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
+
+  (for {
+     x <- unit("abc")
+     _ <- frag[Unit, Unit]
+     _ <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                  } yield ())
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
+
+  (for {
+     x <- unit("abc")
+     _ <- frag[Unit, Unit]
+     y <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                    s <- unit("def")
+                  } yield s)
+     z <- unit(x + y + "ghi")
+   } yield y) run (Atom(Unit,Unit)): (String, (HEq[HEq[Unit]], Unit))
+
+  (for {
+     x <- unit("abc")
+     _ <- frag[Atom[Unit,Unit], Unit]
+     _ <- onLFrag(for {
+                    _ <- frag[Unit, Unit]
+                    _ <- onLFrag(crypt[Unit, HEq])
+                  } yield ())
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom((Atom((),())),())): (String,
+                                             Atom[(HEq[Unit],Unit), Unit])
+}
+
+/** Configuration combinator for a better type inference. */
+object V2 {
+  import Guard._
+
+  def configure[S]: Guard[S,S,Unit] =
+    Guard(s => ((), s))
+
+  (for {
+     _ <- configure[Unit]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, Unit)
+
+  (for {
+     _ <- configure[Unit]
+     _ <- crypt[Unit, HEq]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, HEq[Unit])
 
 
-  def unFrag1(d1: List[(String, Int)], d2: List[(String, Int)]):
-      List[(String,String,Int)] = {
-    for {
-      (x, i) <- d1
-      (y, j) <- d2
-      if i == j
-    } yield (x,y,i)
-  }
+  unit("abc") flatMap { s =>
+    crypt[Unit, HEq] flatMap { _ =>
+      unit("def") map     { d => s + d }: Guard[HEq[Unit], HEq[Unit], String]
+    }: Guard[Unit, HEq[Unit], String]
+  }: Guard[Unit, HEq[Unit], String]
+
+  (for {
+     _ <- configure[Unit]
+     _ <- crypt[Unit, HEq]
+     x <- unit[HEq[Unit], String]("abc")
+     _ <- decrypt[HEq, Unit]
+     y <- unit(x + "def")
+   } yield y) run (()): (String, Unit)
+
+  (for {
+     _ <- configure[Unit]
+     _ <- crypt[Unit, HEq]
+     _ <- crypt[HEq[Unit], HEq]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, HEq[HEq[Unit]])
+
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- unit(x + "def")
+   } yield y) run (Atom((),())): (String, (Unit, Unit))
+
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- unit(x + "def")
+   } yield y) run (Atom((),())): (String, (Unit, Unit))
+
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- unit(x + "def")
+     _ <- defrag
+   } yield y) run (Atom((),())): (String, Atom[Unit,Unit])
+
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     _ <- onLFrag(crypt[Unit, HEq])
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom((),())): (String, Atom[HEq[Unit],Unit])
+
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     _ <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                  } yield ())
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
+
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     _ <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                  } yield ())
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
+
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                    s <- unit("def")
+                  } yield s)
+     z <- unit(x + y + "ghi")
+   } yield y) run (Atom(Unit,Unit)): (String, (HEq[HEq[Unit]], Unit))
+
 
   // (for {
-  //    _ <- init[db.type]
-  //    _ <- frag1
-  //    d1 <- get[(List[(String, Int)], List[(String, String, Int)])]
-  //    // d2 = d1 map ({ case (d,n,a) => (d,n) })
-  //    d21 = d1._1 map ({ case (d,i) => (d,i) })
-  //    d22 = d1._2 map ({ case (n,a,i) => (n,i) })
-  //    // d3 = d2 filter({case (d,n) =>
-  //    //                  List("Chuck", "Bob").exists({ _ == n }) })
-  //    d31 = d22 filter ({case (n,i) =>
-  //                        List("Chuck", "Bob").exists({ _ == n }) })
-  //    d32 = unFrag1(d21,d31)
-  //  } yield d32)
+  //    _ <- frag[_2]
+  //    _ <- onLFrag(for {
+  //                   _ <- crypt[Unit, HEq]
+  //                 } yield ())
+  //    z <- unit(x + "def")
+  //    _ <- defrag
+  //  } yield z) run (db): (String,
+  //                                            Atom[(HEq[Unit],Unit), Unit])
+}
+
+/** Let's be more specific with a concret example. */
+object V3 {
+  import Guard._
+  import V2.configure
+
+  type Line = (String, Option[String], Int)
+  type DB[X] = List[X]
+  val db: DB[Line] =
+    List(("2014-01-01", Some("Bob"),   1),
+         ("2014-01-02", Some("Chuck"), 2),
+         ("2014-01-03", Some("Bob"),   3),
+         ("2014-01-04", Some("Chuck"), 4),
+         ("2014-01-05", Some("Bob"),   5),
+         ("2014-01-06", Some("Bob"),   5),
+         ("2014-01-07", None,          5),
+         ("2014-01-08", Some("Bob"),   6),
+         ("2014-01-08", Some("Daan"),  6),
+         ("2014-01-09", Some("Chuck"), 2),
+         ("2014-01-10", Some("Chuck"), 7))
+
+  // The get combinator offers a view on the database and enables
+  // calculation on that view without modifying the database itself.
+  def get[S]: Guard[S,S,S] =
+    Guard(s => (s,s))
+
+  def project[T,R](db: DB[T])(f: T => R): DB[R] =
+    db map f
+
+  def select[T](db: DB[T])(f: T => Boolean): DB[T] =
+    db filter f
+
+  // No security
+  for {
+    // Configuration of the system with the database:
+    _  <- configure[DB[Line]]
+    // Get a view on that database for futur calculations
+    v1 <- get[DB[Line]]
+    // Projection that only keeps `d` and `n`
+    v2 = project(v1) { case (d, n, a) => (d, n) }
+    // Selection that only keeps "Bob" and "Chuck" entries
+    v3 = select(v2) {
+       case (d, n) => List("Chuck", "Bob") exists { _ == n }
+    }
+  } yield v3
+
+  // // FIXME: Here is the traduction of the previous for/yield. I don't
+  // // know why but the last `map` makes stuck the type inference. The
+  // // second implementation without the last map works infers
+  // // correclty.
+  // // Guard[DB[Line],DB[Line],DB[(String, Option[String])]]
+  // configure[DB[Line]].flatMap({ _ =>
+  //   get[DB[Line]].map({ (v1: DB[Line]) => {
+  //                        val v2 = project(v1) { case (d, n, a) => (d, n) }
+  //                        val v3 = select(v2) {
+  //                          case (d, n) => List("Chuck", "Bob") exists { _ == n }
+  //                        }
+  //                        v3
+  //                      // Guard[DB[Line], DB[Line], DB[(String, Option[String])]]
+  //                      }}).map({ case (v4: DB[(String, Option[String])]) => v4 })
+  //   })
+
+  // configure[DB[Line]].flatMap({ _ =>
+  //   get.map({ v1 => {
+  //              val v2 = project(v1) { case (d, n, a) => (d, n) }
+  //              val v3 = select(v2) {
+  //                case (d, n) => List("Chuck", "Bob") exists { _ == n }
+  //              }
+  //              v3
+  //                // Guard[DB[Line], DB[Line], DB[(String, Option[String])]]
+  //            }})})
+
+  // // The correct traduction according to the spec is the following.
+  // // http://www.scala-lang.org/files/archive/spec/2.11/06-expressions.html#for-comprehensions-and-for-loops
+  // // I'm not sure of what happening there, If I follow the spec, then
+  // // type should be well inferred!? See step4 that compiles without
+  // // giving type information in `get`
+  // Step1:
+  // configure[DB[Line]]
+  //   .flatMap ({
+  //               case _ =>
+  //                 for {
+  //                   v1 <- get[DB[Line]]
+  //                   v2 = project(v1) { case (d, n, a) => (d, n) }
+  //                   v3 = select(v2) {
+  //                     case (d, n) => List("Chuck", "Bob") exists { _ == n }
+  //                   }
+  //                 } yield v3
+  //             })
+
+  // // Step2:
+  // configure[DB[Line]]
+  //   .flatMap ({
+  //              case _ =>
+  //                for {
+  //                  (v1, v2, v3) <- for (
+  //                    x$1@v1 <- get[DB[Line]]
+  //                  ) yield {
+  //                    val x$2@v2 = project(v1) { case (d, n, a) => (d, n) }
+  //                    val x$3@v3 = select(v2) {
+  //                      case (d, n) => List("Chuck", "Bob") exists { _ == n }
+  //                    }
+  //                    (x$1, x$2, x$3)
+  //                  }
+  //                } yield v3
+  //            })
+
+  // // Step3
+  // configure[DB[Line]]
+  //   .flatMap ({
+  //              case _ =>
+  //                 (for (x$1@v1 <- get[DB[Line]])
+  //                  yield {
+  //                    val x$2@v2 = project(v1) { case (d, n, a) => (d, n) }
+  //                    val x$3@v3 = select(v2) {
+  //                      case (d, n) => List("Chuck", "Bob") exists { _ == n }
+  //                    }
+  //                    (x$1, x$2, x$3)
+  //                  })
+  //                   .map ({ case (v1, v2, v3) => v3 })
+  //            })
 
 
-  trait Site[A, S[X]] {
-    def get: A
-    def apply[B](b: B): S[B]
-    def move[S[A] <: Site[A,S]](f: A => S[A]): S[A] = f(get)
-    // // def project[Z <: A,Y](f: Z => Y): Site[List[Y]] = ???
-  }
+  // // Step4
+  // configure[DB[Line]]
+  //   .flatMap ({
+  //              case _ =>
+  //                 get
+  //                   .map({ case x$1@v1 => {
+  //                           val x$2@v2 = project(v1) { case (d, n, a) => (d, n) }
+  //                           val x$3@v3 = select(v2) {
+  //                             case (d, n) => List("Chuck", "Bob") exists { _ == n }
+  //                           }
+  //                           (x$1, x$2, x$3)
+  //                         }})
+  //             })
 
-  case class Site0[A](val get: A) extends Site[A,Site0] {
-    def apply[B](b: B): Site0[B] = Site0(b)
-  }
 
-  case class Site1[A](val get: A) extends Site[A,Site1] {
-    def apply[B](b: B): Site1[B] = Site1(b)
-  }
+  import shapeless.Nat._
+  type F1 = (String, Int)
+  type F2 = (Option[String], Int, Int)
 
-  case class Site2[A](val get: A) extends Site[A,Site2] {
-    def apply[B](b: B): Site2[B] = Site2(b)
-  }
+  def frag[N]: Guard[DB[Line], (DB[F1], DB[F2]), Unit] =
+    Guard(db => ((), (db.zipWithIndex.map {
+                        case ((d,_,_), v) => (d, v)
+                      },
+                      (db.zipWithIndex.map {
+                         case ((_,n,a), v) => (n, a, v)
+                       }))))
+  def join(f1: DB[(String, Int)],
+           f2: DB[(Option[String], Int)]): DB[(String, Option[String], Int)] =
+    for {
+      (x, i) <- f1
+      (y, j) <- f2
+      if i == j
+    } yield (x, y, i)
 
-  object Site {
-    def s0[A](a: A) = Site0(a)
-    def s1[A](a: A) = Site1(a)
-    def s2[A](a: A) = Site2(a)
+  // With fragmentation
+  for {
+    _  <- configure[DB[Line]]
+    _  <- frag[_1]
+    v1 <- get[(DB[F1], DB[F2])]
+    // v2 = project (v1) { case (d, n, a) => (d, n) }
+    v21 = project (v1._1) { case (d, i) => (d, i) }
+    v22 = project (v1._2) { case (n, a, i) => (n, i) }
+    // v3 = select (v2) {
+    //   case (d, n) => List("Chuck", "Bob") exists { _ == n }
+    // }
+    v31 = select (v22) {
+      case (n, i) => List("Chuck", "Bob") exists { _ == n }
+    }
+    v32 = join(v21,v31)
+   } yield v32
 
-    def map[Y,Z,S[X] <: Site[X,S]](s: S[List[Y]])(f: Y => Z): S[List[Z]] =
-      s(s.get map f)
+  def crypt[N,H[_]]: Guard[DB[F2], DB[(H[Option[String]], Int, Int)], Unit] = ???
+  trait Protection { def get: String }
+  trait Raw[R] extends Protection { def decode: R }
+  type Pull[C] <: Protection
+  type AES[R] <: Protection
+  type HES <: Protection
+  type HEq[R] <: HES
+  type HOrder[R] <: HEq[R]
 
-    def filter[Y,S[X] <: Site[X,S]](s: S[List[Y]])(f: Y => Boolean): S[List[Y]] =
-      s(s.get filter f)
-
-    def join[S[X] <: Site[X,S]](s1: S[List[(String,Int)]],
-                                s2: S[List[(String,Int)]]):
-        S[List[(String,String,Int)]] =
-      s1(for {
-           (x, i) <- s1.get
-           (y, j) <- s2.get
-           if i == j
-         } yield (x, y, i))
-  }
-
-  import Site._
-
-  def frag1:Guard[Site0[List[(String,String,String)]],
-                   (Site1[List[(String,Int)]],
-                    Site2[List[(String,String,Int)]]),
-                   Unit] =
-    Guard(db =>
-      ((), (Site1(db.get.zipWithIndex.map {
-                    case ((d,_,_), v) => (d, v)
-                  }),
-            Site2(db.get.zipWithIndex.map {
-                    case ((_,n,a), v) => (n, a, v)
-                  }))))
-
-  (for {
-     _ <- init[Site0[List[(String,String,String)]]]
-     _ <- frag1
-     d1 <- get[(Site1[List[(String, Int)]],
-                Site2[List[(String, String, Int)]])]
-     // Les sites sont implicites
-     // d21 = d1._1 map ({ case (d,i) => (d,i) })
-     d21 = map(d1._1) { case (d, i) => (d, i) }
-     // d22 = d1._2 map ({ case (n,a,i) => (n,i) })
-     d22 = map(d1._2) { case (n, a, i) => (n, i) }
-     // d31 = d22 filter ({case (n,i) =>
-     //                     List("Chuck", "Bob").exists({ _ == n }) })
-     d31 = filter(d22) { case (n, i) =>
-       List("Bob", "Chuck") exists { _ == n } }
-     // d32 = unFrag1(d21,d31)
-     // d32 = join(d21,d31) // Doesn't type check
-     d32 = join(d21.move(s0), d31.move(s0))
-     // FIXME: following also type checks!
-     // d321 = join(d21, d31.move(s1))
-     // d322 = join(d21.move(s2), d31)
-   } yield d32)
+  // With fragmentation + Homomorphic Order
+  for {
+    _  <- configure[DB[Line]]
+    _  <- frag[_1]
+    _  <- onRFrag(crypt[_1, HOrder])
+    v1 <- get[(DB[F1], DB[(HOrder[Option[String]], Int, Int)])]
+    v21 = project (v1._1) { case (d, i) => (d, i) }
+    v22 = project (v1._2) { case (n, a, i) => (n, i) }
+    v31 = select (v22) {
+      case (n, i) => List("Chuck", "Bob") exists { _ == n }
+    }
+    v32 = join(v21,v31)
+   } yield v32
 }
