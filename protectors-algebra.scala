@@ -13,9 +13,11 @@ case class Guard[-S1,S2,+A](run: S1 => (A, S2)) {
 
   def map[B](f: A => B): Guard[S1,S2,B] =
      this flatMap { a => Guard.unit(f(a)) }
+
+//  def filter(p: A => Guard[S1,S2,Bool]): Guard[S
 }
 
-object Guard extends App {
+object Guard  {
   // State is splitable onto S1, S2
   case class Atom[S1,S2](s1: S1, s2: S2)
   type HEq[R]
@@ -158,114 +160,117 @@ object V2 {
   def configure[S]: Guard[S,S,Unit] =
     Guard(s => ((), s))
 
-  // (for {
-  //    _ <- configure[Unit]
-  //    x <- unit("abc")
-  //    y <- unit(x + "def")
-  //  } yield y) run (()): (String, Unit)
+  (for {
+     _ <- configure[Unit]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, Unit)
 
-  // (for {
-  //    _ <- configure[Unit]
-  //    _ <- crypt[Unit, HEq]
-  //    x <- unit("abc")
-  //    y <- unit(x + "def")
-  //  } yield y) run (()): (String, HEq[Unit])
+  (for {
+     _ <- configure[Unit]
+     _ <- crypt[Unit, HEq]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, HEq[Unit])
 
 
-  // unit("abc") flatMap { s =>
-  //   crypt[Unit, HEq] flatMap { _ =>
-  //     unit("def") map     { d => s + d }: Guard[HEq[Unit], HEq[Unit], String]
-  //   }: Guard[Unit, HEq[Unit], String]
-  // }: Guard[Unit, HEq[Unit], String]
+  unit("abc") flatMap { s =>
+    crypt[Unit, HEq] flatMap { _ =>
+      unit("def") map     { d => s + d }: Guard[HEq[Unit], HEq[Unit], String]
+    }: Guard[Unit, HEq[Unit], String]
+  }: Guard[Unit, HEq[Unit], String]
 
-  // (for {
-  //    _ <- configure[Unit]
-  //    _ <- crypt[Unit, HEq]
-  //    x <- unit[HEq[Unit], String]("abc")
-  //    _ <- decrypt[HEq, Unit]
-  //    y <- unit(x + "def")
-  //  } yield y) run (()): (String, Unit)
+  (for {
+     _ <- configure[Unit]
+     _ <- crypt[Unit, HEq]
+     x <- unit[HEq[Unit], String]("abc")
+     _ <- decrypt[HEq, Unit]
+     y <- unit(x + "def")
+   } yield y) run (()): (String, Unit)
 
-  // (for {
-  //    _ <- configure[Unit]
-  //    _ <- crypt[Unit, HEq]
-  //    _ <- crypt[HEq[Unit], HEq]
-  //    x <- unit("abc")
-  //    y <- unit(x + "def")
-  //  } yield y) run (()): (String, HEq[HEq[Unit]])
+  (for {
+     _ <- configure[Unit]
+     _ <- crypt[Unit, HEq]
+     _ <- crypt[HEq[Unit], HEq]
+     x <- unit("abc")
+     y <- unit(x + "def")
+   } yield y) run (()): (String, HEq[HEq[Unit]])
 
-  // (for {
-  //    _ <- configure[Atom[Unit,Unit]]
-  //    x <- unit("abc")
-  //    _ <- frag
-  //    y <- unit(x + "def")
-  //  } yield y) run (Atom((),())): (String, (Unit, Unit))
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- unit(x + "def")
+   } yield y) run (Atom((),())): (String, (Unit, Unit))
 
-  // (for {
-  //    _ <- configure[Atom[Unit,Unit]]
-  //    x <- unit("abc")
-  //    _ <- frag
-  //    y <- unit(x + "def")
-  //  } yield y) run (Atom((),())): (String, (Unit, Unit))
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- unit(x + "def")
+   } yield y) run (Atom((),())): (String, (Unit, Unit))
 
-  // (for {
-  //    _ <- configure[Atom[Unit,Unit]]
-  //    x <- unit("abc")
-  //    _ <- frag
-  //    y <- unit(x + "def")
-  //    _ <- defrag
-  //  } yield y) run (Atom((),())): (String, Atom[Unit,Unit])
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- unit(x + "def")
+     _ <- defrag
+   } yield y) run (Atom((),())): (String, Atom[Unit,Unit])
 
-  // (for {
-  //    _ <- configure[Atom[Unit,Unit]]
-  //    x <- unit("abc")
-  //    _ <- frag
-  //    _ <- onLFrag(crypt[Unit, HEq])
-  //    z <- unit(x + "def")
-  //    _ <- defrag
-  //  } yield z) run (Atom((),())): (String, Atom[HEq[Unit],Unit])
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     _ <- onLFrag(crypt[Unit, HEq])
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom((),())): (String, Atom[HEq[Unit],Unit])
 
-  // (for {
-  //    _ <- configure[Atom[Unit,Unit]]
-  //    x <- unit("abc")
-  //    _ <- frag
-  //    _ <- onLFrag(for {
-  //                   _ <- crypt[Unit, HEq]
-  //                   _ <- crypt[HEq[Unit], HEq]
-  //                 } yield ())
-  //    z <- unit(x + "def")
-  //    _ <- defrag
-  //  } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     _ <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                  } yield ())
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
 
-  // (for {
-  //    _ <- configure[Atom[Unit,Unit]]
-  //    x <- unit("abc")
-  //    _ <- frag
-  //    _ <- onLFrag(for {
-  //                   _ <- crypt[Unit, HEq]
-  //                   _ <- crypt[HEq[Unit], HEq]
-  //                 } yield ())
-  //    z <- unit(x + "def")
-  //    _ <- defrag
-  //  } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     _ <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                  } yield ())
+     z <- unit(x + "def")
+     _ <- defrag
+   } yield z) run (Atom(Unit,Unit)): (String, Atom[HEq[HEq[Unit]], Unit])
 
-  // (for {
-  //    _ <- configure[Atom[Unit,Unit]]
-  //    x <- unit("abc")
-  //    _ <- frag
-  //    y <- onLFrag(for {
-  //                   _ <- crypt[Unit, HEq]
-  //                   _ <- crypt[HEq[Unit], HEq]
-  //                   s <- unit("def")
-  //                 } yield s)
-  //    z <- unit(x + y + "ghi")
-  //  } yield y) run (Atom(Unit,Unit)): (String, (HEq[HEq[Unit]], Unit))
+  (for {
+     _ <- configure[Atom[Unit,Unit]]
+     x <- unit("abc")
+     _ <- frag
+     y <- onLFrag(for {
+                    _ <- crypt[Unit, HEq]
+                    _ <- crypt[HEq[Unit], HEq]
+                    s <- unit("def")
+                  } yield s)
+     z <- unit(x + y + "ghi")
+   } yield y) run (Atom(Unit,Unit)): (String, (HEq[HEq[Unit]], Unit))
 }
 
 /** Let's be more specific with a concret example. */
 object V3 extends App {
   import Guard._
   import V2.configure
+
+  // TODO:
+  // case class N (get: String)
 
   type D     = String
   type N     = String
@@ -321,11 +326,11 @@ object V3 extends App {
     _  <- configure[DB[(D,N,A)]]
     v1 <- get[DB[(D,N,A)]]
     // Projection that only keeps (N,A)
-    v2 = project (v1) { case (d, n, a) => (n, a) }
+    v2 = project (v1) { case (_, n, a) => (n, a) }
     // Selection that returns lines with "Bob" and "Chuck"
     v3 = select (v2) {
       // Has an Eq constraint on N
-      case (n, a) => List("Bob", "Chuck") exists (_ === n)
+      case (n, _) => List("Bob", "Chuck") exists (_ === n)
     }
     // Grouping on `n` and reduce that count, Has an Eq constraint
     v4 = groupby (v3) { case (n, _) => n } {grp =>
@@ -358,7 +363,7 @@ object V3 extends App {
     v2 = v1._2
     // Note: Selection should now take into account index
     v3 = select (v2) {
-      case (n, a, i) => List("Bob", "Chuck") exists (_ === n)
+      case (n, _, _) => List("Bob", "Chuck") exists (_ === n)
     }
     // Note: GroupBy should now take into account index
     v4 = groupby (v3) { case (n, _, _) => n } {grp =>
@@ -402,7 +407,7 @@ object V3 extends App {
     v2 = v1._2
     // Note: OK with Homomorphic Order
     v3 = select (v2) {
-      case (n, a, i) => List(HEq("Bob"), HEq("Chuck")) exists (_ === n)
+      case (n, _, _) => List(HEq("Bob"), HEq("Chuck")) exists (_ === n)
     }
     // Note: OK with Homomorphic Order
     v4 = groupby (v3) { case (n, _, _) => n } {grp =>
@@ -532,7 +537,7 @@ object V3 extends App {
     // on frag1. Moreover, projection should take care of the index.
     // v2 = project(v1) { case (d, n, a) => (d, n) }
     v21 = v1._1
-    v22 = project(v1._2) { case (n, a, i) => (n, i) }
+    v22 = project(v1._2) { case (n, _, i) => (n, i) }
     // Note: Selection works on the two fragments, but is useless on
     // frag1. Moreover, projection should take care of the index.
     v31 = v21
