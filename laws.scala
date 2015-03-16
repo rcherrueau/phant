@@ -40,11 +40,11 @@ object Laws {
 
   // ------------------------------- γ utils
   // U ∈ P(T)
-  def γ[T, U : Eq](db: DB[T])(p: T => U): List[List[T]] = db match {
+  def γ[T, U : Eq](db: DB[T])(p: T => U): DB[DB[T]] = db match {
     case Nil => Nil
     case line :: db =>
       (line :: db.filter(p(_) === p(line))) ::
-        γ(db.filter(p(_) =!= p(line)))(p)
+        γ (db.filter(p(_) =!= p(line))) (p)
   }
 
   def mapUnfrag1[A, B](dbas: DB[DB[(A, Id)]],
@@ -58,10 +58,10 @@ object Laws {
   // ------------------------------- φ utils
   // T =:= List[(A, B)]
   // R =:= (A,B)
-  def φ[T, R, E](l: List[T])(f: T => R, g: R => E): List[E] =
+  def φ[T, R, E](l: DB[T])(f: T => R, g: R => E): DB[E] =
     l map (f) map (g)
   // Keeps the least identifier
-  def φlift[T, R](f: List[T] => R): List[(T, Id)] => (R, Id) = tids => {
+  def φlift[T, R](f: DB[T] => R): DB[(T, Id)] => (R, Id) = tids => {
     val r = f(tids.unzip._1)
     val id = tids.minBy(_._2)._2
 
@@ -69,9 +69,10 @@ object Laws {
   }
 }
 
-object Check {
+object Check extends App {
   import org.scalacheck.Gen
   import org.scalacheck.Prop._
+  import org.scalacheck.Test._
   import Laws._
 
   // A generator of tuple string int
@@ -84,10 +85,11 @@ object Check {
   def db[A,B](gen: Gen[(A,B)]): Gen[DB[(A,B)]] = Gen.listOf(gen)
 
   // A property that specifies the behavior of the frag/unfag method
-  val fragUnfrag =
+  val pFragUnfrag =
     forAll (db(strInt)) {
       db => unfrag(frag(db)) == db
     }
+  pFragUnfrag.check
 
   val pΠ =
     forAll (db(strInt)) {
@@ -100,6 +102,7 @@ object Check {
       // Π on relation R2
       db => Π (unfrag(frag(db))) (R2) == Π (frag(db)._2) (rmId)
     }
+  pΠ.check
 
   val p1R1: String => Boolean = _.startsWith("a")
   val p2R2: Int => Boolean = _ % 2 == 0
@@ -127,8 +130,10 @@ object Check {
         unfrag((σfrag1, σfrag2))
       }
     }
+  pσ.check
 
   val pγ =
+    // FIXME:
     /*forAll (db(strInt)) {
       // γ on relation R seems not fragmentable
       db => γ (unfrag(frag(db))) (R) == {
@@ -143,14 +148,15 @@ object Check {
         val γfrag2 = frag(db)._2
         mapUnfrag1(γfrag1, γfrag2)
       }
-    } && forAll (db(strInt)) {
+    } /* && forAll (db(strInt)) {
       // γ on relation R2
       db => γ (unfrag(frag(db))) (R2) == {
         val γfrag1 = frag(db)._1
         val γfrag2 = γ (frag(db)._2) (R2)
         mapUnfrag2(γfrag1, γfrag2)
       }
-    }
+    } */
+  pγ.check
 
   val f1R1: List[String] => String = _.head
   val f2R2: List[Int] => Int = _.head
@@ -168,18 +174,7 @@ object Check {
         val φfrag2 = φ (γfrag2) (identity, identity[(Int, Id)])
         φ (unfrag((φfrag1, φfrag2))) (identity(_), f12R)
       }
-    } && forAll (db(strInt)) {
-      // φ on relation R2
-      db => φ (γ (unfrag(frag(db))) (R2)) (dbStrInt => {
-                                             val (strs, ints) = dbStrInt.unzip
-                                             (f1R1(strs), f2R2(ints))
-                                           }, f12R) == {
-        val γfrag1 = frag(db)._1
-        val γfrag2 = γ (frag(db)._2) (R2)
-        val φfrag1 = φ (γfrag1) (identity, identity[(String, Id)])
-        val φfrag2 = φ (γfrag2) (φlift(f2R2), identity[(Int, Id)])
-        φ (unfrag((φfrag1, φfrag2))) (identity(_), f12R)
-      }
     }
+  pφ.check
 
 }
