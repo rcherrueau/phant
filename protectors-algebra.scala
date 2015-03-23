@@ -418,7 +418,8 @@ object V3 extends App {
   } yield ()
 
   // Fragmentation + Homomorphic Eq
-  def cryptHEq[N: Eq,A,Id](n: _1): Guard[DB[(N,A,Id)], DB[(HEq[N], A, Id)], Unit] =
+  def cryptHEq[N: Eq,A,Id](n: _1):
+      Guard[DB[(N,A,Id)], DB[(HEq[N], A, Id)], Unit] =
     crypt(n)(n => HEq(n))
 
   illTyped("""
@@ -461,7 +462,9 @@ object V3 extends App {
       (grp.head._1, grp.foldRight (0) { case ((n, _, _), rest) => 1 + rest })
     }
     // Note: We transform HEq into HOrder
-    v5: DB[(HOrder[N],Int)] = v4.map { case (heqN, i) => (HOrder(heqN.get), i) }
+    v5: DB[(HOrder[N],Int)] = v4.map {
+      case (heqN, i) => (HOrder(heqN.get), i)
+    }
     v6 = sort(v5) { case (n, _) => n }
   } yield ()
 
