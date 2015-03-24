@@ -333,7 +333,7 @@ object V3 extends App {
       case (n, _) => List("Bob", "Chuck") exists (_ === n)
     }
     // Grouping on `n` and reduce that count, Has an Eq constraint
-    v4 = groupby (v3) { case (n, _) => n } {grp =>
+    v4 = groupby (v3) { case (n, _) => n } { grp =>
       (grp.head._1, grp.foldRight (0) { case ((n, _), rest) => 1 + rest })
     }
     // Sort on name
@@ -721,7 +721,6 @@ object V4 {
   def modify[S1,S2](f: S1 => S2): Guard[S1,S2,Unit] =
     Guard( (s: S1) => ((), f(s)))
 
-
   def send[S[A] <: Site[A,S], A](f: A => S[A]):
       Guard[Site0[A], S[A], Unit] =
     Guard( db => ((), db.move(f) ))
@@ -736,7 +735,6 @@ object V4 {
       _ <- onLFrag(send[Site1, List[(String,Int)]](s1))
       _ <- onRFrag(send[Site2, List[(String,String,Int)]](s2))
     } yield ()
-
 
   for {
     _ <- configure[Site0[List[(String,String,String)]]]
