@@ -800,7 +800,7 @@ object V4 {
 // -- Current --
 object V5Current {
   import V3.{D, N, A, Id, DB}
-  import V3.{db, project, select, groupby, join}
+  import V3.{db, project, select, groupby}
   import V3.{HEq, HOrder}                 // Homomorphic Function
 
   // Library for type classes
@@ -844,17 +844,69 @@ object V5Current {
   }
 
   // Query operations:
-  def rmId[D,N](db: DB[(D,N,Id)]): DB[(D,N)] = ???
-  def decr2[P[_]](db: DB[(D,P[N])]): DB[(D,N)] = ???
 
-  // TODO: Use word receive or gather for centralize/join. Gather
+  // ------------------------------- Π utils
+  // C ∈ P(T)
+  def Π[T, C](db: DB[T])(p: T => C): DB[C] = db.map(p)
+
+  def R[A,B,C]: ((A, B, C)) => ((A,B,C)) = identity
+  def R1[A,B,C]: ((A, B, C)) => A = _._1
+  def R2[A,B,C]: ((A, B, C)) => B = _._2
+  def R3[A,B,C]: ((A, B, C)) => C = _._3
+  def rmId[A](t: (A, Id)): A = t._1
+  def rmId[A,B](t: (A, B, Id)): (A,B) = (t._1, t._2)
+
+  // -------------------------------- σ utils
+  def σ[T](db: DB[T])(p: T => Boolean): DB[T] = db.filter(p)
+
+  def lift[T](f: T => Boolean): ((T, Id)) => Boolean = {
+    case (t, id) => f(t)
+  }
+  def ∧[A,B](f: A => Boolean, g: B => Boolean, h: ((A,B)) => Boolean):
+      ((A,B)) => Boolean = {
+    case (a, b) => f(a) && g(b) && h((a,b))
+  }
+  def ∧[A,B,C](f: A => Boolean,
+               g: B => Boolean,
+               h: C => Boolean,
+               i: ((A,B,C)) => Boolean): ((A,B,C)) => Boolean = {
+    case (a, b, c) => f(a) && g(b) && h(c) && i((a,b,c))
+  }
+
+  // ------------------------------- γ utils
+  // U ∈ P(T)
+  def γ[T, U : Eq](db: DB[T])(p: T => U): DB[DB[T]] = db match {
+    case Nil => Nil
+    case line :: db =>
+      (line :: db.filter(p(_) === p(line))) ::
+        γ (db.filter(p(_) =!= p(line))) (p)
+  }
+
+
+  // Note: Use word receive or gather for centralize/join. Gather
   // means, brings data back. This works for defragmentation and
   // decryption of data. Thus, frag/defrag, crypt/decrypt are monadic
   // operations and gather (that works for both) is the value
   // operation.
+  def gather[P[_]](db: DB[(D,P[N])]): DB[(D,N)] = ???
+  def gather[D,N,Id](f1: DB[(D, Id)], f2: DB[(N, Id)]): DB[(D, N, Id)] =
+    for {
+      (x, i) <- f1
+      (y, j) <- f2
+      if i == j
+    } yield (x, y, i)
 
   import Guard._
 
+  // Utils
+  def date[D,N,A](row: (D,N,A)): (D) =
+    (row._1)
+  def datename[D,N,A](row: (D,N,A)): (D,N) =
+    (row._1, row._2)
+  def boborchuck(n: N): Boolean =
+    List("Bob", "Chuck") exists { _ === n }
+  def boborchuck_heq(n: HEq[N]): Boolean =
+    List(HEq("Bob"), HEq("Chuck")) exists { _ === n }
 
   // A centralized version.
   val mostVisitedCentralized: Guard[DB[(D,N,A)],
@@ -864,11 +916,9 @@ object V5Current {
        _ <- configure[DB[(D,N,A)]] // Database modifier doesn't have
                                    // identifier (type Unit)
        q <- onDB ((db: DB[(D,N,A)]) => { // Database accessor has
-                          // identifier (type query)
-                    val r1 = project (db) { case (d,n,a)  => (d,n) }
-                    val r2 = select (r1) { case (d,n) =>
-                      List("Bob", "Chuck") exists { _ === n }
-                    }
+                                         // identifier (type query)
+                    val r1 = Π (db) (datename(_))
+                    val r2 = σ (r1) (∧(_ => true, boborchuck(_), _ => true))
                     r2
                   })
      } yield q)
@@ -887,22 +937,20 @@ object V5Current {
        _ <- crypt2[HEq]
        _ <- frag1 // frag really distribute data, after frag I
                   // cannot do things like crypt for instance.
-       q1 <- onLFrag { project (_:DB[(D,Id)]) { case (d, i) => (d, i) } }
+       q1 <- onLFrag { identity[DB[(D,Id)]] }
        q2 <- onRFrag ((db: DB[(HEq[N],A,Id)]) => {
-         val r1 = project (db) { case (n, a, i) => (n, i) }
-         val r2 = select (r1) {
-           case (n, i) => List(HEq("Bob"), HEq("Chuck")) exists { _ === n }
-         }
+         val r1 = Π (db) { case (n, a, i) => (n, i) } // TODO: Lift?
+         val r2 = σ (r1) (lift(boborchuck_heq))
          r2
        })
        // v = illTyped("""q3 = join(q1, q2) // Doesn't type check""")
        // q3 = centralize(q1)
        // q4 = centralize(q2)
-       q5 = join(q1, q2)   // Join is the query operation that copy
-                           // two frags and join them at owner side.
-       q6 = rmId(q5)
-       q = decr2[HEq](q6) // Decrypt is the query operation that
-                              // decrypt value.
+       q5 = gather(q1, q2)   // Join is the query operation that copy
+                             // two frags and join them at owner side.
+       q6 = Π (q5) (rmId(_)) // Remove trailing ids
+       q = gather[HEq](q6) // Decrypt is the query operation that
+                           // decrypt value.
        _ <- defrag         // Defrag is the monadic operation that
                            // defrag the database
        _ <- decrypt2[HEq]  // Decrypt is the monadic operation that
