@@ -848,7 +848,6 @@ object V5Current {
   }
 
   // Query operations:
-
   // ------------------------------- Π
   // C ∈ P(T)
   def Π[T, C](db: DB[T])(p: T => C): DB[C] = db.map(p)
@@ -907,16 +906,27 @@ object V5Current {
   def gather[P[_]](db: DB[(A,P[B])])(
                    implicit
                    $di: DummyImplicit): DB[(A,B)] = ???
-  def gather[A,B](f1: DB[(A, Id)], f2: DB[(B, Id)]): DB[(A, B)] =
+
+  def gather(f1: DB[(A, Id)],
+             f2: DB[(B, Id)]): DB[(A, B)] =
     for {
       (x, i) <- f1
       (y, j) <- f2
       if i == j
     } yield (x, y)
 
-  import Guard2._
+  def gather[P[_]](f1: DB[(P[A], Id)],
+                   f2: DB[(B, Id)])(
+                   implicit
+                   $d: DummyImplicit): DB[(A,B)] = ???
 
-  // --    Examples    --
+  def gather[P[_]](f1: DB[(A, Id)],
+                   f2: DB[(P[B], Id)])(
+                   implicit
+                   $d1: DummyImplicit,
+                   $d2: DummyImplicit): DB[(A,B)] = ???
+
+  import Guard2._
 
   // A centralized version.
   val abCentralized: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
@@ -959,11 +969,10 @@ object V5Current {
                         val r2 = σ (r1) (σlift(g_heq))
                         r2
                       })
-       q5 = gather(q1, q2)  // Join is the query operation that copy
-                            // two frags and join them at owner side.
-       q6 = gather[HEq](q5) // Decrypt is the query operation that
-                            // decrypt value.
-       q  = σ (q6) (h)
+       q5 = gather(q1, q2)  // gather is the query operation that copy
+                            // two frags and join them at owner side
+                            // and also decrypt crypted value.
+       q  = σ (q5) (h)
        _ <- defrag1         // Defrag is the monadic operation that
                             // defrag the database
        _ <- decrypt2[HEq]   // Decrypt is the monadic operation that
@@ -1046,7 +1055,7 @@ object V5Current {
        _  <- decrypt2[HEq] // Decrypt traversing σ. Note: pushing
                            // decrypt through a request produces one
                            // query that has to be gathered.
-       r1 =  gather[HEq](q1)
+       r1 =  gather(q1)
        q  <- onDB ((_:DB[(A,B)]) => {
                      val r2 = σ (r1) (∧(f, g, h))
                      r2
@@ -1064,11 +1073,10 @@ object V5Current {
        _  <- decrypt2[HEq]  // Decrypt traversing σ. Note: pushing
                             // decrypt through a request produces one
                             // query that has to be gathered.
-       r1 =  gather[HEq](q1)
-       r2 =  gather[HEq](q2)
+       r1 =  gather(q1)
+       r2 =  gather(q2)
        q = r2
      } yield q)
-
 }
 
 // -- Expected --
