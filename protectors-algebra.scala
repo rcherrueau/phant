@@ -799,81 +799,93 @@ object V4 {
 /** A new Guard monad */
 // -- Current --
 object V5Current {
-  import V3.{D, N, A, Id, DB}
-  import V3.{db, project, select, groupby}
-  import V3.{HEq, HOrder}                 // Homomorphic Function
+  type A = String
+  type B = Option[Int]
+  type Id = Int
+  type DB[X] = List[X]
+  import V3.{HEq, HOrder}          // Homomorphic Function
 
   // Library for type classes
   import spire.algebra._, spire.implicits._
 
-  case class Guard[-S1,S2,+A](run: S1 => (A, S2)) {
-    def flatMap[S3,B](f: A => Guard[S2,S3,B]): Guard[S1,S3,B] = Guard(
+  case class Guard2[-S1,S2,+A](run: S1 => (A, S2)) {
+    def flatMap[S3,B](f: A => Guard2[S2,S3,B]): Guard2[S1,S3,B] = Guard2(
       (s1: S1) => {
         val (a, s2) = this.run(s1)
           f(a).run(s2)
       })
 
-    def map[B](f: A => B): Guard[S1,S2,B] =
-      this flatMap { a => Guard.unit(f(a)) }
+    def map[B](f: A => B): Guard2[S1,S2,B] =
+      this flatMap { a => Guard2.unit(f(a)) }
   }
 
-  object Guard {
-    def unit[S,A](a: A): Guard[S,S,A] =
-      Guard(s => (a, s))
+  object Guard2 {
+    def unit[S,A](a: A): Guard2[S,S,A] =
+      Guard2(s => (a, s))
 
-    def configure[S]: Guard[S,S,Unit] =
-      Guard(s => ((), s))
+    def configure[S]: Guard2[S,S,Unit] =
+      Guard2(s => ((), s))
 
     // DB Shape Modifiers:
-    def crypt1[P[_]]: Guard[DB[(D,N,A)], DB[(P[D],N,A)], Unit] = ???
-    def crypt2[P[_]]: Guard[DB[(D,N,A)], DB[(D,P[N],A)], Unit] = ???
+    def crypt1[P[_]]: Guard2[DB[(A,B)], DB[(P[A],B)], Unit] = ???
+    def crypt2[P[_]]: Guard2[DB[(A,B)], DB[(A,P[B])], Unit] = ???
 
-    def decrypt1[P[_]]: Guard[DB[(P[D],N,A)], DB[(D,N,A)], Unit] = ???
-    def decrypt2[P[_]]: Guard[DB[(D,P[N],A)], DB[(D,N,A)], Unit] = ???
+    def decrypt1[P[_]]: Guard2[DB[(P[A],B)], DB[(A,B)], Unit] = ???
+    def decrypt2[P[_]]: Guard2[DB[(A,P[B])], DB[(A,B)], Unit] = ???
 
-    def frag1[D,N,A]: Guard[DB[(D,N,A)], (DB[(D,Id)], DB[(N,A,Id)]), Unit] = ???
-
-    def defrag[D,N,A]: Guard[(DB[(D,Id)], DB[(N,A,Id)]), DB[(D,N,A)], Unit] = ???
+    def frag1[A,B]: Guard2[DB[(A,B)], (DB[(A,Id)], DB[(B,Id)]), Unit] = ???
+    def defrag1[A,B]: Guard2[(DB[(A,Id)], DB[(B,Id)]), DB[(A,B)], Unit] = ???
 
     // DB query:
-    def onDB[S,R](q: S => R): Guard[S,S,R] = ???
+    def onDB[S,R](q: S => R): Guard2[S,S,R] =
+      Guard2(s => (q(s), s))
 
-    def onLFrag[SL,SR,R](q: SL => R): Guard[(SL, SR), (SL, SR), R] = ???
+    def onLFrag[SL,SR,R](q: SL => R): Guard2[(SL, SR), (SL, SR), R] =
+      Guard2({ case s@(sl, _) => (q(sl), s) })
 
-    def onRFrag[SL,SR,R](q: SR => R): Guard[(SL, SR), (SL, SR), R] = ???
+    def onRFrag[SL,SR,R](q: SR => R): Guard2[(SL, SR), (SL, SR), R] =
+      Guard2({ case s@(_, sr) => (q(sr), s) })
   }
 
   // Query operations:
 
-  // ------------------------------- Π utils
+  // ------------------------------- Π
   // C ∈ P(T)
   def Π[T, C](db: DB[T])(p: T => C): DB[C] = db.map(p)
 
-  def R[A,B,C]: ((A, B, C)) => ((A,B,C)) = identity
-  def R1[A,B,C]: ((A, B, C)) => A = _._1
-  def R2[A,B,C]: ((A, B, C)) => B = _._2
-  def R3[A,B,C]: ((A, B, C)) => C = _._3
-  def rmId[A](t: (A, Id)): A = t._1
-  def rmId[A,B](t: (A, B, Id)): (A,B) = (t._1, t._2)
+  def R[A,B]: ((A, B)) => ((A, B)) = identity
+  def R1: ((A, B)) => A = _._1
+  def R2[A,B]: ((A, B)) => B = _._2
+  def Πlift(f: ((A,B)) => A)(
+                implicit b: B): ((A,Id)) => ((A, Id)) = {
+    case (a, id) => (f((a, b)), id)
+  }
+  def Πlift[A,B](f: ((A,B)) => B)(
+                 implicit a: A): ((B,Id)) => ((B, Id)) = {
+    case (b, id) => (f((a, b)), id)
+  }
+  def rmId[A,B](t: (A, B, Id)): (A, B) = (t._1, t._2)
 
-  // -------------------------------- σ utils
+  implicit val a: A = ""
+  implicit val b: B = Some(0)
+
+  // -------------------------------- σ
   def σ[T](db: DB[T])(p: T => Boolean): DB[T] = db.filter(p)
 
-  def lift[T](f: T => Boolean): ((T, Id)) => Boolean = {
+  def σlift[T](f: T => Boolean): ((T, Id)) => Boolean = {
     case (t, id) => f(t)
   }
   def ∧[A,B](f: A => Boolean, g: B => Boolean, h: ((A,B)) => Boolean):
       ((A,B)) => Boolean = {
     case (a, b) => f(a) && g(b) && h((a,b))
   }
-  def ∧[A,B,C](f: A => Boolean,
-               g: B => Boolean,
-               h: C => Boolean,
-               i: ((A,B,C)) => Boolean): ((A,B,C)) => Boolean = {
-    case (a, b, c) => f(a) && g(b) && h(c) && i((a,b,c))
-  }
+  def f: A => Boolean = _ => true
+  def g: B => Boolean = _ => true
+  def g_heq: HEq[B] => Boolean = _ => true
+  def h: ((A, B)) => Boolean = _ => true
+  def h_heq: ((A, HEq[B])) => Boolean = _ => true
 
-  // ------------------------------- γ utils
+  // ------------------------------- γ
   // U ∈ P(T)
   def γ[T, U : Eq](db: DB[T])(p: T => U): DB[DB[T]] = db match {
     case Nil => Nil
@@ -882,205 +894,181 @@ object V5Current {
         γ (db.filter(p(_) =!= p(line))) (p)
   }
 
-
   // Note: Use word receive or gather for centralize/join. Gather
   // means, brings data back. This works for defragmentation and
   // decryption of data. Thus, frag/defrag, crypt/decrypt are monadic
   // operations and gather (that works for both) is the value
-  // operation.
-  def gather[P[_]](db: DB[(D,P[N])]): DB[(D,N)] = ???
-  def gather[D,N,Id](f1: DB[(D, Id)], f2: DB[(N, Id)]): DB[(D, N, Id)] =
+  // operation. Gather is a downgrad operation at value level. Defrag
+  // et Decrypt are downgrad operation at monadic level. See, A
+  // library for Ligh-Weight Information Flow Securtity in Haskell.
+  // *In a better definition, the gather should be a downgrade
+  // operation that removes all security*.
+  def gather[P[_]](db: DB[(P[A],B)]): DB[(A,B)] = ???
+  def gather[P[_]](db: DB[(A,P[B])])(
+                   implicit
+                   $di: DummyImplicit): DB[(A,B)] = ???
+  def gather[A,B](f1: DB[(A, Id)], f2: DB[(B, Id)]): DB[(A, B)] =
     for {
       (x, i) <- f1
       (y, j) <- f2
       if i == j
-    } yield (x, y, i)
+    } yield (x, y)
 
-  import Guard._
+  import Guard2._
 
-  // Utils
-  def date[D,N,A](row: (D,N,A)): (D) =
-    (row._1)
-  def datename[D,N,A](row: (D,N,A)): (D,N) =
-    (row._1, row._2)
-  def boborchuck(n: N): Boolean =
-    List("Bob", "Chuck") exists { _ === n }
-  def boborchuck_heq(n: HEq[N]): Boolean =
-    List(HEq("Bob"), HEq("Chuck")) exists { _ === n }
+  // --    Examples    --
 
   // A centralized version.
-  val mostVisitedCentralized: Guard[DB[(D,N,A)],
-                                    DB[(D,N,A)],
-                                    DB[(D,N)]] =
+  val abCentralized: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
     (for {
-       _ <- configure[DB[(D,N,A)]] // Database modifier doesn't have
-                                   // identifier (type Unit)
-       q <- onDB ((db: DB[(D,N,A)]) => { // Database accessor has
-                                         // identifier (type query)
-                    val r1 = Π (db) (datename(_))
-                    val r2 = σ (r1) (∧(_ => true, boborchuck(_), _ => true))
+       _ <- configure[DB[(A,B)]] // Database modifier doesn't have
+                                 // identifier (type Unit)
+       q <- onDB ((db: DB[(A,B)]) => { // Database accessor has
+                                       // identifier (type query)
+                    val r1 = Π (db) (R)
+                    val r2 = σ (r1) (∧(f, g, h))
                     r2
                   })
      } yield q)
 
-  // A fragmented version
-  val mostVisitedFragmented: Guard[DB[(D,N,A)],
-                                   DB[(D,N,A)],
-                                   DB[(D,N)]] = // The type is
-                                                       // exactly the
-                                                       // same as
-                                                       // Centralized
-                                                       // version
+
+  // A fragmented version.
+  val abFragmented: Guard2[DB[(A,B)], // The type is exactly the same as
+                           DB[(A,B)], // Centralized version
+                           DB[(A,B)]] =
     (for {
-       _ <- configure[DB[(D,N,A)]] // Database modifier doesn't have
-                                   // identifier (type Unit)
-       _ <- crypt2[HEq]
-       _ <- frag1 // frag really distribute data, after frag I
-                  // cannot do things like crypt for instance.
-       q1 <- onLFrag { identity[DB[(D,Id)]] }
-       q2 <- onRFrag ((db: DB[(HEq[N],A,Id)]) => {
-         val r1 = Π (db) { case (n, a, i) => (n, i) } // TODO: Lift?
-         val r2 = σ (r1) (lift(boborchuck_heq))
-         r2
-       })
-       // v = illTyped("""q3 = join(q1, q2) // Doesn't type check""")
-       // q3 = centralize(q1)
-       // q4 = centralize(q2)
-       q5 = gather(q1, q2)   // Join is the query operation that copy
-                             // two frags and join them at owner side.
-       q6 = Π (q5) (rmId(_)) // Remove trailing ids
-       q = gather[HEq](q6) // Decrypt is the query operation that
-                           // decrypt value.
-       _ <- defrag         // Defrag is the monadic operation that
-                           // defrag the database
-       _ <- decrypt2[HEq]  // Decrypt is the monadic operation that
-                           // decrypt the database
+       _ <- configure[DB[(A,B)]] // Database modifier doesn't have
+                                 // identifier (type Unit)
+       _ <- crypt2[HEq]          // Monadic crypt
+       _ <- frag1                // Monadic frag: frag really
+                                 // distribute data, after frag I
+                                 // cannot do things like crypt for
+                                 // instance.
+       q1 <- onLFrag ((lfrag: DB[(A, Id)]) => {
+                        // Note: Lift that forgets `b` and takes in
+                        // account `i`
+                        val r1 = Π (lfrag) (Πlift(R1))
+                        val r2 = σ (r1) (σlift(f))
+                        r2
+                      })
+       q2 <- onRFrag ((rfrag: DB[(HEq[B],Id)]) => {
+                        // Note: Lift that forgets `a` and takes in
+                        // account `i`
+                        val r1 = Π (rfrag) (Πlift(R2))
+                        // Note: `g` is now heq
+                        val r2 = σ (r1) (σlift(g_heq))
+                        r2
+                      })
+       q5 = gather(q1, q2)  // Join is the query operation that copy
+                            // two frags and join them at owner side.
+       q6 = gather[HEq](q5) // Decrypt is the query operation that
+                            // decrypt value.
+       q  = σ (q6) (h)
+       _ <- defrag1         // Defrag is the monadic operation that
+                            // defrag the database
+       _ <- decrypt2[HEq]   // Decrypt is the monadic operation that
+                            // decrypt the database
      } yield q)
-
-  /*
-
-
 
   // ---------------------------- Laws, from centralized to fragmented
   // In the following, we develop (as an equation) the pushing of
   // monadic defrag.
-  val mostVisitedPushDefrag_1: Guard[Site0[DB[(D,N,A)]],
-                                     Site0[DB[(D,N,A)]],
-                                     Site0[DB[(D,N)]]] =
+  // A fragmented version
+  val abPushFrag_1: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
     (for {
-       _ <- configure[Site0[DB[(D,N,A)]]]
-       _ <- frag1(s1,s2) // Monadic frag
-       _ <- defrag       // Monadic defrag
-       q <- onDB (db => {
-                    r1 = map (db) { case (d,n,a)  => (d,n) }
-                    r2 = filter (r1) { case (d,n) =>
-                      List("Bob", "Chuck") exists { _ === n }
-                    }
+       _ <- configure[DB[(A,B)]]
+       _ <- frag1
+       _ <- defrag1
+       q <- onDB ((db: DB[(A,B)]) => {
+                    val r1 = Π (db) (R)
+                    val r2 = σ (r1) (∧(f, g, h))
+                    r2
                   })
      } yield q)
 
-  val mostVisitedPushDefrag_2: Guard[Site0[DB[(D,N,A)]],
-                                     Site0[DB[(D,N,A)]],
-                                     Site0[DB[(D,N)]]] =
+  val abPushFrag_2: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
     (for {
-       _  <- configure[Site0[DB[(D,N,A)]]]
-       _  <- frag1(s1,s2)
+       _  <- configure[DB[(A,B)]]
+       _  <- frag1
        // r1
-       q1 <- onLFrag { map (_) { case (d, i) => (d, i) } }
-       q2 <- onRFrag { map (_) { case (n, a, i) => (n, i) } }
-       _  <- defrag // Defrag traversing Π. Note: pushing defrag
-                    // through a request produce two requests that
-                    // have to be centralize/join later.
-       r1 = join(centralize(q1), centralize(q2))
-       // q
-       q  <- onDB (db => {
-                     r2 = filter(r1) { case (d,n) =>
-                       List("Bob", "Chuck") exists { _ === n }
-                     }
+       q1 <- onLFrag { Π (_:DB[(A,Id)]) (Πlift(R1)) }
+       q2 <- onRFrag { Π (_:DB[(B,Id)]) (Πlift(R2)) }
+       _  <- defrag1 // Defrag traversing Π. Note: pushing defrag
+                     // through a request produceq two requests that
+                     // have to be gathered.
+       r1 = gather(q1, q2)
+       // r2
+       q  <- onDB ((_:DB[(A,B)]) => {
+                     val r2 = σ (r1) (∧(f, g, h))
+                     r2
                    })
      } yield q)
 
-  val mostVisitedPushDefrag_3: Guard[Site0[DB[(D,N,A)]],
-                                     Site0[DB[(D,N,A)]],
-                                     Site0[DB[(D,N)]]] =
+  val abPushFrag_3: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
     (for {
-       _  <- configure[Site0[DB[(D,N,A)]]]
-       _  <- frag1(s1,s2)
+       _  <- configure[DB[(A,B)]]
+       _  <- frag1
        // r1
-       q1 <- onLFrag { map (_) { case (d, i) => (d, i) } }
-       q2 <- onRFrag { map (_) { case (n, a, i) => (n, i) } }
+       q1 <- onLFrag { Π (_:DB[(A,Id)]) (Πlift(R1)) }
+       q2 <- onRFrag { Π (_:DB[(B,Id)]) (Πlift(R2)) }
        // r2
-       q3 <- onLFrag { q1 }
-       q4 <- onRFrag (filter (q2) {
-                        case (n, i) =>
-                          List("Bob", "Chuck") exists { _ === n }
-                      })
-       _  <- defrag // Defrag traversing σ
-       r1 = join(centralize(q1), centralize(q2))
-       r2 = join(centralize(q3), centralize(q4))
-       // q
-       q  = r2
+       q3 <- onLFrag { (_:DB[(A,Id)]) => σ (q1) (σlift(f)) }
+       q4 <- onRFrag { (_:DB[(B,Id)]) => σ (q2) (σlift(g)) }
+       _  <- defrag1 // Defrag traversing σ. Note: pushing defrag
+                     // through a request produces two requests that
+                     // have to be gathered.
+       r1 = gather(q1, q2)
+       r2 = gather(q3, q4)
+       q = σ (r2) (h)
      } yield q)
 
   // --------------------------------- Laws, from decrypted to crypted
   // In the following, we develop (as an equation) the pushing of
   // monadic decrypt
-  val mostVisitedPushDecrypt_1: Guard[Site0[DB[(D,N,A)]],
-                                      Site0[DB[(D,N,A)]],
-                                      Site0[DB[(D,N)]]] =
+  val abPushDecrypt_1: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
     (for {
-       _  <- configure[Site0[DB[(D,N,A)]]]
-       _  <- crypt1[HEq]   // Monadic crypt
-       _  <- decrypt1[HEq] // Monadic decrypt
-       q  <- onDB (db => {
-                     r1 = map (db) { case (d,n,a)  => (d,n) }
-                     r2 = filter (r1) { case (d,n) =>
-                       List("Bob", "Chuck") exists { _ === n }
-                     }
-                   })
-     } yield q)
-
-  val mostVisitedPushDecrypt_2: Guard[Site0[DB[(D,N,A)]],
-                                      Site0[DB[(D,N,A)]],
-                                      Site0[DB[(D,N)]]] =
-    (for {
-       _ <- configure[Site0[DB[(D,N,A)]]]
-       _ <- crypt1[HEq]
-       // r1
-       q1 <- onDB { map (_) { case (d,n,a)  => (d,n) } }
-       _ <- decrypt1[HEq] // Decrypt traversing Π. Note: pushing
-                          // decrypt through a request produce one
-                          // request that has to be decrypt later.
-       r1 = decrypt1[HEq](q1)
-       // q
-       q  <- onDB (db => {
-                     r2 = filter (q1) { case (d,n) =>
-                       List("Bob", "Chuck") exists { _ === n }
-                     }
-                   })
-     } yield q)
-
-  val mostVisitedPushDecrypt_3: Guard[Site0[DB[(D,N,A)]],
-                                      Site0[DB[(D,N,A)]],
-                                      Site0[DB[(D,N)]]] =
-    (for {
-       _ <- configure[Site0[DB[(D,N,A)]]]
-       _ <- crypt1[HEq]
-       // r1
-       q1 <- onDB { map (_) { case (d,n,a)  => (d,n) } }
-       // r2
-       q2 <- onDB (_ => {
-                    r2 = filter (q1) { case (d,n) =>
-                      List(HEq("Bob"), HEq("Chuck")) exists { _ === n }
-                    }
+       _ <- configure[DB[(A,B)]]
+       _ <- crypt2[HEq]
+       _ <- decrypt2[HEq]
+       q <- onDB ((db: DB[(A,B)]) => {
+                    val r1 = Π (db) (R)
+                    val r2 = σ (r1) (∧(f, g, h))
+                    r2
                   })
-       _ <- decrypt1[HEq] // Decrypt traversing σ
-       r1 = decrypt1[HEq](q1)
-       r2 = decrypt1[HEq](q2)
-       // q
+     } yield q)
+
+  val abPushDecrypt_2: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+    (for {
+       _  <- configure[DB[(A,B)]]
+       _  <- crypt2[HEq]
+       // r1
+       q1 <- onDB { Π (_:DB[(A,HEq[B])]) (R) }
+       _  <- decrypt2[HEq] // Decrypt traversing σ. Note: pushing
+                           // decrypt through a request produces one
+                           // query that has to be gathered.
+       r1 =  gather[HEq](q1)
+       q  <- onDB ((_:DB[(A,B)]) => {
+                     val r2 = σ (r1) (∧(f, g, h))
+                     r2
+                   })
+     } yield q)
+
+  val abPushDecrypt_3: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+    (for {
+       _  <- configure[DB[(A,B)]]
+       _  <- crypt2[HEq]
+       // r1
+       q1 <- onDB { Π (_:DB[(A,HEq[B])]) (R) }
+       // r2
+       q2 <- onDB { (_:DB[(A,HEq[B])]) => σ (q1) (∧(f, g_heq, h_heq)) }
+       _  <- decrypt2[HEq]  // Decrypt traversing σ. Note: pushing
+                            // decrypt through a request produces one
+                            // query that has to be gathered.
+       r1 =  gather[HEq](q1)
+       r2 =  gather[HEq](q2)
        q = r2
      } yield q)
-  // */
+
 }
 
 // -- Expected --
