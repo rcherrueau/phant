@@ -797,23 +797,98 @@ object V4 {
 }
 
 /** A new Guard monad */
-// -- Current --
-object V5Current {
+object V5_01 {
   type A = String
   type B = Option[Int]
   type Id = Int
   type DB[X] = List[X]
-  import V3.{HEq, HOrder}          // Homomorphic Function
 
   // Library for type classes
   import spire.algebra._, spire.implicits._
 
-  case class Guard2[-S1,S2,+A](run: S1 => (A, S2)) {
-    def flatMap[S3,B](f: A => Guard2[S2,S3,B]): Guard2[S1,S3,B] = Guard2(
-      (s1: S1) => {
-        val (a, s2) = this.run(s1)
-          f(a).run(s2)
-      })
+  // ------------------------------------------------------------ Protection
+  trait Rsc
+  trait Protected extends Rsc
+
+  object Rsc {
+    def toHEq[R](r: Raw[R])(implicit eq: Eq[R]): HEq[R] =
+      HEq(r.get)
+  }
+
+  // Raw
+  class Raw[R](val get: R) extends Rsc
+  object Raw {
+    def apply[R](r: R) = new Raw(r)
+
+    implicit def eq[R: Eq]: Eq[Raw[R]] = new Eq[Raw[R]] {
+      override def eqv(x: Raw[R], y: Raw[R]) =
+        implicitly[Eq[R]].eqv(x.get, y.get)
+    }
+
+    implicit def order[R: Order]: Order[Raw[R]] = new Order[Raw[R]] {
+      override def compare(x: Raw[R], y: Raw[R]) =
+        implicitly[Order[R]].compare(x.get, y.get)
+    }
+
+    implicit def plus[R: AdditiveMonoid]: AdditiveMonoid[Raw[R]] =
+      new AdditiveMonoid[Raw[R]] {
+        override def zero: Raw[R] =
+          Raw(implicitly[AdditiveMonoid[R]].zero)
+
+        override def plus(x: Raw[R], y: Raw[R]) =
+          Raw(implicitly[AdditiveMonoid[R]].plus(x.get, y.get))
+    }
+
+    implicit def times[R: MultiplicativeMonoid]:
+        MultiplicativeMonoid[Raw[R]] =
+      new MultiplicativeMonoid[Raw[R]] {
+        override def one: Raw[R] =
+          Raw(implicitly[MultiplicativeMonoid[R]].one)
+
+        override def times(x: Raw[R], y: Raw[R]) =
+          Raw(implicitly[MultiplicativeMonoid[R]].times(x.get, y.get))
+    }
+  }
+
+  // AES
+  class AES[R](val gat: R) extends Protected
+  object AES {
+    def apply[R](r: R) = new AES(r)
+  }
+
+  trait HES[R] extends Protected
+
+  // Homomorphic Eq
+  class HEq[R: Eq](val get: R) extends HES[R]
+  object HEq {
+    def apply[R: Eq](r: R) = new HEq(r)
+
+    implicit def heq[R: Eq]: Eq[HEq[R]] = new Eq[HEq[R]] {
+      override def eqv(x: HEq[R], y: HEq[R]) =
+        implicitly[Eq[R]].eqv(x.get, y.get)
+    }
+  }
+
+  // Homomorphic Order
+  class HOrder[R: Order](get: R) extends HEq[R](get)
+  object HOrder {
+    def apply[R: Order](r: R) = new HOrder(r)
+
+    implicit def horder[R: Order]: Order[HOrder[R]] =
+      new Order[HOrder[R]] {
+        override def compare(x: HOrder[R], y: HOrder[R]) =
+          implicitly[Order[R]].compare(x.get, y.get)
+      }
+  }
+
+  // ------------------------------------------------------------ Guard monad
+  case class Guard2[S1,S2,A](run: S1 => (A, S2)) {
+    def flatMap[S3,B](f: A => Guard2[S2,S3,B]): Guard2[S1,S3,B] =
+      Guard2((s1: S1) => {
+               val (a, s2) = this.run(s1)
+
+               f(a).run(s2)
+             })
 
     def map[B](f: A => B): Guard2[S1,S2,B] =
       this flatMap { a => Guard2.unit(f(a)) }
@@ -823,18 +898,68 @@ object V5Current {
     def unit[S,A](a: A): Guard2[S,S,A] =
       Guard2(s => (a, s))
 
-    def configure[S]: Guard2[S,S,Unit] =
+    def configure[A,B]: Guard2[DB[(Raw[A],Raw[B])],
+                               DB[(Raw[A],Raw[B])],
+                               Unit] =
       Guard2(s => ((), s))
 
     // DB Shape Modifiers:
-    def crypt1[P[_]]: Guard2[DB[(A,B)], DB[(P[A],B)], Unit] = ???
-    def crypt2[P[_]]: Guard2[DB[(A,B)], DB[(A,P[B])], Unit] = ???
+    def crypt1[A,B,
+               R1[A] <: Rsc,
+               R2[B] <: Rsc,
+                P[A] <: Protected](
+               f: R1[A] => P[A]): Guard2[DB[(R1[A],R2[B])],
+                                         DB[(P[A],R2[B])],
+                                         Unit] =
+      Guard2(s => ((), s map { case (a, b) => (f(a), b) }))
 
-    def decrypt1[P[_]]: Guard2[DB[(P[A],B)], DB[(A,B)], Unit] = ???
-    def decrypt2[P[_]]: Guard2[DB[(A,P[B])], DB[(A,B)], Unit] = ???
+    def crypt2[A,B,
+               R1[A] <: Rsc,
+               R2[B] <: Rsc,
+                P[B] <: Protected](
+               f: R2[B] => P[B]): Guard2[DB[(R1[A],R2[B])],
+                                         DB[(R1[A],P[B])],
+                                         Unit] =
+      Guard2(s => ((), s map { case (a, b) => (a, f(b)) }))
 
-    def frag1[A,B]: Guard2[DB[(A,B)], (DB[(A,Id)], DB[(B,Id)]), Unit] = ???
-    def defrag1[A,B]: Guard2[(DB[(A,Id)], DB[(B,Id)]), DB[(A,B)], Unit] = ???
+    // TODO: Pattern matches on all cases of P and construct a raw
+    // thanks to methods in object Rsc.
+    def decrypt1[A,B,
+                 R[B] <: Rsc,
+                 P[A] <: Protected]: Guard2[DB[(P[A],R[B])],
+                                            DB[(Raw[A],R[B])],
+                                            Unit] = ???
+
+    // TODO: Pattern matches on all cases of P and construct a raw
+    // thanks to methods in object Rsc.
+    def decrypt2[A,B,
+                 R[A] <: Rsc,
+                 P[B] <: Protected]: Guard2[DB[(R[A],P[B])],
+                                            DB[(R[A],Raw[B])],
+                                            Unit] = ???
+
+    def frag1[A,B]: Guard2[DB[(A,B)],
+                           (DB[(A,Id)], DB[(B,Id)]),
+                           Unit] =
+      Guard2(s => {
+               val (as, bs) = s.unzip
+
+               ((), (as.zipWithIndex, bs.zipWithIndex))
+             })
+
+    def defrag1[A,B]: Guard2[(DB[(A,Id)], DB[(B,Id)]),
+                             DB[(A,B)],
+                             Unit] =
+      Guard2(s => {
+               val (as, bs) = s
+               val s2 = (for {
+                           (a, i) <- as
+                           (b, j) <- bs
+                           if (i == j)
+                         } yield (a, b))
+
+               ((), s2)
+             })
 
     // DB query:
     def onDB[S,R](q: S => R): Guard2[S,S,R] =
@@ -847,28 +972,36 @@ object V5Current {
       Guard2({ case s@(_, sr) => (q(sr), s) })
   }
 
-  // Query operations:
-  // ------------------------------- Π
+
+  // ------------------------------------------------------------ Query Ops
+  // Π
   // C ∈ P(T)
   def Π[T, C](db: DB[T])(p: T => C): DB[C] = db.map(p)
 
-  def R[A,B]: ((A, B)) => ((A, B)) = identity
-  def R1: ((A, B)) => A = _._1
-  def R2[A,B]: ((A, B)) => B = _._2
-  def Πlift(f: ((A,B)) => A)(
-                implicit b: B): ((A,Id)) => ((A, Id)) = {
-    case (a, id) => (f((a, b)), id)
+  def Πlift[T,C](f: T => C): ((T, Id)) => ((C, Id)) = {
+    case (t, id) => (f(t), id)
   }
-  def Πlift[A,B](f: ((A,B)) => B)(
-                 implicit a: A): ((B,Id)) => ((B, Id)) = {
-    case (b, id) => (f((a, b)), id)
+  def **[A,B](ra: A => A, rb: B => B): ((A,B)) => ((A,B)) = {
+    case (a,b) => (ra(a), rb(b))
   }
-  def rmId[A,B](t: (A, B, Id)): (A, B) = (t._1, t._2)
+  def ra[R[_] <: Rsc](r: R[A]): R[A] = r
+  def rb[R[_] <: Rsc](r: R[B]): R[B] = r
 
-  implicit val a: A = ""
-  implicit val b: B = Some(0)
+  // def Πlift[R1[_], R2[_]](f: ((R1[A],R2[B])) => R1[A])(
+  //                         implicit b: R2[B]):
+  //     ((R1[A],Id)) => ((R1[A], Id)) = {
+  //   case (a, id) => (f((a, b)), id)
+  // }
+  // def Πlift[A,B](f: ((A,B)) => B)(
+  //                implicit a: A): ((B,Id)) => ((B, Id)) = {
+  //   case (b, id) => (f((a, b)), id)
+  // }
 
-  // -------------------------------- σ
+  implicit val rawa: Raw[A] = Raw("")
+  implicit val rawb: Raw[B] = Raw(Some(0))
+  implicit val heqb: HEq[B] = Rsc.toHEq(rawb)
+
+  // σ
   def σ[T](db: DB[T])(p: T => Boolean): DB[T] = db.filter(p)
 
   def σlift[T](f: T => Boolean): ((T, Id)) => Boolean = {
@@ -878,13 +1011,17 @@ object V5Current {
       ((A,B)) => Boolean = {
     case (a, b) => f(a) && g(b) && h((a,b))
   }
-  def f: A => Boolean = _ => true
-  def g: B => Boolean = _ => true
-  def g_heq: HEq[B] => Boolean = _ => true
-  def h: ((A, B)) => Boolean = _ => true
-  def h_heq: ((A, HEq[B])) => Boolean = _ => true
+  def f[R[_] <: Rsc](implicit eqv: Eq[R[A]]): R[A] => Boolean =
+    a => a === a
+  def g[R[_] <: Rsc](implicit eqv: Eq[R[B]]): R[B] => Boolean =
+    b => b === b
+  def h[R1[_] <: Rsc,
+        R2[_] <: Rsc](implicit
+                      eqvA: Eq[R1[A]],
+                      eqvB: Eq[R2[B]]): ((R1[A], R2[B])) => Boolean =
+    t => t === t
 
-  // ------------------------------- γ
+  // γ
   // U ∈ P(T)
   def γ[T, U : Eq](db: DB[T])(p: T => U): DB[DB[T]] = db match {
     case Nil => Nil
@@ -893,20 +1030,16 @@ object V5Current {
         γ (db.filter(p(_) =!= p(line))) (p)
   }
 
-  // Note: Use word receive or gather for centralize/join. Gather
-  // means, brings data back. This works for defragmentation and
-  // decryption of data. Thus, frag/defrag, crypt/decrypt are monadic
-  // operations and gather (that works for both) is the value
-  // operation. Gather is a downgrad operation at value level. Defrag
-  // et Decrypt are downgrad operation at monadic level. See, A
-  // library for Ligh-Weight Information Flow Securtity in Haskell.
-  // *In a better definition, the gather should be a downgrade
-  // operation that removes all security*.
-  def gather[P[_]](db: DB[(P[A],B)]): DB[(A,B)] = ???
-  def gather[P[_]](db: DB[(A,P[B])])(
-                   implicit
-                   $di: DummyImplicit): DB[(A,B)] = ???
+  // Note: Use word gather for centralize/join. Gather means, brings
+  // data back. This works for defragmentation and decryption of data.
+  // Thus, frag/defrag, crypt/decrypt are monadic operations and
+  // gather (that works for both) is the value operation. Gather is a
+  // downgrad operation at value level. Defrag et Decrypt are downgrad
+  // operation at monadic level. See, A library for Ligh-Weight
+  // Information Flow Securtity in Haskell. *In other word, the gather
+  // should be a downgrade operation that removes all security*.
 
+  // gather frag
   def gather(f1: DB[(A, Id)],
              f2: DB[(B, Id)]): DB[(A, B)] =
     for {
@@ -915,114 +1048,179 @@ object V5Current {
       if i == j
     } yield (x, y)
 
-  def gather[P[_]](f1: DB[(P[A], Id)],
-                   f2: DB[(B, Id)])(
-                   implicit
-                   $d: DummyImplicit): DB[(A,B)] = ???
+  // gather crypt
+  def gather[R1[_] <: Rsc,
+             R2[_] <: Rsc](db: DB[(R1[A],R2[B])]): DB[(Raw[A],Raw[B])] = ???
 
-  def gather[P[_]](f1: DB[(A, Id)],
-                   f2: DB[(P[B], Id)])(
-                   implicit
-                   $d1: DummyImplicit,
-                   $d2: DummyImplicit): DB[(A,B)] = ???
+  // gather frag + crypt
+  def gather[R1[_] <: Rsc,
+             R2[_] <: Rsc](f1: DB[(R1[A], Id)],
+                           f2: DB[(R2[B], Id)])(
+                           implicit
+                           $d: DummyImplicit): DB[(Raw[A],Raw[B])] = ???
 
+  // --------------------------------------------------------------- Examples
   import Guard2._
+  import Rsc._
 
   // A centralized version.
-  val abCentralized: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+  val abCentralized: Guard2[DB[(Raw[A],Raw[B])],
+                            DB[(Raw[A],Raw[B])],
+                            DB[(Raw[A],Raw[B])]] =
     (for {
-       _ <- configure[DB[(A,B)]] // Database modifier doesn't have
-                                 // identifier (type Unit)
-       q <- onDB ((db: DB[(A,B)]) => { // Database accessor has
-                                       // identifier (type query)
-                    val r1 = Π (db) (R)
+       _ <- configure[A,B] // Database modifier doesn't have
+                           // identifier (type Unit)
+       q <- onDB ((db: DB[(Raw[A],Raw[B])]) => { // Database accessor
+                                                 // has identifier
+                                                 // (type query)
+                    // TODO: Delete explicit parameter type Raw with
+                    // `**` function composition using a macro for :
+                    // def comp[R1[_] <: Rsc,
+                    //          R2[_] <: Rsc]:
+                    //     ((R1[A],R2[B])) => (((R1[A],R2[B]))) =
+                    //   **(ra[R1], rb[R2])
+                    // val r1 = Π (db) (comp)
+                    // See,
+                    // https://github.com/travisbrown/type-provider-examples
+                    val r1 = Π (db) (**(ra[Raw],rb[Raw]))
                     val r2 = σ (r1) (∧(f, g, h))
                     r2
                   })
      } yield q)
 
-
   // A fragmented version.
-  val abFragmented: Guard2[DB[(A,B)], // The type is exactly the same as
-                           DB[(A,B)], // Centralized version
-                           DB[(A,B)]] =
+  val abFragmented: Guard2[DB[(Raw[A],Raw[B])],   // The type is
+                           DB[(Raw[A],Raw[B])],   // exactly the same
+                           DB[(Raw[A],Raw[B])]] = // as Centralized
+                                                  // version
     (for {
-       _ <- configure[DB[(A,B)]] // Database modifier doesn't have
-                                 // identifier (type Unit)
-       _ <- crypt2[HEq]          // Monadic crypt
-       _ <- frag1                // Monadic frag: frag really
-                                 // distribute data, after frag I
-                                 // cannot do things like crypt for
-                                 // instance.
-       q1 <- onLFrag ((lfrag: DB[(A, Id)]) => {
-                        // Note: Lift that forgets `b` and takes in
-                        // account `i`
-                        val r1 = Π (lfrag) (Πlift(R1))
+       _  <- configure[A,B]   // Database modifier doesn't have
+                              // identifier (type Unit)
+       _  <- crypt2(toHEq[B]) // Monadic crypt
+       _  <- frag1            // Monadic frag: frag really distribute
+                              // data, after frag I cannot do things
+                              // like crypt for instance.
+       q1 <- onLFrag ((lfrag: DB[(Raw[A], Id)]) => {
+                        // Note: Lift takes in account `i`
+                        val r1 = Π (lfrag) (Πlift(ra[Raw]))
+                        // Note: Lift takes in account `i`
                         val r2 = σ (r1) (σlift(f))
                         r2
                       })
        q2 <- onRFrag ((rfrag: DB[(HEq[B],Id)]) => {
-                        // Note: Lift that forgets `a` and takes in
-                        // account `i`
-                        val r1 = Π (rfrag) (Πlift(R2))
-                        // Note: `g` is now heq
-                        val r2 = σ (r1) (σlift(g_heq))
+                        // Note: Lift takes in account `i`
+                        val r1 = Π (rfrag) (Πlift(rb[HEq]))
+                        // Note: its works on `g` because `b` is type
+                        // HEq[B] and has the Eq property.
+                        val r2 = σ (r1) (σlift(g))
                         r2
                       })
        q5 = gather(q1, q2)  // gather is the query operation that copy
-                            // two frags and join them at owner side
-                            // and also decrypt crypted value.
+                            // two frags, join them at owner side and
+                            // finally decrypts crypted value.
        q  = σ (q5) (h)
        _ <- defrag1         // Defrag is the monadic operation that
                             // defrag the database
-       _ <- decrypt2[HEq]   // Decrypt is the monadic operation that
+       _ <- decrypt2        // Decrypt is the monadic operation that
                             // decrypt the database
      } yield q)
+
+    (for {
+       _ <- configure[A,B]
+       q <- onDB (db => {
+                    val r1 = Π (db) (**(ra[Raw],rb[Raw]))
+                    val r2 = σ (r1) (∧(f, g, h))
+                    r2
+                  }): Guard2[DB[(Raw[A], Raw[B])],
+                             DB[(Raw[A], Raw[B])],
+                             DB[(Raw[A], Raw[B])]]
+     } yield q)
+
+
+  // Note: Expected
+  // val abCentralized =
+  //   (for {
+  //      _ <- configure[A,B]
+  //      q <- onDB {
+  //                  val r1 = Π (_) (ra ** rb)
+  //                  val r2 = σ (r1) (f ∧ g ∘ h)
+  //                  r2
+  //                }
+  //    } yield q)
+  //
+  // val abFragmented =
+  //   (for {
+  //      _  <- configure[A,B]
+  //      _  <- crypt2(toHEq)
+  //      _  <- frag1
+  //      q1 <- onLFrag {
+  //                      val r1 = Π (_) (Πlift(ra))
+  //                      val r2 = σ (r1) (σlift(f))
+  //                      r2
+  //                    }
+  //      q2 <- onRFrag {
+  //                      val r1 = Π (_) (Πlift(rb))
+  //                      val r2 = σ (r1) (σlift(g))
+  //                      r2
+  //                    }
+  //      q5 = gather(q1, q2)
+  //      q  = σ (q5) (h)
+  //      _  <- defrag1
+  //      _  <- decrypt2
+  //    } yield q)
+  //
+  // assert(abCentralized == abFragmented)
 
   // ---------------------------- Laws, from centralized to fragmented
   // In the following, we develop (as an equation) the pushing of
   // monadic defrag.
   // A fragmented version
-  val abPushFrag_1: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+  val abPushFrag_1: Guard2[DB[(Raw[A],Raw[B])],
+                           DB[(Raw[A],Raw[B])],
+                           DB[(Raw[A],Raw[B])]] =
     (for {
-       _ <- configure[DB[(A,B)]]
+       _ <- configure[A,B]
        _ <- frag1
        _ <- defrag1
-       q <- onDB ((db: DB[(A,B)]) => {
-                    val r1 = Π (db) (R)
+       q <- onDB ((db: DB[(Raw[A],Raw[B])]) => {
+                    val r1 = Π (db) (**(ra[Raw],rb[Raw]))
                     val r2 = σ (r1) (∧(f, g, h))
                     r2
                   })
      } yield q)
 
-  val abPushFrag_2: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+  val abPushFrag_2: Guard2[DB[(Raw[A],Raw[B])],
+                           DB[(Raw[A],Raw[B])],
+                           DB[(Raw[A],Raw[B])]] =
     (for {
-       _  <- configure[DB[(A,B)]]
+       _ <- configure[A,B]
        _  <- frag1
        // r1
-       q1 <- onLFrag { Π (_:DB[(A,Id)]) (Πlift(R1)) }
-       q2 <- onRFrag { Π (_:DB[(B,Id)]) (Πlift(R2)) }
+       q1 <- onLFrag { Π (_:DB[(Raw[A],Id)]) (Πlift(ra[Raw])) }
+       q2 <- onRFrag { Π (_:DB[(Raw[B],Id)]) (Πlift(rb[Raw])) }
        _  <- defrag1 // Defrag traversing Π. Note: pushing defrag
                      // through a request produceq two requests that
                      // have to be gathered.
        r1 = gather(q1, q2)
        // r2
-       q  <- onDB ((_:DB[(A,B)]) => {
+       q  <- onDB ((_:DB[(Raw[A],Raw[B])]) => {
                      val r2 = σ (r1) (∧(f, g, h))
                      r2
                    })
      } yield q)
 
-  val abPushFrag_3: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+  val abPushFrag_3: Guard2[DB[(Raw[A],Raw[B])],
+                           DB[(Raw[A],Raw[B])],
+                           DB[(Raw[A],Raw[B])]] =
     (for {
-       _  <- configure[DB[(A,B)]]
+       _  <- configure[A,B]
        _  <- frag1
        // r1
-       q1 <- onLFrag { Π (_:DB[(A,Id)]) (Πlift(R1)) }
-       q2 <- onRFrag { Π (_:DB[(B,Id)]) (Πlift(R2)) }
+       q1 <- onLFrag { Π (_:DB[(Raw[A],Id)]) (Πlift(ra[Raw])) }
+       q2 <- onRFrag { Π (_:DB[(Raw[B],Id)]) (Πlift(rb[Raw])) }
        // r2
-       q3 <- onLFrag { (_:DB[(A,Id)]) => σ (q1) (σlift(f)) }
-       q4 <- onRFrag { (_:DB[(B,Id)]) => σ (q2) (σlift(g)) }
+       q3 <- onLFrag { (_:DB[(Raw[A],Id)]) => σ (q1) (σlift(f)) }
+       q4 <- onRFrag { (_:DB[(Raw[B],Id)]) => σ (q2) (σlift(g)) }
        _  <- defrag1 // Defrag traversing σ. Note: pushing defrag
                      // through a request produces two requests that
                      // have to be gathered.
@@ -1034,61 +1232,590 @@ object V5Current {
   // --------------------------------- Laws, from decrypted to crypted
   // In the following, we develop (as an equation) the pushing of
   // monadic decrypt
-  val abPushDecrypt_1: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+  val abPushDecrypt_1: Guard2[DB[(Raw[A],Raw[B])],
+                              DB[(Raw[A],Raw[B])],
+                              DB[(Raw[A],Raw[B])]] =
     (for {
-       _ <- configure[DB[(A,B)]]
-       _ <- crypt2[HEq]
-       _ <- decrypt2[HEq]
-       q <- onDB ((db: DB[(A,B)]) => {
-                    val r1 = Π (db) (R)
+       _ <- configure[A,B]
+       _ <- crypt2(toHEq[B])
+       _ <- decrypt2
+       q <- onDB ((db: DB[(Raw[A],Raw[B])]) => {
+                    val r1 = Π (db) (**(ra[Raw],rb[Raw]))
                     val r2 = σ (r1) (∧(f, g, h))
                     r2
                   })
      } yield q)
 
-  val abPushDecrypt_2: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+  val abPushDecrypt_2: Guard2[DB[(Raw[A],Raw[B])],
+                              DB[(Raw[A],Raw[B])],
+                              DB[(Raw[A],Raw[B])]] =
     (for {
-       _  <- configure[DB[(A,B)]]
-       _  <- crypt2[HEq]
+       _  <- configure[A,B]
+       _  <- crypt2(toHEq[B])
        // r1
-       q1 <- onDB { Π (_:DB[(A,HEq[B])]) (R) }
-       _  <- decrypt2[HEq] // Decrypt traversing σ. Note: pushing
-                           // decrypt through a request produces one
-                           // query that has to be gathered.
+       q1 <- onDB { Π (_:DB[(Raw[A],HEq[B])]) (**(ra[Raw],rb[HEq])) }
+       _  <- decrypt2 // Decrypt traversing σ. Note: pushing decrypt
+                      // through a request produces one query that has
+                      // to be gathered.
        r1 =  gather(q1)
-       q  <- onDB ((_:DB[(A,B)]) => {
+       q  <- onDB ((_:DB[(Raw[A],Raw[B])]) => {
                      val r2 = σ (r1) (∧(f, g, h))
                      r2
                    })
      } yield q)
 
-  val abPushDecrypt_3: Guard2[DB[(A,B)], DB[(A,B)], DB[(A,B)]] =
+  val abPushDecrypt_3: Guard2[DB[(Raw[A],Raw[B])],
+                              DB[(Raw[A],Raw[B])],
+                              DB[(Raw[A],Raw[B])]] =
     (for {
-       _  <- configure[DB[(A,B)]]
-       _  <- crypt2[HEq]
+       _  <- configure[A,B]
+       _  <- crypt2(toHEq[B])
        // r1
-       q1 <- onDB { Π (_:DB[(A,HEq[B])]) (R) }
+       q1 <- onDB { Π (_:DB[(Raw[A],HEq[B])]) (**(ra[Raw],rb[HEq])) }
        // r2
-       q2 <- onDB { (_:DB[(A,HEq[B])]) => σ (q1) (∧(f, g_heq, h_heq)) }
-       _  <- decrypt2[HEq]  // Decrypt traversing σ. Note: pushing
-                            // decrypt through a request produces one
-                            // query that has to be gathered.
+       q2 <- onDB { (_:DB[(Raw[A],HEq[B])]) => σ (q1) (∧(f, g, h)) }
+       _  <- decrypt2  // Decrypt traversing σ. Note: pushing decrypt
+                       // through a request produces one query that
+                       // has to be gathered. Moreover, predicate has
+                       // to be applicable on crypted value.
        r1 =  gather(q1)
        r2 =  gather(q2)
        q = r2
      } yield q)
 }
 
+object V5_02 {
+  type A = String
+  type B = Option[Int]
+  type Id = Int
+  type DB[X] = List[X]
+
+  // Library for type classes
+  import spire.algebra._, spire.implicits._
+
+  // Library for type tags
+  import scalaz.@@
+
+  // ------------------------------------------------------------ Protection
+  trait Rsc
+  trait Protected extends Rsc
+
+  object Rsc {
+    def toHEq[R](r: Raw[R])(implicit eq: Eq[R]): HEq[R] =
+      HEq(r.get)
+  }
+
+  // Raw
+  class Raw[R](val get: R) extends Rsc
+  object Raw {
+    def apply[R](r: R) = new Raw(r)
+
+    implicit def eq[R: Eq]: Eq[Raw[R]] = new Eq[Raw[R]] {
+      override def eqv(x: Raw[R], y: Raw[R]) =
+        implicitly[Eq[R]].eqv(x.get, y.get)
+    }
+
+    implicit def order[R: Order]: Order[Raw[R]] = new Order[Raw[R]] {
+      override def compare(x: Raw[R], y: Raw[R]) =
+        implicitly[Order[R]].compare(x.get, y.get)
+    }
+
+    implicit def plus[R: AdditiveMonoid]: AdditiveMonoid[Raw[R]] =
+      new AdditiveMonoid[Raw[R]] {
+        override def zero: Raw[R] =
+          Raw(implicitly[AdditiveMonoid[R]].zero)
+
+        override def plus(x: Raw[R], y: Raw[R]) =
+          Raw(implicitly[AdditiveMonoid[R]].plus(x.get, y.get))
+    }
+
+    implicit def times[R: MultiplicativeMonoid]:
+        MultiplicativeMonoid[Raw[R]] =
+      new MultiplicativeMonoid[Raw[R]] {
+        override def one: Raw[R] =
+          Raw(implicitly[MultiplicativeMonoid[R]].one)
+
+        override def times(x: Raw[R], y: Raw[R]) =
+          Raw(implicitly[MultiplicativeMonoid[R]].times(x.get, y.get))
+    }
+  }
+
+  // AES
+  class AES[R](val gat: R) extends Protected
+  object AES {
+    def apply[R](r: R) = new AES(r)
+  }
+
+  trait HES[R] extends Protected
+
+  // Homomorphic Eq
+  class HEq[R: Eq](val get: R) extends HES[R]
+  object HEq {
+    def apply[R: Eq](r: R) = new HEq(r)
+
+    implicit def heq[R: Eq]: Eq[HEq[R]] = new Eq[HEq[R]] {
+      override def eqv(x: HEq[R], y: HEq[R]) =
+        implicitly[Eq[R]].eqv(x.get, y.get)
+    }
+  }
+
+  // Homomorphic Order
+  class HOrder[R: Order](get: R) extends HEq[R](get)
+  object HOrder {
+    def apply[R: Order](r: R) = new HOrder(r)
+
+    implicit def horder[R: Order]: Order[HOrder[R]] =
+      new Order[HOrder[R]] {
+        override def compare(x: HOrder[R], y: HOrder[R]) =
+          implicitly[Order[R]].compare(x.get, y.get)
+      }
+  }
+
+  // ---------------------------------------------------------------- Sites
+  sealed trait Site[A, S[X] <: Site[X,S]] { self: S[A] =>
+    def get: A
+    def apply[B](b: B): S[B] = this(b)
+  }
+  case class Site0[A](get: A) extends Site[A, Site0]
+  case class Site1[A](get: A) extends Site[A, Site1]
+  case class Site2[A](get: A) extends Site[A, Site2]
+
+  object Site {
+    def s0[A](a: A) = Site0(a)
+    def s1[A](a: A) = Site1(a)
+    def s2[A](a: A) = Site2(a)
+  }
+
+  // ------------------------------------------------------------ Guard monad
+  case class Guard2[S1,S2,A](run: S1 => (A, S2)) {
+    def flatMap[S3,B](f: A => Guard2[S2,S3,B]): Guard2[S1,S3,B] =
+      Guard2((s1: S1) => {
+               val (a, s2) = this.run(s1)
+
+               f(a).run(s2)
+             })
+
+    def map[B](f: A => B): Guard2[S1,S2,B] =
+      this flatMap { a => Guard2.unit(f(a)) }
+  }
+
+  object Guard2 {
+    def unit[S,A](a: A): Guard2[S,S,A] =
+      Guard2(s => (a, s))
+
+    def configure[A,B]: Guard2[Site0[DB[(Raw[A],Raw[B])]],
+                               Site0[DB[(Raw[A],Raw[B])]],
+                               Unit] =
+      Guard2(s => ((), s))
+
+    // DB Shape Modifiers:
+    def crypt1[A,B,
+                S[X] <: Site[X,S],
+               R1[A] <: Rsc,
+               R2[B] <: Rsc,
+                P[A] <: Protected](
+               f: R1[A] => P[A]): Guard2[S[DB[(R1[A],R2[B])]],
+                                         S[DB[(P[A],R2[B])]],
+                                         Unit] =
+      Guard2(s => ((), s(s.get map { case (a, b) => (f(a), b) })))
+
+    def crypt2[A,B,
+                S[X] <: Site[X,S],
+               R1[A] <: Rsc,
+               R2[B] <: Rsc,
+                P[B] <: Protected](
+               f: R2[B] => P[B]): Guard2[S[DB[(R1[A],R2[B])]],
+                                         S[DB[(R1[A],P[B])]],
+                                         Unit] =
+      Guard2(s => ((), s(s.get map { case (a, b) => (a, f(b)) })))
+
+    // TODO: Pattern matches on all cases of P and construct a raw
+    // thanks to methods in object Rsc.
+    def decrypt1[A,B,
+                 S[X] <: Site[X,S],
+                 R[B] <: Rsc,
+                 P[A] <: Protected]: Guard2[S[DB[(P[A],R[B])]],
+                                            S[DB[(Raw[A],R[B])]],
+                                            Unit] = ???
+
+    // TODO: Pattern matches on all cases of P and construct a raw
+    // thanks to methods in object Rsc.
+    def decrypt2[A,B,
+                 S[X] <: Site[X,S],
+                 R[A] <: Rsc,
+                 P[B] <: Protected]: Guard2[S[DB[(R[A],P[B])]],
+                                            S[DB[(R[A],Raw[B])]],
+                                            Unit] = ???
+
+    def frag1[A,B,
+              S1[X] <: Site[X,S1],
+              S2[X] <: Site[X,S2]](
+              s1: S1[_],
+              s2: S2[_]): Guard2[Site0[DB[(A,B)]],
+                                 (S1[DB[(A,Id)]], S2[DB[(B,Id)]]),
+                                 Unit] =
+      Guard2(s => {
+               val (as, bs) = s.get.unzip
+
+               ((), (s1(as.zipWithIndex), s2(bs.zipWithIndex)))
+             })
+
+    def defrag1[A,B,
+                S1[X] <: Site[X,S1],
+                S2[X] <: Site[X,S2]]: Guard2[(S1[DB[(A,Id)]], S2[DB[(B,Id)]]),
+                                             Site0[DB[(A,B)]],
+                                             Unit] =
+      Guard2(s => {
+               val (as, bs) = s
+               val db = (for {
+                           (a, i) <- as.get
+                           (b, j) <- bs.get
+                           if (i == j)
+                         } yield (a, b))
+
+               ((), Site0(db))
+             })
+
+    // DB query: FIXME: Who manages site on query? is it Monad or Site
+    // itself? Tries boths!
+    def onDB[X,R,
+             S[X] <: Site[X,S]](q: X => R): Guard2[S[X],S[X],S[R]] =
+      Guard2(s => (s(q(s.get)), s))
+
+    // def onLFrag[SL,SR,R](q: SL => R): Guard2[(SL, SR), (SL, SR), R] =
+    //   Guard2({ case s@(sl, _) => (q(sl), s) })
+
+    // def onRFrag[SL,SR,R](q: SR => R): Guard2[(SL, SR), (SL, SR), R] =
+    //   Guard2({ case s@(_, sr) => (q(sr), s) })
+  }
+
+  // ------------------------------------------------------------ Query Ops
+  // Π
+  // C ∈ P(T)
+  def Π[T, C](db: DB[T])(p: T => C): DB[C] = db.map(p)
+
+  def Πlift[T,C](f: T => C): ((T, Id)) => ((C, Id)) = {
+    case (t, id) => (f(t), id)
+  }
+  def **[A,B](ra: A => A, rb: B => B): ((A,B)) => ((A,B)) = {
+    case (a,b) => (ra(a), rb(b))
+  }
+  def ra[R[_] <: Rsc](r: R[A]): R[A] = r
+  def rb[R[_] <: Rsc](r: R[B]): R[B] = r
+
+  implicit val rawa: Raw[A] = Raw("")
+  implicit val rawb: Raw[B] = Raw(Some(0))
+  implicit val heqb: HEq[B] = Rsc.toHEq(rawb)
+
+  // σ
+  def σ[T](db: DB[T])(p: T => Boolean): DB[T] = db.filter(p)
+
+  def σlift[T](f: T => Boolean): ((T, Id)) => Boolean = {
+    case (t, id) => f(t)
+  }
+  def ∧[A,B](f: A => Boolean, g: B => Boolean, h: ((A,B)) => Boolean):
+      ((A,B)) => Boolean = {
+    case (a, b) => f(a) && g(b) && h((a,b))
+  }
+  def f[R[_] <: Rsc](implicit eqv: Eq[R[A]]): R[A] => Boolean =
+    a => a === a
+  def g[R[_] <: Rsc](implicit eqv: Eq[R[B]]): R[B] => Boolean =
+    b => b === b
+  def h[R1[_] <: Rsc,
+        R2[_] <: Rsc](implicit
+                      eqvA: Eq[R1[A]],
+                      eqvB: Eq[R2[B]]): ((R1[A], R2[B])) => Boolean =
+    t => t === t
+
+  // γ
+  // U ∈ P(T)
+  def γ[T, U : Eq](db: DB[T])(p: T => U): DB[DB[T]] = db match {
+    case Nil => Nil
+    case line :: db =>
+      (line :: db.filter(p(_) === p(line))) ::
+        γ (db.filter(p(_) =!= p(line))) (p)
+  }
+
+  // gather frag
+  def gather(f1: DB[(A, Id)],
+             f2: DB[(B, Id)]): DB[(A, B)] =
+    for {
+      (x, i) <- f1
+      (y, j) <- f2
+      if i == j
+    } yield (x, y)
+
+  // gather crypt
+  def gather[R1[_] <: Rsc,
+             R2[_] <: Rsc](db: DB[(R1[A],R2[B])]): DB[(Raw[A],Raw[B])] = ???
+
+  // gather frag + crypt
+  def gather[R1[_] <: Rsc,
+             R2[_] <: Rsc](f1: DB[(R1[A], Id)],
+                           f2: DB[(R2[B], Id)])(
+                           implicit
+                           $d: DummyImplicit): DB[(Raw[A],Raw[B])] = ???
+
+  // --------------------------------------------------------------- Examples
+  import Guard2._
+  import Rsc._
+  import Site._
+
+  // A centralized version.
+  val abCentralized: Guard2[Site0[DB[(Raw[A],Raw[B])]],
+                            Site0[DB[(Raw[A],Raw[B])]],
+                            Site0[DB[(Raw[A],Raw[B])]]] =
+    (for {
+       _ <- configure[A,B]
+       q <- onDB ((db: DB[(Raw[A],Raw[B])]) => {
+                    val r1 = Π (db) (**(ra[Raw],rb[Raw]))
+                    val r2 = σ (r1) (∧(f, g, h))
+                    r2
+                  })
+     } yield q)
+}
+
+/*
+object V5_02 {
+  import V5_01.{A,B,Id,DB,Rsc,Protected,Raw,AES,HEq,HOrder}
+  import V5_01.{Π,Πlift,**,ra,rb,σ,σlift,∧,f,g,h}
+
+  import spire.algebra._, spire.implicits._
+
+  trait GMakeFrom[G1[_,_,_] <: Guard2[_,_,_],
+                  G2[_,_,_] <: Guard2[_,_,_],
+                  S1,S3,B] {
+    type Out <: G2[S1,S3,B]
+
+    def make[S2,A](g1: G1[S1,S2,A], f: A => G2[S2,S3,B]): Out = ???
+  }
+
+  // ------------------------------------------------------------ Guard monad
+  trait Guard2[S1,S2,A] {
+    type This[_,_,_] <: Guard2[_,_,_]
+    def run: S1 => (A, S2)
+
+    def flatMap[S3,B,
+                G[X,Y,Z] <: Guard2[X,Y,Z]](
+                f: A => G[S2,S3,B])(
+                implicit
+                gm: GMakeFrom[This,G,S1,S3,B]): gm.Out
+
+    // def map[B](f: A => B): Guard2[S1,S2,B]
+  }
+
+  class GuardU2[S1,S2,A](val run: S1 => (A, S2)) extends Guard2[S1,S2,A] {
+    type This[_,_,_] = GuardU2[_,_,_]
+
+    override def flatMap[S3,B,
+                G[X,Y,Z] <: Guard2[X,Y,Z]](
+                f: A => G[S2,S3,B])(
+                implicit
+                gm: GMakeFrom[GuardU2,G,S1,S3,B]): gm.Out =
+      gm.make(this, f)
+
+      // new GuardU2((s1: S1) => {
+      //               val (a, s2) = this.run(s1)
+
+      //               f(a).run(s2)
+      //             })
+
+    // override def map[B](f: A => B): Guard2[S1,S2,B] = ???
+    //   // this flatMap { a => Guard2.unit(f(a)) }
+
+    // // Query doesn't change the state
+    // def query[B](q: S1 => B)(implicit ev: S1 =:= S2): GuardU2[S1,S2,B] =
+    //   new GuardU2((s1: S1) => (q(s1), s1))
+  }
+
+  class GuardF2[SL1,SR1,
+                   SL2,SR2,A](run: ((SL1,SR1)) => (A, (SL2,SR2)))
+      extends Guard2[(SL1,SR1),
+                     (SL2,SR2),
+                     A]  {
+
+    override def flatMap[S3,B](f: A => Guard2[(SL2,SR2),S3,B]): Guard2[S1,S3,B] =
+      new GuardU2((s1: S1) => {
+                    val (a, s2) = this.run(s1)
+
+                    f(a).run(s2)
+                  })
+
+    override def map[B](f: A => B): Guard2[S1,S2,B] = ???
+
+    def queryLeft[B](q: SL1 => B)(
+                     implicit
+                     ev: (SL1,SR1) =:= (SL2,SR2)): GuardF2[SL1,SR1,
+                                                              SL2,SR2,B] =
+      new GuardF2((s: (SL1,SR1)) => (q(s._1), s))
+
+    def queryRight[C](q: SR1 => C)(
+                     implicit
+                     ev: (SL1,SR1) =:= (SL2,SR2)): GuardF2[SL1,SR1,
+                                                              SL2,SR2,C] =
+      new GuardF2((s: (SL1,SR1)) => (q(s._2), s))
+  }
+
+  object Guard2 {
+    def apply[S1,S2,A](run: S1 => (A, S2)) = new GuardUFrag2(run)
+
+    def unit[S,A](a: A): Guard2[S,S,A] =
+      Guard2(s => (a, s))
+
+    def configure[A,B]: GuardU2[DB[(Raw[A],Raw[B])],
+                               DB[(Raw[A],Raw[B])],
+                               Unit] =
+      Guard2(s => ((), s))
+
+    // DB Shape Modifiers:
+    def crypt1[A,B,
+               R1[A] <: Rsc,
+               R2[B] <: Rsc,
+                P[A] <: Protected](
+               f: R1[A] => P[A]): Guard2[DB[(R1[A],R2[B])],
+                                         DB[(P[A],R2[B])],
+                                         Unit] =
+      Guard2(s => ((), s map { case (a, b) => (f(a), b) }))
+
+    def crypt2[A,B,
+               R1[A] <: Rsc,
+               R2[B] <: Rsc,
+                P[B] <: Protected](
+               f: R2[B] => P[B]): Guard2[DB[(R1[A],R2[B])],
+                                         DB[(R1[A],P[B])],
+                                         Unit] =
+      Guard2(s => ((), s map { case (a, b) => (a, f(b)) }))
+
+    // TODO: Pattern matches on all cases of P and construct a raw
+    // thanks to methods in object Rsc.
+    def decrypt1[A,B,
+                 R[B] <: Rsc,
+                 P[A] <: Protected]: Guard2[DB[(P[A],R[B])],
+                                            DB[(Raw[A],R[B])],
+                                            Unit] = ???
+
+    // TODO: Pattern matches on all cases of P and construct a raw
+    // thanks to methods in object Rsc.
+    def decrypt2[A,B,
+                 R[A] <: Rsc,
+                 P[B] <: Protected]: Guard2[DB[(R[A],P[B])],
+                                            DB[(R[A],Raw[B])],
+                                            Unit] = ???
+
+    def frag1[A,B]: Guard2[DB[(A,B)],
+                           (DB[(A,Id)], DB[(B,Id)]),
+                           Unit] =
+      Guard2(s => {
+               val (as, bs) = s.unzip
+
+               ((), (as.zipWithIndex, bs.zipWithIndex))
+             })
+
+    def defrag1[A,B]: Guard2[(DB[(A,Id)], DB[(B,Id)]),
+                             DB[(A,B)],
+                             Unit] =
+      Guard2(s => {
+               val (as, bs) = s
+               val s2 = (for {
+                           (a, i) <- as
+                           (b, j) <- bs
+                           if (i == j)
+                         } yield (a, b))
+
+               ((), s2)
+             })
+
+    // DB query:
+    def onDB[S,R](q: S => R): Guard2[S,S,R] =
+      Guard2(s => (q(s), s))
+
+    def onLFrag[SL,SR,R](q: SL => R): Guard2[(SL, SR), (SL, SR), R] =
+      Guard2({ case s@(sl, _) => (q(sl), s) })
+
+    def onRFrag[SL,SR,R](q: SR => R): Guard2[(SL, SR), (SL, SR), R] =
+      Guard2({ case s@(_, sr) => (q(sr), s) })
+  }
+
+  import Guard2._
+
+  // Note: Solution
+
+  // 1. Delete explicit parameter type on state by making query a
+  //    method of Guard2
+  (for {
+     q <- configure[A,B] query (db => {
+              val r1 = Π (db) (**(ra[Raw],rb[Raw]))
+              val r2 = σ (r1) (∧(f, g, h))
+              r2
+            })
+   } yield q)
+
+ // Fixing return type also helps type inference
+     (for {
+       _ <- configure[A,B]
+       q <- onDB (db => {
+                    val r1 = Π (db) (**(ra[Raw],rb[Raw]))
+                    val r2 = σ (r1) (∧(f, g, h))
+                    r2
+                  }): Guard2[DB[(Raw[A], Raw[B])],
+                             DB[(Raw[A], Raw[B])],
+                             DB[(Raw[A], Raw[B])]]
+     } yield q)
+
+
+
+
+  // // 2. Delete explicit parameter type Raw on `**` function
+  // // composition by using a macro. See,
+  // // https://github.com/travisbrown/type-provider-examples
+  // def macro_starstar[R1[_] <: Rsc,
+  //          R2[_] <: Rsc]:
+  //     ((R1[A],R2[B])) => (((R1[A],R2[B]))) =
+  //   **(ra[R1], rb[R2])
+  // (for {
+  //    _ <- configure[A,B]
+  //    q <- onDB ((db: DB[(Raw[A],Raw[B])]) => {
+  //                 val r1 = Π (db) (macro_starstar)
+  //                 val r2 = σ (r1) (∧(f, g, h))
+  //                 r2
+  //               })
+  //  } yield q)
+
+  // (for {
+  //    _  <- configure[A,B]
+  //    _  <- crypt2(toHEq[B])
+  //    _  <- frag1
+  //    q1 <- onLFrag ((lfrag: DB[(Raw[A], Id)]) => {
+  //                     // Note: Lift takes in account `i`
+  //                     val r1 = Π (lfrag) (Πlift(ra[Raw]))
+  //                       // Note: Lift takes in account `i`
+  //                     val r2 = σ (r1) (σlift(f))
+  //                       r2
+  //                   })
+  //    q2 <- onRFrag ((rfrag: DB[(HEq[B],Id)]) => {
+  //                     // Note: Lift takes in account `i`
+  //                     val r1 = Π (rfrag) (Πlift(rb[HEq]))
+  //                       // Note: its works on `g` because `b` is type
+  //                       // HEq[B] and has the Eq property.
+  //                     val r2 = σ (r1) (σlift(g))
+  //                       r2
+  //                   })
+  //    q5 = gather(q1, q2)  // gather is the query operation that copy
+  //                         // two frags, join them at owner side and
+  //                         // finally decrypts crypted value.
+  //    q  = σ (q5) (h)
+  //    _ <- defrag1         // Defrag is the monadic operation that
+  //                         // defrag the database
+  //    _ <- decrypt2        // Decrypt is the monadic operation that
+  //                         // decrypt the database
+  //  } yield q)
+}
+*/
+
 // -- Expected --
 
 /*
 object V5 {
-  // TODO: Use word receive or gather for centralize/join. Gather
-  // means, brings data back. This works for defragmentation and
-  // decryption of data. Thus, frag/defrag, crypt/decrypt are monadic
-  // operations and gather (that works for both) is the value
-  // operation.
-
   // A centralized version.
   val mostVisitedCentralized: Guard[Site0[DB[(D,N,A)]],
                                     Site0[DB[(D,N,A)]],
