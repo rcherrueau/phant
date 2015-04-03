@@ -1293,9 +1293,6 @@ object V5_02 {
   // Library for type classes
   import spire.algebra._, spire.implicits._
 
-  // Library for type tags
-  import scalaz.@@
-
   // ------------------------------------------------------------ Protection
   trait Rsc
   trait Protected extends Rsc
@@ -1381,9 +1378,9 @@ object V5_02 {
   case class Site2[A](get: A) extends Site[A, Site2]
 
   object Site {
-    def s0[A](a: A) = Site0(a)
-    def s1[A](a: A) = Site1(a)
-    def s2[A](a: A) = Site2(a)
+    def s0 = Site0("")
+    def s1 = Site1("")
+    def s2 = Site2("")
   }
 
   // ------------------------------------------------------------ Guard monad
@@ -1429,8 +1426,6 @@ object V5_02 {
                                          Unit] =
       Guard2(s => ((), s(s.get map { case (a, b) => (a, f(b)) })))
 
-    // TODO: Pattern matches on all cases of P and construct a raw
-    // thanks to methods in object Rsc.
     def decrypt1[A,B,
                  S[X] <: Site[X,S],
                  R[B] <: Rsc,
@@ -1438,8 +1433,6 @@ object V5_02 {
                                             S[DB[(Raw[A],R[B])]],
                                             Unit] = ???
 
-    // TODO: Pattern matches on all cases of P and construct a raw
-    // thanks to methods in object Rsc.
     def decrypt2[A,B,
                  S[X] <: Site[X,S],
                  R[A] <: Rsc,
@@ -1451,9 +1444,10 @@ object V5_02 {
               S1[X] <: Site[X,S1],
               S2[X] <: Site[X,S2]](
               s1: S1[_],
-              s2: S2[_]): Guard2[Site0[DB[(A,B)]],
-                                 (S1[DB[(A,Id)]], S2[DB[(B,Id)]]),
-                                 Unit] =
+              s2: S2[_]):
+        Guard2[Site0[DB[(A,B)]],
+               (S1[DB[(A,Id)]], S2[DB[(B,Id)]]),
+               Unit] =
       Guard2(s => {
                val (as, bs) = s.get.unzip
 
@@ -1476,17 +1470,23 @@ object V5_02 {
                ((), Site0(db))
              })
 
-    // DB query: FIXME: Who manages site on query? is it Monad or Site
-    // itself? Tries boths!
+    // FIXME: Who manages site on query? is it Monad or Site itself?
+    // Tries boths!
     def onDB[X,R,
              S[X] <: Site[X,S]](q: X => R): Guard2[S[X],S[X],S[R]] =
       Guard2(s => (s(q(s.get)), s))
 
-    // def onLFrag[SL,SR,R](q: SL => R): Guard2[(SL, SR), (SL, SR), R] =
-    //   Guard2({ case s@(sl, _) => (q(sl), s) })
+    def onLFrag[X,R,SR,
+                SL[X] <: Site[X,SL]](q: X => R): Guard2[(SL[X], SR),
+                                                        (SL[X], SR),
+                                                        SL[R]] =
+      Guard2({ case s@(sl, _) => (sl(q(sl.get)), s) })
 
-    // def onRFrag[SL,SR,R](q: SR => R): Guard2[(SL, SR), (SL, SR), R] =
-    //   Guard2({ case s@(_, sr) => (q(sr), s) })
+    def onRFrag[X,R,SL,
+                SR[X] <: Site[X,SR]](q: X => R): Guard2[(SL, SR[X]),
+                                                        (SL, SR[X]),
+                                                        SR[R]] =
+      Guard2({ case s@(_, sr) => (sr(q(sr.get)), s) })
   }
 
   // ------------------------------------------------------------ Query Ops
@@ -1537,24 +1537,34 @@ object V5_02 {
   }
 
   // gather frag
-  def gather(f1: DB[(A, Id)],
-             f2: DB[(B, Id)]): DB[(A, B)] =
-    for {
-      (x, i) <- f1
-      (y, j) <- f2
-      if i == j
-    } yield (x, y)
+  def gather[A,B,
+             S1[X] <: Site[X,S1],
+             S2[X] <: Site[X,S2]](
+             f1: S1[DB[(A, Id)]],
+             f2: S2[DB[(B, Id)]]): Site0[DB[(A, B)]] =
+    Site0(for {
+            (x, i) <- f1.get
+            (y, j) <- f2.get
+            if i == j
+          } yield (x, y))
 
   // gather crypt
-  def gather[R1[_] <: Rsc,
-             R2[_] <: Rsc](db: DB[(R1[A],R2[B])]): DB[(Raw[A],Raw[B])] = ???
+  def gather[A,B,
+             S[X] <: Site[X,S],
+             R1[_] <: Rsc,
+             R2[_] <: Rsc](
+             db: S[DB[(R1[A],R2[B])]]): Site0[DB[(Raw[A],Raw[B])]] = ???
 
   // gather frag + crypt
-  def gather[R1[_] <: Rsc,
-             R2[_] <: Rsc](f1: DB[(R1[A], Id)],
-                           f2: DB[(R2[B], Id)])(
-                           implicit
-                           $d: DummyImplicit): DB[(Raw[A],Raw[B])] = ???
+  def gather[A,B,
+             S1[X] <: Site[X,S1],
+             S2[X] <: Site[X,S2],
+             R1[_] <: Rsc,
+             R2[_] <: Rsc](
+             lfrag: S1[DB[(R1[A], Id)]],
+             rfrag: S2[DB[(R2[B], Id)]])(
+             implicit
+             $d: DummyImplicit): Site0[DB[(Raw[A],Raw[B])]] = ???
 
   // --------------------------------------------------------------- Examples
   import Guard2._
@@ -1573,6 +1583,35 @@ object V5_02 {
                     r2
                   })
      } yield q)
+
+  // A fragmented version.
+  val abFragmented: Guard2[Site0[DB[(Raw[A],Raw[B])]],
+                           Site0[DB[(Raw[A],Raw[B])]],
+                           Site0[DB[(Raw[A],Raw[B])]]] =
+    (for {
+       _  <- configure[A,B]
+       _  <- crypt2(toHEq[B])
+       _  <- frag1(s1, s2)
+       q1 <- onLFrag ((lfrag: DB[(Raw[A], Id)]) => {
+                        val r1 = Π (lfrag) (Πlift(ra[Raw]))
+                        val r2 = σ (r1) (σlift(f))
+                        r2
+                      })
+       q2 <- onRFrag (rfrag => {
+                        val r1 = Π (rfrag) (Πlift(rb[HEq]))
+                        val r2 = σ (r1) (σlift(g))
+                        r2
+                      }): Guard2[(Site1[DB[(Raw[A], Id)]], Site2[DB[(HEq[B], Id)]]),
+                                 (Site1[DB[(Raw[A], Id)]], Site2[DB[(HEq[B], Id)]]),
+                                 Site2[DB[(HEq[B], Id)]]]
+       q5 = gather(q1, q2)
+       // FIXME: Who manages site on query? is it Monad or Site itself?
+       // Tries boths!
+       q  = Site0(σ (q5.get) (h))
+       _ <- defrag1
+       _ <- decrypt2
+     } yield q)
+
 }
 
 /*
