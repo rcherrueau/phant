@@ -1444,10 +1444,9 @@ object V5_02 {
               S1[X] <: Site[X,S1],
               S2[X] <: Site[X,S2]](
               s1: S1[_],
-              s2: S2[_]):
-        Guard2[Site0[DB[(A,B)]],
-               (S1[DB[(A,Id)]], S2[DB[(B,Id)]]),
-               Unit] =
+              s2: S2[_]): Guard2[Site0[DB[(A,B)]],
+                                 (S1[DB[(A,Id)]], S2[DB[(B,Id)]]),
+                                 Unit] =
       Guard2(s => {
                val (as, bs) = s.get.unzip
 
@@ -1566,10 +1565,12 @@ object V5_02 {
              implicit
              $d: DummyImplicit): Site0[DB[(Raw[A],Raw[B])]] = ???
 
-  // --------------------------------------------------------------- Examples
+  // ------------------------------------------------ Examples
   import Guard2._
   import Rsc._
   import Site._
+
+  // -- Actual --
 
   // A centralized version.
   val abCentralized: Guard2[Site0[DB[(Raw[A],Raw[B])]],
@@ -1597,20 +1598,57 @@ object V5_02 {
                         val r2 = σ (r1) (σlift(f))
                         r2
                       })
-       q2 <- onRFrag (rfrag => {
+       q2 <- onRFrag ((rfrag: DB[(HEq[B], Id)]) => {
                         val r1 = Π (rfrag) (Πlift(rb[HEq]))
                         val r2 = σ (r1) (σlift(g))
                         r2
-                      }): Guard2[(Site1[DB[(Raw[A], Id)]], Site2[DB[(HEq[B], Id)]]),
-                                 (Site1[DB[(Raw[A], Id)]], Site2[DB[(HEq[B], Id)]]),
+                      }): Guard2[(Site1[DB[(Raw[A], Id)]],
+                                  Site2[DB[(HEq[B], Id)]]),
+                                 (Site1[DB[(Raw[A], Id)]],
+                                  Site2[DB[(HEq[B], Id)]]),
                                  Site2[DB[(HEq[B], Id)]]]
        q5 = gather(q1, q2)
-       // FIXME: Who manages site on query? is it Monad or Site itself?
-       // Tries boths!
+       // FIXME: Who manages site on query? is it Monad or Site
+       // itself? Tries boths!
        q  = Site0(σ (q5.get) (h))
        _ <- defrag1
        _ <- decrypt2
      } yield q)
+
+
+
+  // -- Expected --
+
+  // A centralized version.
+  for {
+     _ <- configure[A,B]
+     q <- onDB (db => {
+                  val r1 = Π (db) (ra ** rb)
+                  val r2 = σ (r1) (f ∧ g ∧ h)
+                  r2
+                })
+   } yield q
+
+  // A fragmented version.
+  for {
+     _  <- configure[A,B]
+     _  <- crypt2(toHEq)
+     _  <- frag1(Site1(_), Site2(_))
+     q1 <- onLFrag (lfrag => {
+                      val r1 = Π (lfrag) (Πlift(ra))
+                      val r2 = σ (r1) (σlift(f))
+                      r2
+                    })
+     q2 <- onRFrag (rfrag => {
+                      val r1 = Π (rfrag) (Πlift(rb))
+                      val r2 = σ (r1) (σlift(g))
+                      r2
+                    })
+     q5 = gather(q1, q2)
+     q  = σ (q5.get) (h)
+     _ <- defrag1
+     _ <- decrypt2
+   } yield q
 
 }
 
