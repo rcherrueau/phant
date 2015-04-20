@@ -430,7 +430,7 @@ object V3 {
       Guard[DB[(N,A,Id)], DB[(HEq[N], A, Id)], Unit] =
     crypt(n)(n => HEq(n))
 
-  illTyped("""
+//  illTyped("""
   for {
     _  <- configure[DB[(D,N,A)]]
     _  <- frag(_1)
@@ -450,7 +450,7 @@ object V3 {
     // Note: Doesn't type check, there is no `<` on HEq
     v5 = sort(v4) { case (n, _) => n }
   } yield ()
-  """)
+//  """)
 
   // Fragmentation + Homorphic Eq => Homorphic Order
   for {
