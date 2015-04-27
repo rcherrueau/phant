@@ -48,6 +48,9 @@ libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.1.1"
 //   // file("/home/rl3x-desktop/prog/phant/src/main/scala")
 //   file("/Users/rcherr12/prog/phant/src/main/scala")
 
+// Exclude files in attic directory
+excludeFilter in unmanagedSources := HiddenFileFilter || "attic/*.scala"
+
 unmanagedJars in Compile ++=
   (file("utils/target/scala-2.11/") * "scala-illtyped_2.11-1.0.jar").classpath
 
