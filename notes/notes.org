@@ -229,3 +229,22 @@
     #+END_VERSE
 
 #+INCLUDE: "laws.scala" src scala
+
+
+#+BEGIN_SRC bibtex
+@Book{TOV11a,
+  author =       {M. Tamer {\"{O}}zsu and Patrick Valduriez},
+  title =        {Principles of Distributed Database Systems, Third
+                  Edition},
+  publisher =    {Springer},
+  year =         2011,
+  url =          {http://dx.doi.org/10.1007/978-1-4419-8834-8},
+  doi =          {10.1007/978-1-4419-8834-8},
+  isbn =         {978-1-4419-8833-1},
+  timestamp =    {Mon, 31 May 4437819 14:30:56 +},
+  biburl =
+                  {http://dblp.uni-trier.de/rec/bib/books/daglib/0029498},
+  bibsource =    {dblp computer science bibliography, http://dblp.org}
+}
+#+END_SRC
+
