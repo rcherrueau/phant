@@ -8,7 +8,8 @@ import db._
 import org.scalatest._
 
 class OpsDBSpec extends FlatSpec with Matchers {
-  import shapeless._, Nat._
+  import shapeless._, Nat._, ops.hlist._,
+         syntax.std.tuple._
 
   val db: String |: Option[String] |: Int |: EOCol = DB(
     ("2014-01-01", Some("Bob"),   1),
@@ -83,8 +84,61 @@ class OpsDBSpec extends FlatSpec with Matchers {
       ColMapper[_1, db.This, Int, Option[Int]](db)(Some(_))""")
   }
 
-  "HLister" should "return the first line of the DB" in {
-    HLister(db): String :: Option[String] :: Int :: HNil
+  "HeadLiner" should "return the first line with the rest of the DB" in {
+    HeadLiner(db): Option[(String :: Option[String] :: Int :: HNil,
+                           String |: Option[String] |: Int |: EOCol)]
+    HeadLiner(DB()): Option[(HNil, EOCol)]
+
+    HeadLiner(db) should be (
+      Some(("2014-01-01" :: Some("Bob") :: 1 :: HNil,
+            DB(("2014-01-02", Some("Chuck"), 2),
+               ("2014-01-03", Some("Bob"),   3),
+               ("2014-01-04", Some("Chuck"), 4),
+               ("2014-01-05", Some("Bob"),   5),
+               ("2014-01-06", Some("Bob"),   5),
+               ("2014-01-07", None,          5),
+               ("2014-01-08", Some("Bob"),   6),
+               ("2014-01-08", Some("Daan"),  6),
+               ("2014-01-09", Some("Chuck"), 2),
+               ("2014-01-10", Some("Chuck"), 7)))))
+    HeadLiner(DB()) should be (None)
+
+    HeadLiner(DB(("2014-01-01", Some("Bob"),1))) should be (
+      Some(("2014-01-01" :: Some("Bob") ::   1 :: HNil,
+            |:(Nil: List[String],
+               |:(Nil: List[Option[String]],
+                  |:(Nil: List[Int], EOCol))))))
+
+    def recurs[Db <: DB : HeadLiner](db: Db): Unit = HeadLiner(db) match {
+      case line -: db => println(line) ; recurs(db)
+      case None => println("fin")
+    }
+
+    recurs(db)
+
+    Projection(db)({ case x :: y :: z :: HNil => x :: HNil }):
+        String |: EOCol
+
+    Projection(db)({ case x :: y :: z :: HNil => x :: z :: HNil }):
+        String |: Int |: EOCol
+
+    Projection(db)({
+                     case x :: y :: z :: HNil => x :: z :: HNil
+                   }) should be (DB(("2014-01-01", 1),
+                                    ("2014-01-02", 2),
+                                    ("2014-01-03", 3),
+                                    ("2014-01-04", 4),
+                                    ("2014-01-05", 5),
+                                    ("2014-01-06", 5),
+                                    ("2014-01-07", 5),
+                                    ("2014-01-08", 6),
+                                    ("2014-01-08", 6),
+                                    ("2014-01-09", 2),
+                                    ("2014-01-10", 7)))
+
+
+    // FIXME:
+    // Projection(db)({ case x :: y :: z :: HNil => HNil })
   }
 
   "TakerH" should "produce chunck of DB type" in {

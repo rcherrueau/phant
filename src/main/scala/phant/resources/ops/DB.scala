@@ -4,6 +4,7 @@ package ops
 
 object db {
   import shapeless._, Nat._
+  import ops.hlist._
 
   /** Type class selects first `n` columns. */
   trait Taker[N <: Nat, Db <: DB] {
@@ -86,6 +87,32 @@ object db {
         }
       }
   }
+
+  // Solution reusing Taker and Dropper.
+  // object Splitter {
+  //   def apply[N <: Nat, Db <: DB](db: Db)(implicit
+  //                                         spter: Splitter[N,Db]) =
+  //     spter.split(db)
+
+  //   implicit def ZeroSplitter[Db <: DB] = new Splitter[_0, Db] {
+  //     type Prefix = EOCol
+  //     type Suffix = Db
+  //     def split(db: Db) = (EOCol, db)
+  //   }
+
+  //   implicit def SuccSplitter[N <: Nat,
+  //                             Db <: DB](implicit
+  //                                       taker: Taker[Succ[N],Db],
+  //                                       dpper: Dropper[Succ[N],Db]) =
+  //     new Splitter[Succ[N], Db] {
+  //       type Prefix = taker.Out
+  //       type Suffix = dpper.Out
+  //       def split(db: Db) = {
+  //         (taker.take(db), dpper.drop(db))
+  //       }
+  //     }
+  // }
+
 
   /** Type class that withdraws the `n`th colum. */
   trait Withdrawer[N <: Nat, Db <: DB] {
@@ -180,31 +207,122 @@ object db {
   }
 
   /** Type class that returns the first line */
-  trait HLister[Db <: DB] {
+  trait Liner[Db <: DB]  {
     type Out <: HList
     def toHList(db: Db): Out
   }
 
-  object HLister {
+  object Liner {
     def apply[Db <: DB](db: Db)(implicit
-                                hlter: HLister[Db]) =
-      hlter.toHList(db)
+                                liner: Liner[Db],
+                                tpler: Tupler[Db#Line]) = {
+      val hl = liner.toHList(db)
+        //      hl.tupled(DB._unsafe[Tupler[liner.Out]](tpler))
+        hl
+    }
 
-    implicit def EOColHLister = new HLister[EOCol] {
+    implicit def EOColLiner = new Liner[EOCol] {
       type Out = HNil
       def toHList(db: EOCol) = HNil
     }
 
-    implicit def DbHLister[Db <: DB](implicit
-                                     hlter: HLister[Db#Tail]) =
-      new HLister[Db] {
-        type Out = Db#Head :: hlter.Out
-        def toHList(db: Db) = db.head.head :: hlter.toHList(db.tail)
+    implicit def DbLiner[Db <: DB](implicit
+                                   liner: Liner[Db#Tail]) =
+      new Liner[Db] {
+        type Out = Db#Head :: liner.Out
+        def toHList(db: Db) = db.head.head :: liner.toHList(db.tail)
+      }
+  }
+
+  /** Type class that returns the first line and the rest of
+    *  the database. */
+  trait HeadLiner[Db <: DB]  {
+    type Head <: HList
+    type Tail = Db
+    type Out = (Head, Tail)
+    def headLine(db: Db): Out
+  }
+
+  // object DBNil extends HeadLiner[EOCol]  {
+  //   type Head = HNil
+  //   type Tail = EOCol
+  //   def headLine(db: EOCol): Out =
+  //     throw new NoSuchElementException("No more lines in DB")
+  // }
+  // type DBNil = DBNil.type
+
+  object  HeadLiner {
+    def apply[Db <: DB](db: Db)(implicit
+                                hlner: HeadLiner[Db]):
+        Option[hlner.Out] =
+      if (!db.isEmpty)
+        Some(hlner.headLine(db))
+      else
+        None
+
+    implicit def EOColHeadLiner = new HeadLiner[EOCol] {
+      type Head = HNil
+      def headLine(db: EOCol) = (HNil, EOCol)
+    }
+
+    implicit def DbHeadLiner[Db <: DB](implicit
+                                       hlner: HeadLiner[Db#Tail]) =
+      new HeadLiner[Db] {
+        type Head = Db#Head :: hlner.Head
+        def headLine(db: Db) = {
+          val res: (hlner.Head, Db#Tail) = hlner.headLine(db.tail)
+          val head: Head = db.head.head  :: res._1
+          val tail: Tail = DB._unsafe[Tail](|:(db.head.tail, res._2))
+          (head, tail)
+        }
+      }
+  }
+
+
+  trait Projection[Db <: DB, R <: HList] {
+    type Out <: DB
+    def project(db: Db)(f: Db#Line => R): Out
+  }
+
+  object Projection {
+    def apply[Db <: DB, R <: HList](db: Db)(
+                                    f: Db#Line => R)(
+                                    implicit
+                                    pjtion: Projection[Db, R]): pjtion.Out =
+      pjtion.project(db)(f)
+
+    implicit def ProjectionHNil[Db <: DB] = new Projection[Db,HNil] {
+      type Out = EOCol
+      def project(db: Db)(f: Db#Line => HNil) = EOCol
+    }
+
+    implicit def Projection[Db <: DB,
+                            H, T <: HList](implicit
+                               pjtion: Projection[Db, T]) =
+      new Projection[Db, H :: T] {
+        type Out = |:[H, pjtion.Out]
+
+        def project(db: Db)(f: Db#Line => H :: T) = {
+          def _project(db: Db): Out = db._hview match {
+            case line -: db => f(line) -: _project(DB._unsafe[Db](db))
+            case None => DB._unsafe[Out](db)
+          }
+
+          _project(db)
+        }
       }
   }
 
   /** Type class that selects all elements which satisfy a predicate. */
-  trait Filter[Db <: DB]
+  // trait Filter[Db <: DB] {
+  //   def filter(db: Db)(implicit tupler: Tupler[Db#Line]): (tupler.Out => Boolean) => Db
+  // }
+
+  // object Filter {
+  //   def apply[Db <: DB](db: Db)(implicit flter: Filer[Db] = db.hview match {
+
+  //   }
+  // }
 
   object TakerH {
     def apply[Db <: DB](n: Int, db: Db): Db#This = DB._unsafe[Db#This](

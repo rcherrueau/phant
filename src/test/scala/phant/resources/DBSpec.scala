@@ -3,7 +3,7 @@ package resources
 
 import ops.db._
 
-import shapeless.Nat._
+import shapeless._, Nat._
 import org.scalatest._
 
 class DBSpec extends FlatSpec with Matchers {
@@ -174,6 +174,19 @@ class DBSpec extends FlatSpec with Matchers {
                                 ("2014-01-10", Some("Chuck"), 7)),
                              DB()))
   }
+
+  "A DB" should "return the first line as Tuple" in {
+    db.line should be (Some(("2014-01-01", Some("Bob"), 1)))
+
+    ("2014-01-01" :: Some("Bob") :: 1 :: HNil) -: db
+
+    db.select { l => true } should be (db)
+
+    // Next should be equal to DBNil
+    db.select { case x :: y :: z :: HNil => false}
+  }
+
+
 
   "A DB" should "take lines from top to bottom" in {
     db.takeH(0) should be (DB[String, Option[String], Int](Nil:_*))
