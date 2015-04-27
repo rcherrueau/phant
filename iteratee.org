@@ -1,0 +1,357 @@
+#+TITLE: Scalaz Tutorial: Enumeration-based I/O With Iteratees
+#+AUTHOR: Rúnar Bjarnason
+#+Date: 2014-11-17
+
+[[http://blog.higher-order.com/blog/2010/10/14/scalaz-tutorial-enumeration-based-io-with-iteratees/][Scalaz Tutorial: Enumeration-based I/O With Iteratees]]
+
+* Motivation
+Problem with side-effects approach is that it is not modular. As we
+know, side-effects do not compose.
+
+Treating the stream of input as an enumeration is therefore desirable.
+It at least holds the lure of modularity, since we would be able to
+treat a File, from which we're reading values, in the same way that we
+would treat an ordinary List of values, for example.
+
+A naive approach to this is to use iterators, or rather, ~Iterable~.
+This is akin to the way that you would typically read a file in
+something like Ruby or Python. Basically you treat is as a collection
+of Strings:
+
+#+BEGIN_SRC scala
+  def getContents(fileName: String): Iterable[String] = {
+    val fr = new BufferedReader(new FileReader(fileName))
+
+    new Iterable[String] {
+      def iterator = new Iterator[String] {
+        def hasNest = line != null
+        def next = {
+          val retVal = line
+          line = getLine
+          retVal
+        }
+        def getLine = {
+          var line: String = null
+          try {
+            line = fr.readLine
+          } catch {
+            case _ => line = null
+          }
+          line
+        }
+        var line = getLine
+      }
+    }
+  }
+#+END_SRC
+
+What this is doing is a king of lazy I/O. Nothing is read from the
+file until it is requested, and we only hold one line in memory at a
+time. But there are some serious issues with this approach. It's not
+clear when you should close the file handle, or whose responsibility
+that is. You could have the Iterator close the file when it has read
+the last line, but what if you only want to read part of the file?
+Clearly this approach is not sufficient. There some things we can do
+to make this more sophisticated, but only at the expense of breaking
+the illusion that the file really is a collection of Strings.
+
+
+* The Idea
+Any red-blooded functional programmer should be thinking right about
+now: "Instead of getting Strings out of the file, just pass in a
+function that will serve as a handler for each new line!" Bingo. This
+is in the plot with Iteratees. *Instead of implementing an interface
+from which we request Strings by pulling* (ie: in ~Iterable[String]~
+we request next String by pulling using ~next~), we're going to give
+an implementation of an interface that can *receive Strings by
+pushing*.
+
+And indeed, this idea is nothing new. This is exactly what we do when
+we fold a list.
+
+#+BEGIN_SRC scala
+  def foldLeft[B](b: B)(f: (B, A) => B): B
+#+END_SRC
+
+The second argument is exactly that, a handler for each element in the
+list, along with a means of combining it with the accumulated value so
+far.
+
+Now, there are *two issues with an ordinary fold* that prevent it from
+being useful when enumerating file contents. Firstly, there is no way
+of *indicating that the fold should stop early*. Secondly, a *list is
+held all in memory at the same time*.
+
+/Note/ General idea behind is that you invert the control. Now the one
+in charge to manage the collection is not client but you leave the
+management to an extra structure. Thanks to that extra structure the
+client cannot have unexpected control, eg: reading a closing file
+buffer, because the extra structure avoid it. But the extra structure
+have to offer handler that lets the client using the elements of the
+collection but the control of the handler is leaved to the extra
+structure.
+
+
+* The Iteratee Solution
+Sclalaz defines the following two data structures
+
+#+BEGIN_SRC scala
+  trait Input[+E]
+  case class El[E](e: E) extends Input[E]
+  case object Empty extends Input[Nothing]
+  case object EOF extends Input[Nothing]
+
+  trait IterV[E,A] {
+    def run: A = ??? // Implementation omitted
+  }
+
+  case class Done[E,A](a: A, e: Input[E]) extends IterV[E,A]
+  case class Cont[E,A](k: Input[E] => IterV[E,A]) extends IterV[E,A]
+#+END_SRC
+
+So an input to an iteratee is represented by ~Input[E]~, where ~E~ is
+the element of the input source. It can be either an element (*the
+next element in the file or stream* ) or it's one of two signals:
+~Empty~ or ~EOF~. The ~Empty~ signal tells the iteratee that there is
+not an element available, but to expect more element later. The ~EOF~
+signal tells the iteratee that there are no more elements to be had.
+
+~IterV[E,A]~ represents a computation that can be in one of two
+states. It can be ~Done~, in which case it will hold a result (the
+accumulated value) of type ~A~. Or it can be waiting for more input of
+type ~E~, in which case it will hold a continuation that accepts the
+next input.
+
+Let's see how we would use this to process a ~List~. The following
+function takes a list and an iteratee and feeds the list's elements to
+the iteratee.
+
+#+BEGIN_SRC scala
+  def enumerate[E,A]: (List[E], IterV[E,A]) => IterV[E,A] = {
+    case (Nil, i) => i
+    case (_, i@Done(_, _)) => i
+    case (x :: xs, Cont(k)) => enumerate(xs, k(El(x)))
+  }
+#+END_SRC
+
+Now let's see some actual iteratees. As a simple example, here is an
+iteratee that counts the number of elements it has seen:
+
+#+BEGIN_SRC scala
+  def counter[A]: IterV[A,Int] = {
+    def step(n: Int): Input[A] => IterV[A, Int] = {
+      case El(x) => Cont(step(n + 1))
+      case Empty => Cont(step(n))
+      case EOF => Done(n, EOF)
+    }
+    Cont(step(0))
+  }
+#+END_SRC
+
+And here's an iteratee that discards the first n elements:
+
+#+BEGIN_SRC scala
+  def drop[A](n: Int): IterV[A,Unit] = {
+    def step: Input[A] => IterV[A,Unit] = {
+      case El(x) => drop(n - 1)
+      case Empty => Cont(step)
+      case EOF => Done((), EOF)
+    }
+    if (n == 0) Done((), Empty) else Cont(step)
+  }
+#+END_SRC
+
+And one that takes the first element from the input:
+
+#+BEGIN_SRC scala
+  def head[E]: IterV[E,Option[E]] = {
+    def step: Input[E] => IterV[E,Option[E]] = {
+      case El(x) => Done(Some(x), Empty)
+      case Empty => Cont(step)
+      case EOF => Done(None, EOF)
+    }
+    Cont(step)
+  }
+#+END_SRC
+
+Let's go through this code. Each one defines a "step" function, which
+is the function that will handle the next input. Each one starts the
+iteratee in the ~Cont~ state, and the step function always returns a
+new iteratee in the next state based on the input received. Note in
+the last one (~head~), we are using the ~Empty~ signal to indicate
+that we want to remove the element from the input. The utility of this
+will be clear when we start composing iteratees.
+
+Now, an example usage. To get the length of a list, we write:
+
+#+BEGIN_SRC scala
+val length: Int = enumerate(List(1,2,3), counter[Int]).run // 3
+#+END_SRC
+
+The run method on ~IterV~ just gets the accumulated value out of the
+~Done~ iteratee. If it isn't done, it send the ~EOF~ signal to itself
+first and then gets the value.
+
+
+* Composing Iteratees
+Notice a couple of things here. With iteratees, the input source can
+send the signal that it has finished producing values. And on the
+other side, the iteratee itself can signal to the input source that it
+has finished consuming values. So on one hand, we can leave an
+iteratee "running" by not sending it the ~EOF~ signal, so we can
+compose two input sources and feed them into the same iteratee. On the
+other hand, an iteratee can signal that it's done, at which point we
+can start sending any remaining elements to another iteratee. In other
+words, iteratees compose sequentially.
+
+In fact, ~IterV[E,A]~ is an instance of the Monad type class for each
+fixed ~E~, and composition is very similar to the way monadic parsers
+compose:
+
+#+BEGIN_SRC scala
+  def flatMap[B](f: A => IterV[E,B]) = this match {
+    case Done(x, e) => f(x) match {
+      case Done(y, _) => Done(y, e)
+      case Cont(k) => k(e)
+    }
+    case Cont(k) => Cont(e => k(e) flatMap f)
+  }
+#+END_SRC
+
+Here then is an example of composing iteratees with a
+for-comprehension:
+
+#+BEGIN_SRC scala
+  def drop1Keep1[E]: IterV[E, Option[E]] = for {
+    _ <- drop(1)
+    x <- head
+  } yield x
+#+END_SRC
+
+The iteratee above discard the first element it sees and returns the
+second one. The iteratee below does this ~n~ time, accumulating the
+kept elements into a list.
+
+#+BEGIN_SRC scala
+  def alternates[E](n: Int): IterV[E, List[E]] =
+    drop1Keep1[E].
+      replicate[List](n).
+      foldRight(Done(List[Option[E]](),Empty))((x,y) => for {
+        h <- x
+        t <- y
+      } yield h :: t).map(_.flatten)
+#+END_SRC
+
+Here's an example run:
+
+#+BEGIN_EXAMPLE
+scala> enumerate(List.range(1,15), alternates[Int](5)).run
+res85: List[Int] = List(2, 4, 6, 8, 10)
+#+END_EXAMPLE
+
+
+* File Input With Iteratees
+Using the iteratees to read from file input turns out to be incredibly
+easy. The only difference is in how the data source is enumerated, and
+in order to remain lazy (and not prematurely perform any
+side-effects), we must return out iteratee in a monad:
+
+#+BEGIN_SRC scala
+  def enumReader[A](r: BufferedReader,
+                    it: IterV[String, A]): IO[IterV[String, A]] = {
+    def loop: IterV[String, A] => IO[IterV[String, A]] = {
+      case i@Done(_,_) => IO { i }
+      case i@Cont(k) => for {
+        s <- IO { r.readline }
+        a <- if (s == null) IO { i } else loop(k(El(s)))
+      } yield a
+    }
+    loop(it)
+  }
+#+END_SRC
+
+The important thing to note is that the iteratee is completely obvious
+to the fact that it's being fed lines from a ~BufferedReader~ rather
+than a ~List~.
+
+Here is the ~IO~ monad using. As you can see, it's really just a lazy
+identity monad:
+
+#+BEGIN_SRC scala
+  object io {
+    sealed trait IO[A] { def unsafePerformIO: A }
+
+    object IO {
+      def apply[A](a: => A): IO[A] = new IO[A] {
+        def unsafePerformIO = a
+      }
+    }
+
+    implicit val IOMonad = new Monad[IO] {
+      def pure[A](a: => A): IO[A] = IO(a)
+      def bind[A,B](a: IO[A], f: A => IO[B]): IO[B] = IO {
+        implicitly[Monad[Function0]].bind(
+          () => a.unsafePerformIO,
+          (x:A) => () => f(x).unsafePerformIO)()
+      }
+    }
+  }
+#+END_SRC
+
+To read lines from a file, we'll do something like this:
+
+#+BEGIN_SRC scala
+  def bufferFile(f: File) = IO {
+    new BufferedReader(new FileReader(f))
+  }
+
+  def closeReader(r: Reader) = IO {
+    r.close
+  }
+
+  def bracket[A,B,C](init: IO[A],
+                     fin: A => IO[B],
+                     body: A => IO[C]): IO[C] =
+    for { a <- init
+          c <- body(a)
+          _ <- fin(a) }
+      yield c
+
+  def enumFile[A](f: File, i: IterV[String, A]): IO[IterV[String,A]] =
+    bracket(bufferFile(f),
+            closeReader(_:BufferedReader),
+            enumReader(_:BufferedReader, i))
+#+END_SRC
+
+The ~enumFile~ method uses bracketing to ensure that the file always
+gets closed. It's completely lazy though, so nothing actually happens
+until you call ~unsafePerformIO~ on the resulting ~IO~ action:
+
+#+BEGIN_EXAMPLE
+scala> enumFile(new File("/Users/runar/Documents/Iteratees.txt"), head) map (_.run)
+res2: io.IO[Option[String]] = io$IO@5f90b584
+
+scala> res2.unsafePerformIO
+res3: Option[String] = Some(Scalaz Tutorial: Enumeration-Based I/O
+#+END_EXAMPLE
+
+That uses the "head" iteratee from above to get the first line of the
+file that I'm using to edit this blog post.
+
+We can get the number of lines in two files combined, by composing two
+enumerations and using our "counter" iteratee from above:
+
+#+BEGIN_SRC scala
+  def lengthOfTwoFile(f1: File, f2: File): IO[Int] = for {
+    l1 <- enumFile(f1, counter)
+    l2 <- enumFile(f2, l1)
+  } yield l2.run
+#+END_SRC
+
+So what we have here is a uniform and compositional interface for
+enumerating both pure and effectful data sources. We can avoid holding
+on to the entire input in memory when we don't want to, and we have
+complete control over when to stop iterating. The iteratee can decide
+whether to consume elements, leave them intact, or even truncate the
+input. The enumerator can decide whether to shut the iteratee down by
+sending it the EOF signal, or to leave it open for other enumerators.
