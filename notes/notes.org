@@ -1,0 +1,250 @@
+* 2014-11-04
+** Meeting Rémi Mario                                              :PullFunc:
+   Observation about fragmentation:
+   - If a service joins all fragments, it obviously violates some
+     confidentiality constraints.
+   - If it doesn't (eg, the fragmentation encrypts some attributes)
+     then the fragmentation isn't required.
+
+   Based on this observation we update our use case. In the new use
+   case Alice produces {Date, Name, Address} entries and has the
+   following confidentiality constraints:
+   - C1 :: {Date, Address} I wanna kill Alice
+   - C2 :: {Name, Address} I wanna kill the other guy
+   - C3 :: {Name} Who are friends of Alice
+
+   These constraints lead to two fragments:
+   - F1 :: {Date}
+   - F2 :: {_Name_, Address} with encrypted name
+
+   At this instant, we have three services:
+   - DateStats with operation ~mostBusyDay~ on F1. This operation
+     requires equality testing (Eq) on Date.
+   - ClientStats with operation ~mostVisitedClient~ on F2. This
+     operation requires Names to be comparable (Ord).
+   - Calendar with operation ~getMeetings~ on F2. This operation
+     requires equality testing (Eq) on Name.
+
+   And two scenarios:
+   1. We use an HES_{ord} to encrypt Name attributes. Alice calls
+      ~getMeetings~ on Calendar that calls ~mostVisitiedClient~ on
+      ClientStats.
+   2. We use an HES_{eq} to encrypt Name attributes. Alice calls
+      ~getMeetings~ on Calendar. Then Alice transform Name attributes
+      from HES_{eq} to HES_{ord}. Finally, Alice calls ~mostVisitedClient~
+      on ClientStats.
+
+   Next is an example of DSL for scenario 1 and 2. For a better
+   reading, we use D for Date, N for Name and A for Address.
+   #+BEGIN_VERSE
+   /Scenario 1/
+   Enc^{Frag{{Raw D},{Ord N, Raw A}}} mostVisitedClient^{Ord N} • getMeeting^{Eq N}
+
+   /Scenario 2/
+   Enc^{Frag{{Raw D},{Eq N, Raw A}}} Enc^{Ord N}(mostVisitedClient^{Ord N}) • Enc^{Eq N}(getMeeting^{Eq N})
+   #+END_VERSE
+
+   ~Enc~ is a macro for ~Dec • S • Enc~. ~Enc~ and ~Dec~ happen at
+   user's side. For scenario 2, look carefully how superscripts are
+   spread in the unsugared version.
+   #+BEGIN_VERSE
+   /Scenario 1 unsugared/
+   Dec^{Frag{{Raw D},{Ord N, Raw A}}} • (mostVisitedClient^{Ord N} • getMeeting^{Eq N}) • Enc^{Frag{{Raw D},{Ord N, Raw A}}}
+
+   /Scenario 2 unsugared/
+   Dec^{Frag{{Raw D},{Ord N, Raw A}}} • (mostVisitedClient^{Ord N}) • Enc^{Ord N} • Dec^{Eq N}(getMeeting^{Eq N}) • Enc^{Frag{{Raw D},{Eq N, Raw A}}}
+   #+END_VERSE
+
+
+   /Note/ If we want a service that joins two fragments without
+   violating confidentiality constraints we have to instantiate the
+   next diagram:
+   #+BEGIN_EXAMPLE
+               +-------------+                 C1: {A,D}
+               | F1:  {A}    | <----- S3       C2: {B,C}
+    +--------> +-------------+
+   S1
+    +--------> +-------------+
+               | F2:  {B}    | <----- S4
+    +--------> +-------------+
+   S2
+    +--------> +-------------+
+               | F3: {_C_,D} | <----- S5
+               +-------------+
+   #+END_EXAMPLE
+
+
+* 2014-11-28
+** Final Example with Alice and Agenda                             :PullFunc:
+   The fragment ~F2~ requires ~Eq~ constraint on ~N~ that gives
+   satisfactory outcome for selection and projection through the
+   database. For this reason, the operation ~Agend.getMeetings~
+   requires ~Eq~ constraint on ~N~. In contrast, the service
+   ~Stats.mostVisited~ requires ~Ord~ constraint on ~N~ thus, if two
+   different clients are visited the same number of times the service
+   sorts those client using the alphabetical order. This workflow is
+   drawn in figure 1. On service ~SComp.mostVisitedClient~ the
+   constraint for ~N~ is inferred to ~Ord~ because ~Ord~ is a
+   subtype of ~Eq~.
+
+   Now, Alice wants to protect her data and decides to encrypt the
+   name ~N~ of her clients in the database. She uses homomorphic
+   encryption to keep ~N~ safe and processable by services. Two
+   scenarios are possible:
+   1. Alice encrypts ~N~ with homomorphic ord, ~Hord~, thus the
+      workflow is the same as in figure 1. Unfortunately, services
+      ~F2.selectMeetings~ and ~Agenda.getMeetings~ now apply ~Hord~
+      operations that have terrible payloads (figure 2).
+   2. Alice encrypts ~N~ with homomorphic eq, ~Heq~ and transforms
+      ~Heq(N)~ into ~Hord(N)~ at an opportune time so as to keep good
+      performance on database selection (figure 3).
+
+
+* 2015-02-27
+** The algebra of Protected Resources - The API                    :PullFunc:
+    In the state monad, the state is the Database. As combinators, I
+    have functions that update the database in place. For instance,
+    `frag` fragments the database and `crypt` crypt columns of the
+    database.
+
+    Now, if I wanna use my database and do some calculus on it, then I
+    have to `get` the sate. The security there is that I have a
+    function to `get` the state but never put the state. Thus, I
+    cannot have inconsistent state between two instructions.
+
+    On database, I define functions such as `project` for projection
+    (which is just a `map`), `select` for selection (which is just a
+    `filter`) and set operators (see [[http://en.wikipedia.org/wiki/Relational_algebra#Introduction][relational algebra]]). Moreover a
+    `site` parameter identifies the location of the current database.
+
+    On the following example, `site`s appear in commentary
+    #+BEGIN_SRC scala
+    for {
+      // db on site1 (the site of the database)
+      _  <- init[db.type]
+      d1 <- get[db.type]
+      // d2 on site1 (a projection doesn't change the site)
+      d2 = d1 map ({ case (d,n,a) => (d,n) })
+      // d3 on site1 ( on ne change pas le site car filter s'applique sur
+      // un seul frag).
+      d3 = d2 filter({ case (d,n) =>
+                       List("Chuck", "Bob").exists({ _ == n }) })
+    } yield d3 // site1
+    #+END_SRC
+
+    Fragmenting a database produces a new database on which functions
+    take care of the location. See the following example with site
+    information. Notice the unFrag1 operation.
+    #+BEGIN_SRC scala
+    for {
+      // db on site1
+      _  <- init[db.type] // (d,n,a)
+      // frag1 produces two chunks on respectively sitef1 and sitef2.
+      _  <- frag1 // produces (d) (n,a)
+      // d1 is a tuple (sitef1, sitef2)
+      d1 <- get[(List[(String, Int)], List[(String, String, Int)])]
+      // d2 = d1 map ({ case (d,n,a) => (d,n) })
+      // d21 is sitef1 (projection)
+      d21 = d1._1 map ({ case (d,i) => (d,i) })
+      // d22 is sitef2 (projection)
+      d22 = d1._2 map ({ case (n,a,i) => (n,i) })
+      // d3 = d2 filter({case (d,n) =>
+      //                  List("Chuck", "Bob").exists({ _ == n }) })
+      // d31 is site3 (the one who executes the code)
+      d31 = d22 filter ({case (n,i) =>
+                          List("Chuck", "Bob").exists({ _ == n }) })
+      // the join of two information from different frag isn't safe. We
+      // have to declassify d21 and d31 into owner site.
+      d32 = unFrag1(d21,d31) // unsafe
+    } yield d32
+    #+END_SRC
+
+
+    Si on suppose que les fragments sont fait de manière
+    intelligentes, ça veut dire que les fragments ne doivent jamais
+    êtres réunis. Du coup, les pending questions sont :
+    - Quel est le sens d'une projection sur *des frags* quand on prend
+      en compte la localité ? Est-ce que la
+    - Quel est le sens d'une séléction sur *des frags* quand on prend
+      en compte la localité ?
+    - Est-ce qu'on doit déclasser les localité ?
+
+   Si on sait comment se comporte une projection/selection sur un
+   frag. Du coup on est capable de passer d'une version centralisé de
+   nos donnés, à une version fragmentés simplement en appelant
+   l'instruction =_ <- frag=.
+
+#+INCLUDE: "protectors-algebra.scala" src scala
+
+   Examples are base on the diagram [[file:homoOrdToEq.pdf]]
+
+
+* 2015-03-06
+** The algebra of Protected Resources - The Laws                   :PullFunc:
+*** Vertical
+    #+BEGIN_VERSE
+    unFrag_{Π1,Π2} ∘ Frag_{Π1,Π2} = id
+    #+END_VERSE
+
+    #+BEGIN_VERSE
+    filter(Π1 \land Π2 \land Π12) ∘ unFrag_{Π1,Π2} =
+    filter Π12 ∘ unFrag_{Π1,Π2} ∘ (filter Π1, filter Π2)
+    #+END_VERSE
+
+    #+BEGIN_VERSE
+    filter(Π1 \land Π2 \land Π12) ∘ unFrag_{Π1,Π2} =
+    filter Π12 ∘ unFrag_{Π1,Π2} ∘ (is = filter Π1,
+    filter Π2 \land{} idx(Π2) \in is)
+    #+END_VERSE
+
+    #+BEGIN_VERSE
+    filter (true) = id
+    #+END_VERSE
+
+    #+BEGIN_VERSE
+    filter Π1 ∘ unFrag_{Π1,Π2} =
+    unFrag_{Π1,Π2} ∘ (filter Π1, id)
+    #+END_VERSE
+
+    #+BEGIN_VERSE
+    map Π1 ∘ unFrag_{Π1,Π2} =
+    map Π1
+    #+END_VERSE
+
+    # XXX:
+    #+BEGIN_VERSE
+    fold Π1 Π2 ∘ gb Π1 ∘ unFrag_{Π1,Π2} =
+    fold Π1 Π2 ∘ unFrag_{Π1,Π2} ∘ (gb Π1, id)
+    #+END_VERSE
+
+*** Horizontal
+    #+BEGIN_VERSE
+    unFrag_{p} ∘ Frag_{p}
+    #+END_VERSE
+
+    #+BEGIN_VERSE
+    gb crit reduce ∘ unFrag_{p} =
+    gb crit reduce ∘ unFrag_{p} ∘
+    (gb crit reduce, gb crit reduce)
+    #+END_VERSE
+
+#+INCLUDE: "laws.scala" src scala
+
+
+#+BEGIN_SRC bibtex
+@Book{TOV11a,
+  author =       {M. Tamer {\"{O}}zsu and Patrick Valduriez},
+  title =        {Principles of Distributed Database Systems, Third
+                  Edition},
+  publisher =    {Springer},
+  year =         2011,
+  url =          {http://dx.doi.org/10.1007/978-1-4419-8834-8},
+  doi =          {10.1007/978-1-4419-8834-8},
+  isbn =         {978-1-4419-8833-1},
+  timestamp =    {Mon, 31 May 4437819 14:30:56 +},
+  biburl =
+                  {http://dblp.uni-trier.de/rec/bib/books/daglib/0029498},
+  bibsource =    {dblp computer science bibliography, http://dblp.org}
+}
+#+END_SRC
+
