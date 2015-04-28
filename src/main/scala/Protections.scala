@@ -12,7 +12,9 @@ object Rsc {
 }
 
 // Raw
-class Raw[R](val get: R) extends Rsc
+class Raw[R](val get: R) extends Rsc {
+  override def toString(): String = s"Raw($get)"
+}
 object Raw {
   def apply[R](r: R) = new Raw(r)
 
@@ -44,10 +46,14 @@ object Raw {
       override def times(x: Raw[R], y: Raw[R]) =
         Raw(implicitly[MultiplicativeMonoid[R]].times(x.get, y.get))
     }
+
+  implicit def toRaw[R](r: R): Raw[R] = Raw(r)
 }
 
 // AES
-class AES[R](val gat: R) extends Protected
+class AES[R](val get: R) extends Protected {
+  override def toString(): String = s"AES($get)"
+}
 object AES {
   def apply[R](r: R) = new AES(r)
 }
@@ -55,7 +61,9 @@ object AES {
 trait HES[R] extends Protected
 
 // Homomorphic Eq
-class HEq[R: Eq](val get: R) extends HES[R]
+class HEq[R: Eq](val get: R) extends HES[R] {
+  override def toString(): String = s"HEq($get)"
+}
 object HEq {
   def apply[R: Eq](r: R) = new HEq(r)
 
@@ -66,7 +74,9 @@ object HEq {
 }
 
 // Homomorphic Order
-class HOrder[R: Order](get: R) extends HEq[R](get)
+class HOrder[R: Order](get: R) extends HEq[R](get) {
+  override def toString(): String = s"HOrder($get)"
+}
 object HOrder {
   def apply[R: Order](r: R) = new HOrder(r)
 
