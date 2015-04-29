@@ -156,7 +156,7 @@ object Guard3 {
   def defragV[C1,C2,C3,
               S1[X] <: Site[X,S1],
               S2[X] <: Site[X,S2]](
-    n: _2)(implicit $dm: DummyImplicit): 
+    n: _2)(implicit $dm: DummyImplicit):
       Guard3[(S1[DB[(C1, C2, Idx)]], S2[DB[(C3, Idx)]]),
              Site0[DB[(C1,C2,C3)]],
              Unit] =
@@ -191,27 +191,16 @@ object Guard3 {
 
 object DB {
   import spire.algebra._, spire.implicits._
+  import Guard3.Idx
 
   type DB[X] = List[X]
 
-  implicit def Π3toC1[C1,C2,C3,
-                      R1[C1] <: Rsc,
-                      R2[C2] <: Rsc,
-                      R3[C3] <: Rsc](r: (R1[C1], R2[C2], R3[C3])): R1[C1] = r._1
-  implicit def Π3toC2[C1,C2,C3,
-                      R1[C1] <: Rsc,
-                      R2[C2] <: Rsc,
-                      R3[C3] <: Rsc](r: (R1[C1], R2[C2], R3[C3])): R2[C2] = r._2
-  implicit def Π3toC3[C1,C2,C3,
-                      R1[C1] <: Rsc,
-                      R2[C2] <: Rsc,
-                      R3[C3] <: Rsc](r: (R1[C1], R2[C2], R3[C3])): R3[C3] = r._3
-  implicit def Π2toC1[C1,C2,
-                      R1[C1] <: Rsc,
-                      R2[C2] <: Rsc](r: (R1[C1], R2[C2])): R1[C1] = r._1
-  implicit def Π2toC2[C1,C2,
-                      R1[C1] <: Rsc,
-                      R2[C2] <: Rsc](r: (R1[C1], R2[C2])): R2[C2] = r._2
+  // implicit should have different names
+  implicit def ΠR3toC1[C1,C2,C3](r: (Raw[C1], Raw[C2], Raw[C3])): Raw[C1] = r._1
+  implicit def ΠR1IdxtoC1[C1](r: (Raw[C1], Idx)): Raw[C1] = r._1
+  implicit def ΠR21IdxtoC2[C1,C2](r: (HEq[C1], Raw[C2], Idx)): Raw[C2] = r._2
+  implicit def ΠR21IdxtoIdx[C1,C2](r: (HEq[C1], Raw[C2], Idx)): Idx = r._3
+
   def Π[T, C](db: DB[T])(p: T => C): DB[C] = db.map(p)
   def σ[T, TT](db: DB[T])(p: TT => Boolean)(implicit Π: T => TT): DB[T] =
     db.foldLeft(Nil:DB[T])((db, r) => if (p(Π(r))) r :: db
@@ -222,6 +211,26 @@ object DB {
       (line :: db.filter(p(_) === p(line))) ::
         group (db.filter(p(_) =!= p(line))) (p)
   }
+
+  def fold[T,Z](dbs: List[DB[T]])(z: Z)(f: (Z,T) => Z): DB[Z] =
+    dbs.map{ _.foldLeft(z)(f) }
+
+  def count[T](dbs: List[DB[T]]): DB[Int] =
+    fold(dbs)(0)((z,r) => z+1)
+
+
+  // Defrag Left Grouped
+  def gather[C1,
+             S1[X] <: Site[X,S1],
+             S2[X] <: Site[X,S2]](fragL: S1[List[DB[(C1, Idx)]]],
+                                  fragR: S2[DB[(Idx)]]):
+      Site0[List[DB[(C1)]]] =
+    Site0(
+      fragL.get.map(db => for {
+                      (x, i) <- db
+                      (j) <- fragR.get
+                      if i == j
+                    } yield (x)))
 }
 
 object Guard3Test extends App {
@@ -256,8 +265,7 @@ object Guard3Test extends App {
 
   def date[R1[Date] <: Rsc,
            R2[Name] <: Rsc,
-           R3[Addr] <: Rsc](r: (R1[Date], R2[Name], R3[Addr])): R1[Date] = r._1
-  def date[R1[Date] <: Rsc](r: R1[Date]): R1[Date] = r
+           R3[Addr] <: Rsc](r: (R1[Date], R2[Name], R3[Addr])): (R1[Date]) = (r._1)
 
   def name[R1[Date] <: Rsc,
            R2[Name] <: Rsc,
@@ -272,32 +280,77 @@ object Guard3Test extends App {
 
   val localApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
                        Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
-                       _] =
+                       Site0[DB[Int]]] =
      for {
        _ <- configure[Date, Name, Addr]
        q <- query((db: DB[(Raw[Date], Raw[Name], Raw[Addr])]) => {
                     val r1 = σ (db) (lastweek)
                     val r2 = σ (r1) (atdesk)
-                    r2
-                    // val r3 = Π (r2) (date)
-                    // r3
-                    // val r4 = group (r3) (date); r4
-                    // val r5 = count (r4); r5
+                    val r3 = Π (r2) (date)
+                    val r4 = group (r3) ({ case (d) => (d) })
+                    val r5 = count (r4); r5
                   })
      } yield q
 
+  val cloudApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
+                       ( Site1[DB[(Raw[Date], Idx)]],
+                         Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
+                       Site0[DB[Int]]] =
+     for {
+       _  <- configure[Date, Name, Addr]
+       _  <- crypt (_2) (Rsc.toHEq[Name])
+       _  <- fragV (_1) (Site.s1, Site.s2)
+       qL <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
+                       val r1 = σ (fragL) (lastweek)
+                       val r2 = Π (r1) ({ case (d,i) => (d,i) })
+                       val r3 = group (r2) ({ case (d,i) => (d) }); r3
+                     })
+       qR <- queryR ((fragR: DB[(HEq[Name], Raw[Addr], Idx)]) => {
+                       val r1 = σ (fragR) (atdesk)
+                       val r2 = Π (r1) ({ case (n,a,i) => (i) }); r2
+                     }): Guard3[(Site1[DB[(Raw[Date], Idx)]],
+                                 Site2[DB[(HEq[Name], Raw[Addr], Idx)]]),
+                                (Site1[DB[(Raw[Date], Idx)]],
+                                 Site2[DB[(HEq[Name], Raw[Addr], Idx)]]),
+                                Site2[DB[(Idx)]]]
+       // FIXME: Who manages site on query? Is it monad of Site itself?
+     } yield Site0(count (gather(qL, qR).get))
+
+  val leftFirstApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
+                           ( Site1[DB[(Raw[Date], Idx)]],
+                             Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
+                           Site2[DB[Int]]] =
+    for {
+       _   <- configure[Date, Name, Addr]
+       _   <- crypt (_2) (Rsc.toHEq[Name])
+       _   <- fragV (_1) (Site.s1, Site.s2)
+       ids <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
+                       val r1 = σ (fragL) (lastweek)
+                       val r2 = Π (r1) ({ case (d,i) => (i) }); r2
+                     })
+       q   <- queryR ((fragR: DB[(HEq[Name], Raw[Addr], Idx)]) => {
+                        val r1 = σ (fragR) ((idx: Idx) =>
+                          ids.get.exists(_ === idx))
+                        val r2 = group (r1) ({ case (n,a,i) => (n) })
+                        val r3 = count (r2); r3
+                     })
+    } yield q
+
+
   val db: DB[(Raw[Date],Raw[Name],Raw[Addr])] =
-    List((Date("2014-01-01"), Name("Bob"),   Addr(Some(1))),
-         (Date("2014-01-02"), Name("Chuck"), Addr(Some(2))),
-         (Date("2014-01-03"), Name("Bob"),   Addr(Some(3))),
-         (Date("2014-01-04"), Name("Chuck"), Addr(Some(4))),
-         (Date("2014-01-05"), Name("Bob"),   Addr(Some(5))),
-         (Date("2014-01-05"), Name("Bob"),   Addr(Some(5))),
-         (Date("2014-01-07"), Name("Daan"),  Addr(None)),
-         (Date("2014-01-08"), Name("Bob"),   Addr(Some(6))),
-         (Date("2014-01-08"), Name("Daan"),  Addr(Some(6))),
-         (Date("2014-01-09"), Name("Chuck"), Addr(Some(2))),
-         (Date("2014-01-10"), Name("Chuck"), Addr(Some(7))))
+   List((Raw(Date("2014-01-01")), Raw(Name("Bob")),   Raw(Addr(Some(1)))),
+        (Raw(Date("2014-01-02")), Raw(Name("Chuck")), Raw(Addr(Some(2)))),
+        (Raw(Date("2014-01-03")), Raw(Name("Bob")),   Raw(Addr(Some(3)))),
+        (Raw(Date("2014-01-04")), Raw(Name("Chuck")), Raw(Addr(Some(4)))),
+        (Raw(Date("2014-01-05")), Raw(Name("Bob")),   Raw(Addr(Some(5)))),
+        (Raw(Date("2014-01-05")), Raw(Name("Bob")),   Raw(Addr(Some(5)))),
+        (Raw(Date("2014-01-07")), Raw(Name("Daan")),  Raw(Addr(None))),
+        (Raw(Date("2014-01-08")), Raw(Name("Bob")),   Raw(Addr(Some(6)))),
+        (Raw(Date("2014-01-08")), Raw(Name("Daan")),  Raw(Addr(Some(6)))),
+        (Raw(Date("2014-01-09")), Raw(Name("Chuck")), Raw(Addr(Some(2)))),
+        (Raw(Date("2014-01-10")), Raw(Name("Chuck")), Raw(Addr(Some(7)))))
 
   println(localApp.eval(Site0(db)))
+  println(cloudApp.eval(Site0(db)))
+  println(leftFirstApp.eval(Site0(db)))
 }

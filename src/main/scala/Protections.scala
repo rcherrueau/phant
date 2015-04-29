@@ -46,8 +46,6 @@ object Raw {
       override def times(x: Raw[R], y: Raw[R]) =
         Raw(implicitly[MultiplicativeMonoid[R]].times(x.get, y.get))
     }
-
-  implicit def toRaw[R](r: R): Raw[R] = Raw(r)
 }
 
 // AES
