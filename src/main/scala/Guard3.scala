@@ -17,89 +17,84 @@ object Guard3 {
   /** Encrypts the first column of the DB. */
   def crypt[C1,C2,C3,
             S[X] <: Site[X,S],
-            R1[C1] <: Rsc,
             R2[C2] <: Rsc,
             R3[C3] <: Rsc,
             PT[C1] <: Protected](
     n: _1)(
-    f: R1[C1] => PT[C1]): Guard3[S[DB[(R1[C1], R2[C2], R3[C3])]],
-                                 S[DB[(PT[C1], R2[C2], R3[C3])]],
-                                 Unit] =
-    State.iModify(s => s(s.get map { case (c1, c2, c3) => (f(c1), c2, c3) }))
-
+    f: C1 => PT[C1]): Guard3[S[DB[(Raw[C1], R2[C2], R3[C3])]],
+                             S[DB[(PT[C1], R2[C2], R3[C3])]],
+                             Unit] =
+    State.iModify(s => s(s.get map { case (c1, c2, c3) => (f(c1.get), c2, c3) }))
 
   /** Encrypts the second column of the DB. */
   def crypt[C1,C2,C3,
             S[X] <: Site[X,S],
             R1[C1] <: Rsc,
-            R2[C2] <: Rsc,
             R3[C3] <: Rsc,
             PT[C2] <: Protected](
     n: _2)(
-    f: R2[C2] => PT[C2])(implicit $dm: DummyImplicit):
-      Guard3[S[DB[(R1[C1], R2[C2], R3[C3])]],
-             S[DB[(R1[C1], PT[C2], R3[C3])]],
-             Unit] =
-    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, f(c2), c3) }))
+    f: C2 => PT[C2])(
+    implicit
+    $dm: DummyImplicit): Guard3[S[DB[(R1[C1], Raw[C2], R3[C3])]],
+                                S[DB[(R1[C1], PT[C2], R3[C3])]],
+                                Unit] =
+    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, f(c2.get), c3) }))
 
   /** Encrypts the third column of the DB. */
   def crypt[C1,C2,C3,
             S[X] <: Site[X,S],
             R1[C1] <: Rsc,
             R2[C2] <: Rsc,
-            R3[C3] <: Rsc,
             PT[C3] <: Protected](
     n: _3)(
-    f: R3[C3] => PT[C3])(implicit
-                         $dm1: DummyImplicit,
-                         $dm2: DummyImplicit):
-      Guard3[S[DB[(R1[C1], R2[C2], R3[C3])]],
-             S[DB[(R1[C1], R2[C2], PT[C3])]],
-             Unit] =
-    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, c2, f(c3)) }))
+    f: C3 => PT[C3])(
+    implicit
+    $dm1: DummyImplicit,
+    $dm2: DummyImplicit): Guard3[S[DB[(R1[C1], R2[C2], Raw[C3])]],
+                                 S[DB[(R1[C1], R2[C2], PT[C3])]],
+                                 Unit] =
+    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, c2, f(c3.get)) }))
 
   /** Decrypts the first column of the DB. */
   def decrypt[C1,C2,C3,
               S[X] <: Site[X,S],
-              R1[C1] <: Rsc,
               R2[C2] <: Rsc,
               R3[C3] <: Rsc,
               PT[C1] <: Protected](
     n: _1)(
-    f: PT[C1] => R1[C1]): Guard3[S[DB[(PT[C1], R2[C2], R3[C3])]],
-                                 S[DB[(R1[C1], R2[C2], R3[C3])]],
-                                 Unit] =
-    State.iModify(s => s(s.get map { case (c1, c2, c3) => (f(c1), c2, c3) }))
+    f: PT[C1] => C1): Guard3[S[DB[(PT[C1], R2[C2], R3[C3])]],
+                             S[DB[(Raw[C1], R2[C2], R3[C3])]],
+                             Unit] =
+    State.iModify(s => s(s.get map { case (c1, c2, c3) => (Raw(f(c1)), c2, c3) }))
 
   /** Decrypts the second column of the DB. */
   def decrypt[C1,C2,C3,
             S[X] <: Site[X,S],
             R1[C1] <: Rsc,
-            R2[C2] <: Rsc,
             R3[C3] <: Rsc,
             PT[C2] <: Protected](
     n: _2)(
-    f: PT[C2] => R2[C2])(implicit $dm: DummyImplicit):
-      Guard3[S[DB[(R1[C1], PT[C2], R3[C3])]],
-             S[DB[(R1[C1], R2[C2], R3[C3])]],
-             Unit] =
-    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, f(c2), c3) }))
+    f: PT[C2] => C2)(
+    implicit
+    $dm: DummyImplicit): Guard3[S[DB[(R1[C1], PT[C2], R3[C3])]],
+                                S[DB[(R1[C1], Raw[C2], R3[C3])]],
+                                Unit] =
+    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, Raw(f(c2)), c3) }))
 
   /** Decrypts the third column of the DB. */
   def decrypt[C1,C2,C3,
               S[X] <: Site[X,S],
               R1[C1] <: Rsc,
               R2[C2] <: Rsc,
-              R3[C3] <: Rsc,
               PT[C3] <: Protected](
     n: _3)(
-    f: PT[C3] => R3[C3])(implicit
-                         $dm1: DummyImplicit,
-                         $dm2: DummyImplicit):
-      Guard3[S[DB[(R1[C1], R2[C2], PT[C3])]],
-             S[DB[(R1[C1], R2[C2], R3[C3])]],
-             Unit] =
-    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, c2, f(c3)) }))
+    f: PT[C3] => C3)(
+    implicit
+    $dm1: DummyImplicit,
+    $dm2: DummyImplicit): Guard3[S[DB[(R1[C1], R2[C2], PT[C3])]],
+                                 S[DB[(R1[C1], R2[C2], Raw[C3])]],
+                                 Unit] =
+    State.iModify(s => s(s.get map { case (c1, c2, c3) => (c1, c2, Raw(f(c3))) }))
 
   /** Vertically fragments on the first column of the DB. */
   def fragV[C1,C2,C3,
@@ -186,8 +181,8 @@ object Guard3 {
              SR[X] <: Site[X,SR]](q: X => Q): Guard3[(SL, SR[X]),
                                                      (SL, SR[X]),
                                                      SR[Q]] =
-    State.gets({ case (_, sr) => sr(q(sr.get)) })
-}
+    State.gets({ case (_, sr) => sr(q(sr.get)) })}
+
 
 object DB {
   import spire.algebra._, spire.implicits._
@@ -298,7 +293,7 @@ object Guard3Test extends App {
                        Site0[DB[Int]]] =
      for {
        _  <- configure[Date, Name, Addr]
-       _  <- crypt (_2) (Rsc.toHEq[Name])
+       _  <- crypt (_2) (HEq(_:Name))
        _  <- fragV (_1) (Site.s1, Site.s2)
        qL <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
                        val r1 = σ (fragL) (lastweek)
@@ -308,10 +303,10 @@ object Guard3Test extends App {
        qR <- queryR ((fragR: DB[(HEq[Name], Raw[Addr], Idx)]) => {
                        val r1 = σ (fragR) (atdesk)
                        val r2 = Π (r1) ({ case (n,a,i) => (i) }); r2
-                     }): Guard3[(Site1[DB[(Raw[Date], Idx)]],
-                                 Site2[DB[(HEq[Name], Raw[Addr], Idx)]]),
-                                (Site1[DB[(Raw[Date], Idx)]],
-                                 Site2[DB[(HEq[Name], Raw[Addr], Idx)]]),
+                     }): Guard3[( Site1[DB[(Raw[Date], Idx)]],
+                                  Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
+                                ( Site1[DB[(Raw[Date], Idx)]],
+                                  Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
                                 Site2[DB[(Idx)]]]
        // FIXME: Who manages site on query? Is it monad of Site itself?
      } yield Site0(count (gather(qL, qR).get))
@@ -322,7 +317,7 @@ object Guard3Test extends App {
                            Site2[DB[Int]]] =
     for {
        _   <- configure[Date, Name, Addr]
-       _   <- crypt (_2) (Rsc.toHEq[Name])
+       _   <- crypt (_2) (HEq(_:Name))
        _   <- fragV (_1) (Site.s1, Site.s2)
        ids <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
                        val r1 = σ (fragL) (lastweek)
@@ -336,6 +331,28 @@ object Guard3Test extends App {
                      })
     } yield q
 
+  // val twiceEnc =
+  //   for {
+  //     _ <- configure[Date, Name, Addr]
+  //     _ <- crypt (_2) (HEq(_:Name))
+  //     _ <- crypt (_2) (HEq(_:Name))
+  //   } yield ()
+
+  // val unfragQueryOnFrag =
+  //   for {
+  //     _ <- configure[Date, Name, Addr]
+  //     _ <- fragV (_1) (Site.s1, Site.s2)
+  //     q <- query (db => { /* ... */ })
+  //   } yield ()
+
+  // val grpOnAES =
+  //   for {
+  //     _ <- configure[Date, Name, Addr]
+  //     _ <- crypt (_2) (AES(_:Name))
+  //     q <- query ((db: DB[(Raw[Date], AES[Name], Raw[Addr])]) => {
+  //                   group (db) ({ case (d,n,a) => (n) })
+  //                 })
+  //   } yield ()
 
   val db: DB[(Raw[Date],Raw[Name],Raw[Addr])] =
    List((Raw(Date("2014-01-01")), Raw(Name("Bob")),   Raw(Addr(Some(1)))),

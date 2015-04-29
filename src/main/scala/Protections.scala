@@ -6,11 +6,6 @@ import spire.algebra._, spire.implicits._
 trait Rsc
 trait Protected extends Rsc
 
-object Rsc {
-  def toHEq[R](r: Raw[R])(implicit eq: Eq[R]): HEq[R] =
-    HEq(r.get)
-}
-
 // Raw
 class Raw[R](val get: R) extends Rsc {
   override def toString(): String = s"Raw($get)"
