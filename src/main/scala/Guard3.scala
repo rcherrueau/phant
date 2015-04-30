@@ -110,7 +110,7 @@ object Guard3 {
                     (s1(lf.zipWithIndex), s2(rf.foldLeft((Nil:DB[(C2,C3,Idx)], 0)) {
                                                case ((db, i), (c2, c3)) =>
                                                  ((c2, c3, i) :: db, i + 1)
-                                             }._1))
+                                             }._1.reverse))
                   })
 
   /** Vertically fragments on the second column of the DB. */
@@ -128,7 +128,7 @@ object Guard3 {
                     (s1(lf.foldLeft((Nil:DB[(C1,C2,Idx)], 0)) {
                           case ((db, i), (c1, c2)) =>
                             ((c1, c2, i) :: db, i + 1)
-                        }._1), s2(rf.zipWithIndex))
+                        }._1.reverse), s2(rf.zipWithIndex))
                   })
 
   /** Defragments a vertically fragmented DB on the first column. */
@@ -192,20 +192,44 @@ object DB {
 
   // implicit should have different names
   implicit def ΠR3toC1[C1,C2,C3](r: (Raw[C1], Raw[C2], Raw[C3])): Raw[C1] = r._1
+  implicit def ΠR3toC2[C1,C2,C3](r: (Raw[C1], Raw[C2], Raw[C3])): Raw[C2] = r._2
+  implicit def ΠR3toC3[C1,C2,C3](r: (Raw[C1], Raw[C2], Raw[C3])): Raw[C3] = r._3
   implicit def ΠR1IdxtoC1[C1](r: (Raw[C1], Idx)): Raw[C1] = r._1
-  implicit def ΠR21IdxtoC2[C1,C2](r: (HEq[C1], Raw[C2], Idx)): Raw[C2] = r._2
-  implicit def ΠR21IdxtoIdx[C1,C2](r: (HEq[C1], Raw[C2], Idx)): Idx = r._3
+  implicit def ΠR2IdxtoIdx[C1,C2](r: (HEq[C1], Raw[C2], Idx)): Idx = r._3
+  implicit def ΠR2IdxtoC1[C1,C2](r: (HEq[C1], Raw[C2], Idx)): HEq[C1] = r._1
+  implicit def ΠR2IdxtoC2[C1,C2](r: (HEq[C1], Raw[C2], Idx)): Raw[C2] = r._2
+  implicit def ΠR1toC1[C1](r: (Raw[C1])): Raw[C1] = r
+  implicit def ΠR1IdxtoIdx[C1](r: (Raw[C1], Idx)): Idx = r._2
 
-  def Π[T, C](db: DB[T])(p: T => C): DB[C] = db.map(p)
-  def σ[T, TT](db: DB[T])(p: TT => Boolean)(implicit Π: T => TT): DB[T] =
-    db.foldLeft(Nil:DB[T])((db, r) => if (p(Π(r))) r :: db
-                                            else db)
-  def group[T, U : Eq](db: DB[T])(p: T => U): List[DB[T]] = db match {
-    case Nil => Nil
-    case line :: db =>
-      (line :: db.filter(p(_) === p(line))) ::
-        group (db.filter(p(_) =!= p(line))) (p)
+  // Note: Mixing infered and explicit type parameters
+  // def Π[T, U](db: DB[T])(implicit p: T => U): DB[U] = db.map(p)
+  class PiUnapplied[U] {
+    def apply[T](db: DB[T])(implicit p: T => U): DB[U] =
+      db.map(p)
   }
+  def Π[U] = new PiUnapplied[U]
+
+
+  def σ[T, U](db: DB[T])(p: U => Boolean)(implicit Π: T => U): DB[T] =
+    db.foldLeft(Nil:DB[T])((db, r) => if (p(Π(r))) r :: db
+                                      else db)
+
+  // Note: Mixing infered and explicit type parameters
+  // def group[T, U : Eq](db: DB[T])(implicit p: T => U): List[DB[T]] = db match {
+  //   case Nil => Nil
+  //   case line :: db =>
+  //     (line :: db.filter(p(_) === p(line))) ::
+  //       group[T,U] (db.filter(p(_) =!= p(line)))
+  // }
+  class GroupUnapplied[U] {
+    def apply[T](db: DB[T])(implicit p: T => U, eq: Eq[U]): List[DB[T]] = db match {
+      case Nil => Nil
+      case line :: db =>
+        (line :: db.filter(p(_) === p(line))) ::
+          apply[T] (db.filter(p(_) =!= p(line)))
+    }
+  }
+  def group[U] = new GroupUnapplied[U]
 
   def fold[T,Z](dbs: List[DB[T]])(z: Z)(f: (Z,T) => Z): DB[Z] =
     dbs.map{ _.foldLeft(z)(f) }
@@ -225,15 +249,17 @@ object DB {
                       (x, i) <- db
                       (j) <- fragR.get
                       if i == j
-                    } yield (x)))
+                    } yield (x)).reverse)
 }
 
 object Guard3Test extends App {
-  import shapeless._, Nat._
+  import shapeless._, Nat._, test.illTyped
   import spire.algebra._, spire.implicits._
   import Guard3._
+  import Site._
   import DB._
 
+  // ----------------------------------------------------------- Attributes
   case class Date(get: String)
   object Date {
     implicit def order: Order[Date] = new Order[Date] {
@@ -258,31 +284,21 @@ object Guard3Test extends App {
     }
   }
 
-  def date[R1[Date] <: Rsc,
-           R2[Name] <: Rsc,
-           R3[Addr] <: Rsc](r: (R1[Date], R2[Name], R3[Addr])): (R1[Date]) = (r._1)
+  // ----------------------------------------------------------- Predicates
+  def lastweek[R[_]](d: R[Date]): Boolean = true
+  def atdesk[R[_]](a: R[Addr]): Boolean = true
 
-  def name[R1[Date] <: Rsc,
-           R2[Name] <: Rsc,
-           R3[Addr] <: Rsc](r: (R1[Date], R2[Name], R3[Addr])): R2[Name] = r._2
-
-  def addr[R1[Date] <: Rsc,
-           R2[Name] <: Rsc,
-           R3[Addr] <: Rsc](r: (R1[Date], R2[Name], R3[Addr])): R3[Addr] = r._3
-
-  def lastweek[R[Date] <: Rsc](d: R[Date]): Boolean = true
-  def atdesk[R[Addr] <: Rsc](a: R[Addr]): Boolean = true
-
+  // --------------------------------------------------------- Applications
   val localApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
                        Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
-                       Site0[DB[Int]]] =
+                       _] =
      for {
        _ <- configure[Date, Name, Addr]
        q <- query((db: DB[(Raw[Date], Raw[Name], Raw[Addr])]) => {
                     val r1 = σ (db) (lastweek)
                     val r2 = σ (r1) (atdesk)
-                    val r3 = Π (r2) (date)
-                    val r4 = group (r3) ({ case (d) => (d) })
+                    val r3 = Π[Raw[Date]] (r2)
+                    val r4 = group[Raw[Date]] (r3)
                     val r5 = count (r4); r5
                   })
      } yield q
@@ -294,21 +310,17 @@ object Guard3Test extends App {
      for {
        _  <- configure[Date, Name, Addr]
        _  <- crypt (_2) (HEq(_:Name))
-       _  <- fragV (_1) (Site.s1, Site.s2)
+       _  <- fragV (_1) (s1, s2)
        qL <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
                        val r1 = σ (fragL) (lastweek)
-                       val r2 = Π (r1) ({ case (d,i) => (d,i) })
-                       val r3 = group (r2) ({ case (d,i) => (d) }); r3
+                       val r2 = Π[(Raw[Date], Idx)] (r1)
+                       val r3 = group[Raw[Date]] (r2); r3
                      })
        qR <- queryR ((fragR: DB[(HEq[Name], Raw[Addr], Idx)]) => {
                        val r1 = σ (fragR) (atdesk)
-                       val r2 = Π (r1) ({ case (n,a,i) => (i) }); r2
-                     }): Guard3[( Site1[DB[(Raw[Date], Idx)]],
-                                  Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
-                                ( Site1[DB[(Raw[Date], Idx)]],
-                                  Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
-                                Site2[DB[(Idx)]]]
-       // FIXME: Who manages site on query? Is it monad of Site itself?
+                       val r2 = Π[Idx] (r1); r2
+                     })
+       // Note: Who manages site on query? Is it monad of Site itself?
      } yield Site0(count (gather(qL, qR).get))
 
   val leftFirstApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
@@ -318,34 +330,39 @@ object Guard3Test extends App {
     for {
        _   <- configure[Date, Name, Addr]
        _   <- crypt (_2) (HEq(_:Name))
-       _   <- fragV (_1) (Site.s1, Site.s2)
+       _   <- fragV (_1) (s1, s2)
        ids <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
                        val r1 = σ (fragL) (lastweek)
-                       val r2 = Π (r1) ({ case (d,i) => (i) }); r2
+                       val r2 = Π[Idx] (r1); r2
                      })
        q   <- queryR ((fragR: DB[(HEq[Name], Raw[Addr], Idx)]) => {
                         val r1 = σ (fragR) ((idx: Idx) =>
                           ids.get.exists(_ === idx))
-                        val r2 = group (r1) ({ case (n,a,i) => (n) })
+                        val r2 = group[HEq[Name]] (r1)
                         val r3 = count (r2); r3
                      })
     } yield q
 
-  // val twiceEnc =
+  // illTyped { """
+  // val twiceEncApp =
   //   for {
   //     _ <- configure[Date, Name, Addr]
   //     _ <- crypt (_2) (HEq(_:Name))
   //     _ <- crypt (_2) (HEq(_:Name))
   //   } yield ()
+  // """ }
 
-  // val unfragQueryOnFrag =
-  //   for {
-  //     _ <- configure[Date, Name, Addr]
-  //     _ <- fragV (_1) (Site.s1, Site.s2)
-  //     q <- query (db => { /* ... */ })
-  //   } yield ()
+  illTyped { """
+  val unfragQueryOnFragApp =
+    for {
+      _ <- configure[Date, Name, Addr]
+      _ <- fragV (_1) (s1, s2)
+      q <- query (db => { /* ... */ })
+    } yield ()
+  """ }
 
-  // val grpOnAES =
+  // illTyped { """
+  // val grpOnAESApp =
   //   for {
   //     _ <- configure[Date, Name, Addr]
   //     _ <- crypt (_2) (AES(_:Name))
@@ -353,7 +370,9 @@ object Guard3Test extends App {
   //                   group (db) ({ case (d,n,a) => (n) })
   //                 })
   //   } yield ()
+  // """ }
 
+  // ------------------------------------------------------------------ Run
   val db: DB[(Raw[Date],Raw[Name],Raw[Addr])] =
    List((Raw(Date("2014-01-01")), Raw(Name("Bob")),   Raw(Addr(Some(1)))),
         (Raw(Date("2014-01-02")), Raw(Name("Chuck")), Raw(Addr(Some(2)))),
