@@ -343,6 +343,7 @@ object Guard3Test extends App {
                      })
     } yield q
 
+  // FIXME: SO in illTyped macro expansion
   // illTyped { """
   // val twiceEncApp =
   //   for {
@@ -361,6 +362,7 @@ object Guard3Test extends App {
     } yield ()
   """ }
 
+  // FIXME: SO in illTyped macro expansion
   // illTyped { """
   // val grpOnAESApp =
   //   for {
