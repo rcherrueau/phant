@@ -1,0 +1,179 @@
+* 'phant
+/keywords: Privacy techniques composition, Fragmentation, Encryption, Library,
+Typing, Algebraic laws./
+
+
+'phant is a POC-library for the composition of privacy techniques in
+unsupervised clouds. Cloud computations are risky concerning the divulging and
+ownership of private data. To handle the privacy concern in unsupervised clouds,
+techniques such as encryption, fragmentation, differential privacy and
+client-side computation keep data private. Each technique has pro and cons but,
+in general, they are limited. For instance, data encryption fits for storage
+protection but not for computations and differential privacy is useful for
+statistical databases only.
+
+In cloud application, privacy risks are mainly addressed using one technique,
+making application limited. We consider that the composition of many techniques
+is much more effective and enables the development of expressive
+privacy-preserving cloud applications. 'phant is a POC-library for the *correct*
+composition of privacy-preserving techniques.
+
+'phant is a *prototype* aims to ensure that the state monad is the good
+abstraction for the correct composition of privacy-preserving techniques. At the
+moment, the project is under development but verifies interesting [[file:attic/laws.scala][laws for the
+composition.]]
+
+** Code example
+   #+BEGIN_SRC scala
+     object Agenda extends App {
+       import shapeless._, Nat._, test.illTyped
+       import spire.algebra._, spire.implicits._
+       import phant._, Guard3._, Site._, DB._
+
+       // ----------------------------------------------------------- Attributes
+       case class Date(get: String)
+       object Date {
+         implicit def order: Order[Date] = new Order[Date] {
+           override def compare(x: Date, y: Date) =
+             implicitly[Order[String]].compare(x.get, y.get)
+         }
+       }
+
+       case class Name(get: String)
+       object Name {
+         implicit def order: Order[Name] = new Order[Name] {
+           override def compare(x: Name, y: Name) =
+             implicitly[Order[String]].compare(x.get, y.get)
+         }
+       }
+
+       case class Addr(get: Option[Int])
+       object Addr {
+         implicit def order: Order[Addr] = new Order[Addr] {
+           override def compare(x: Addr, y: Addr) =
+             implicitly[Order[Option[Int]]].compare(x.get, y.get)
+         }
+       }
+
+       // ----------------------------------------------------------- Predicates
+       def lastweek[R[_]](d: R[Date]): Boolean = true
+       def atdesk[R[_]](a: R[Addr]): Boolean = true
+
+       // --------------------------------------------------------- Applications
+       // Local App: Number, per day, of meetings had in office last week
+       val localApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
+                            Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
+                            _] =
+          for {
+            _ <- configure[Date, Name, Addr]
+            q <- query((db: DB[(Raw[Date], Raw[Name], Raw[Addr])]) => {
+                         val r1 = σ (db) (lastweek)
+                         val r2 = σ (r1) (atdesk)
+                         val r3 = Π[Raw[Date]] (r2)
+                         val r4 = group[Raw[Date]] (r3)
+                         val r5 = count (r4); r5
+                       })
+          } yield q
+
+       // Frag+Crypt improvment: Number, per day, of meetings had in office last week
+       val cloudApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
+                            ( Site1[DB[(Raw[Date], Idx)]],
+                              Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
+                            Site0[DB[Int]]] =
+          for {
+            _  <- configure[Date, Name, Addr]
+            _  <- crypt (_2) (HEq(_:Name))
+            _  <- fragV (_1) (s1, s2)
+            qL <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
+                            val r1 = σ (fragL) (lastweek)
+                            val r2 = Π[(Raw[Date], Idx)] (r1)
+                            val r3 = group[Raw[Date]] (r2); r3
+                          })
+            qR <- queryR ((fragR: DB[(HEq[Name], Raw[Addr], Idx)]) => {
+                            val r1 = σ (fragR) (atdesk)
+                            val r2 = Π[Idx] (r1); r2
+                          })
+            // Note: Who manages site on query? Is it monad of Site itself?
+          } yield Site0(count (gather(qL, qR).get))
+
+       // Left-first strategy: Number of poeple met last week
+       val leftFirstApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
+                                ( Site1[DB[(Raw[Date], Idx)]],
+                                  Site2[DB[(HEq[Name], Raw[Addr], Idx)]] ),
+                                Site2[DB[Int]]] =
+         for {
+            _   <- configure[Date, Name, Addr]
+            _   <- crypt (_2) (HEq(_:Name))
+            _   <- fragV (_1) (s1, s2)
+            ids <- queryL ((fragL: DB[(Raw[Date], Idx)]) => {
+                            val r1 = σ (fragL) (lastweek)
+                            val r2 = Π[Idx] (r1); r2
+                          })
+            q   <- queryR ((fragR: DB[(HEq[Name], Raw[Addr], Idx)]) => {
+                             val r1 = σ (fragR) ((idx: Idx) =>
+                               ids.get.exists(_ === idx))
+                             val r2 = group[HEq[Name]] (r1)
+                             val r3 = count (r2); r3
+                          })
+         } yield q
+
+       illTyped { """
+       val twiceEncApp =
+         for {
+           _ <- configure[Date, Name, Addr]
+           _ <- crypt (_2) (HEq(_:Name))
+           _ <- crypt (_2) (HEq(_:Name))
+         } yield ()
+       """ }
+
+       illTyped { """
+       val unfragQueryOnFragApp =
+         for {
+           _ <- configure[Date, Name, Addr]
+           _ <- fragV (_1) (s1, s2)
+           q <- query (db => { /* ... */ })
+         } yield ()
+       """ }
+
+       illTyped { """
+       val grpOnAESApp =
+         for {
+           _ <- configure[Date, Name, Addr]
+           _ <- crypt (_2) (AES(_:Name))
+           q <- query ((db: DB[(Raw[Date], AES[Name], Raw[Addr])]) => {
+                         group (db) ({ case (d,n,a) => (n) })
+                       })
+         } yield ()
+       """ }
+
+       // ------------------------------------------------------------------ Run
+       val db: DB[(Raw[Date],Raw[Name],Raw[Addr])] =
+        List((Raw(Date("2014-01-01")), Raw(Name("Bob")),   Raw(Addr(Some(1)))),
+             (Raw(Date("2014-01-02")), Raw(Name("Chuck")), Raw(Addr(Some(2)))),
+             (Raw(Date("2014-01-03")), Raw(Name("Bob")),   Raw(Addr(Some(3)))),
+             (Raw(Date("2014-01-04")), Raw(Name("Chuck")), Raw(Addr(Some(4)))),
+             (Raw(Date("2014-01-05")), Raw(Name("Bob")),   Raw(Addr(Some(5)))),
+             (Raw(Date("2014-01-05")), Raw(Name("Bob")),   Raw(Addr(Some(5)))),
+             (Raw(Date("2014-01-07")), Raw(Name("Daan")),  Raw(Addr(None))),
+             (Raw(Date("2014-01-08")), Raw(Name("Bob")),   Raw(Addr(Some(6)))),
+             (Raw(Date("2014-01-08")), Raw(Name("Daan")),  Raw(Addr(Some(6)))),
+             (Raw(Date("2014-01-09")), Raw(Name("Chuck")), Raw(Addr(Some(2)))),
+             (Raw(Date("2014-01-10")), Raw(Name("Chuck")), Raw(Addr(Some(7)))))
+
+       println(localApp.eval(Site0(db)))
+       println(cloudApp.eval(Site0(db)))
+       println(leftFirstApp.eval(Site0(db)))
+     }
+   #+END_SRC
+
+** Generalization to relation of =n= attributes
+   The Scala programming language is good for generalization. An advanced uses
+   of implicits and type members performs type-level computation. It enables
+   arity-polymorphic database so that, the code of guardian monad is wrote once.
+
+   A version that uses implicit for arity-polymorphic databases is under
+   development on =PolyWithImplicit= branch.
+
+** Why 'phant
+   Because file retrieval in the 'phant is hard to accomplish: 
+   http://www.smbc-comics.com/?id=3520#comic
