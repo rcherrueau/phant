@@ -285,13 +285,14 @@ object Guard3Test extends App {
   }
 
   // ----------------------------------------------------------- Predicates
+  // Note: Defining `R` as `R[_] <: Rsc` disturbs the type inference
   def lastweek[R[_]](d: R[Date]): Boolean = true
   def atdesk[R[_]](a: R[Addr]): Boolean = true
 
   // --------------------------------------------------------- Applications
   val localApp: Guard3[Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
                        Site0[DB[(Raw[Date], Raw[Name], Raw[Addr])]],
-                       _] =
+                       Site0[DB[Int]]] =
      for {
        _ <- configure[Date, Name, Addr]
        q <- query((db: DB[(Raw[Date], Raw[Name], Raw[Addr])]) => {
