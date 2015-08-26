@@ -26,10 +26,10 @@ infixr 7 |:
 --
 -- Every data constructor of U corresponds to a type.
 data U : Type where
-  NAT  : U
-  TEXT : Nat -> U
-  REAL : U
-  BOOL : U
+  NAT   : U
+  TEXT  : Nat -> U
+  REAL  : U
+  BOOL  : U
 
 instance Eq U where
   NAT == NAT       = True
@@ -116,7 +116,53 @@ using (s: Schema, s': Schema)
     Project : (s : Schema) -> RA s' -> RA (intersect s s')
     Select  : RA s -> RA s
     -- Introduce
-    Read    : Table s -> RA s
+    Unit    : Table s -> RA s
 
 -- Number of meeting per day
-SELECT $ Project [("Date", TEXT 10)] $ Read agenda
+nbMeeting : RA s -> RA (intersect [("Date", TEXT 10)] s)
+nbMeeting ra =
+  -- Count $ Group [("Date", TEXT 10)] $ Project [("Date", TEXT 10)] ra
+  Project [("Date", TEXT 10)] ra
+
+
+-- Symbolic simulations
+--
+-- Symbolic simulations are like deterministic simulations one
+-- concrete data, using symbolic values to run and check the results
+-- of a /full set/ of simulations. See,
+-- http://coq-blog.clarus.me/checking-concurrent-programs-with-symbolic-simulations.html
+--
+-- A simulation, or a run, is a co-program over an interactive query.
+-- It answers to the requests of the program, playing th role of the
+-- environment. A simulation is defined by induction over the
+-- program's structure. This has two advantages:
+-- - By construction, a simulation must give exactly one answer per
+--   request.
+-- - You can construct the simulation following the structure of the
+--   program.
+
+
+-- C'est quoi le point de variation dans mon programe ?
+-- 1. Le schema de la base
+-- 2. Les requêtes fait sur un schéma
+-- 3. Le calcul utilisés pour protéger le schéma
+
+
+-- Du coup, qu'est ce que je peux tester pour la propriété de fuite
+-- des données ?
+-- 1. Pour n'importe quel schéma, mon calcule ne fuite pas d'info :
+--    Impossible a vérifier car les protection dépendent du schéma.
+-- 2. Pour n'importe quelle requête (sur un schéma), mon calcule ne
+--    fuite pas d'info : OK.
+-- 3. Utiliser le prover pour driver l'écriture d'un calcul safe pour
+--    n'importe quelle requête lorsque je connais le schéma.
+-- On se focalise sur 2 et 3.
+
+
+-- Qu'est-ce que le calcul ? Le calcule est une combinaison d'une
+-- requête et de fonctions de protections entrelacées. Typiquement, je
+-- peux représenter mon calcule par une monade.
+
+
+
+-- Comment vérifier qu'un calcul ne fuite pas de données ?
