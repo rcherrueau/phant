@@ -19,48 +19,180 @@ import Data.List
 
 infixr 7 |:
 
--- Cryptographic encryption
--- String here to define type clases only on correct encryption scheme
-data Crypt : String -> a -> Type where
-  Heq : a -> (pkey : String) -> Crypt "Heq" a
-  AES : a -> (key : String) -> Crypt "AES" a
+namespace inclusion
+  -- List Inclusion.
+  --
+  -- Assert that elements of the first list are elements of the second
+  -- list.
+  Include : List a -> List a -> Type
+  Include xs ys = (z : _) -> Elem z xs -> Elem z ys
 
-instance Eq a => Eq (Crypt "Heq" a) where
-  (Heq a _) == (Heq b _)      = a == b
+  -- Be an element of a singletong list implies to being the singleton
+  elemSingleton : Elem z [x] -> z = x
+  elemSingleton Here           = Refl
+  elemSingleton (There zInNil) = absurd zInNil
 
-instance Eq a => Eq (Crypt "AES" a) where
-  (AES a _) == (AES b _) = a == b
+  -- The first element of the first list is not an element of the
+  -- second list implies that the inclusion doesn't holds.
+  notFirstIn : (Elem x ys -> Void) -> Include (x :: xs) ys -> Void
+  notFirstIn nxInYs xxsIncYs {x} {xs} = let xInYs  = xxsIncYs x Here in
+                                        nxInYs xInYs
 
--- I. Schemas, Tables and Rows
+  -- The tail of the first list is not included implies the first list
+  -- is not included.
+  notTailInc : (Include xs ys -> Void) -> Include (x :: xs) ys -> Void
+  notTailInc nxsIncYs xxsIncYs {x} {xs} =
+                                 nxsIncYs (\z,zInXs => xxsIncYs z (There zInXs))
+
+  -- The head of the first list is an element of the second list AND
+  -- the tail of the first list is included in the second list implies
+  -- that the first list is included in the second list.
+  firstInRestInc : DecEq a => {x : a} -> Elem x ys -> Include xs ys ->
+    Include (x :: xs) ys
+  firstInRestInc xInYs xsIncYs {x} {xs} =
+                                 \z,zInXxs => case decEq z x of
+                                   Yes zIsX => rewrite zIsX in xInYs
+                                   -- z ≠ x ∧ z ∈ (x :: xs) ⇒ z ∈ xs
+                                   No nzIsX => let zInXs = getZInXs nzIsX zInXxs in
+                                               xsIncYs z zInXs
+    where
+    getZInXs : (z = x -> Void) -> Elem z (x :: xs) -> Elem z xs
+    getZInXs nzIsX zInXxs with (xs)
+      -- zInLX : Elem z [x]
+      getZInXs nzIsX zInLX  | [] = let zIsX = elemSingleton zInLX in
+                                   void (nzIsX zIsX)
+      -- If xs in not empty, then two possibilities:
+      -- z is the first element of xs, so zInXxs is Here, so z and x
+      -- are equal which is not possible according to our assumption
+      getZInXs nzIsX Here          | (z :: tl) = void (nzIsX Refl)
+        -- z is an element of xs, so we have to pop the proof to
+        -- discard the `x`.
+      getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
+
+  -- Is the elements of the first list are elements of the second
+  -- list.
+  isInclude : DecEq a => (xs : List a) -> (ys : List a) -> Dec (Include xs ys)
+  isInclude []        ys         = Yes (\z,zinxs => case isElem z ys of
+                                                      No contra => absurd zinxs
+                                                      Yes prf   => prf)
+  -- 2 Strategies:
+  -- 1. First head is elem of ys. Then manage tail included in ys
+  isInclude (x :: xs) ys with (isElem x ys)
+    isInclude (x :: xs) ys | (No nxInYs)
+                                 = No $ notFirstIn nxInYs
+    isInclude (x :: xs) ys | (Yes xInYs) with (isInclude xs ys)
+      isInclude (x :: xs) ys | (Yes xInYs) | (No nxsIncYs)
+                                 = No (\xxsIncYs => notTailInc nxsIncYs xxsIncYs)
+      isInclude (x :: xs) ys | (Yes xInYs) | (Yes xsIncYs)
+                                 = Yes $ firstInRestInc xInYs xsIncYs
+  -- 2. First tl included in xs. Then manage head is elem of ys
+  -- isInclude (x :: xs) ys with (isInclude xs ys)
+  --   isInclude (x :: xs) ys | (No nxsIncYs)
+  --                                = No (\xxsIncYs => notTailInc nxsIncYs xxsIncYs)
+  --   isInclude (x :: xs) ys | (Yes xsIncYs) with (isElem x ys)
+  --     isInclude (x :: xs) ys | (Yes xsIncYs) | (Yes xInYs)
+  --                                = Yes $ firstInRestInc xInYs xsIncYs
+  --     isInclude (x :: xs) ys | (Yes xsIncYs) | (No nxInYs)
+  --                                = No (\xxsIncYs => notFirstIn nxInYs xxsIncYs)
+
+namespace encryption
+  Key : Type
+  Key = String
+
+  class Crypt a where
+    encrypt : String -> Key -> a
+    decrypt : a -> Key -> String
+
+  -- AES
+  data AES : Type where
+    MkAES : String -> AES
+
+  instance Crypt AES where
+    encrypt s k = MkAES s
+    decrypt a k = "str"
+
+  instance Eq AES where
+    (MkAES x) == (MkAES y) = x == y
+
+  -- Cryptographic encryption
+  -- String here to define type clases only on correct encryption scheme
+  -- data Crypt : String -> a -> Type where
+  --   Heq : a -> (pkey : String) -> Crypt "Heq" a
+  --   AES : a -> (key : String) -> Crypt "AES" a
+
+  -- instance Eq a => Eq (Crypt "Heq" a) where
+  --   (Heq a _) == (Heq b _)      = a == b
+
+  -- instance Eq a => Eq (Crypt "AES" a) where
+  --   (AES a _) == (AES b _) = a == b
+
+  -- -- in data U:
+  -- CRYPT : Crypt _ U -> U
+
+  -- -- in el
+  -- el (CRYPT f) with (f)
+  --   el (CRYPT f) | (Heq x pkey) = Crypt "Heq" x
+  --   el (CRYPT f) | (AES x skey) = Crypt "AES" x
+
 -- Universe for Database allowed types (both `U` and `el`)
 --
 -- Every data constructor of U corresponds to a type.
-data U : Type where
-  NAT   : U
-  TEXT  : Nat -> U
-  REAL  : U
-  BOOL  : U
-  CRYPT : Crypt _ U -> U
-  HOME  : U -> U
+namespace dbuniverse
+  data U : Type where
+    NAT   : U
+    TEXT  : Nat -> U
+    REAL  : U
+    BOOL  : U
+    CRYPT : U
+    HOME  : U -> U
 
-instance Eq U where
-  NAT == NAT           = True
-  (TEXT x) == (TEXT y) = x == y
-  REAL == REAL         = True
-  BOOL == BOOL         = True
-  x == y               = False
+  -- Decoding function
+  el : U -> Type
+  el NAT       = Nat
+  el (TEXT k)  = String
+  el REAL      = Double
+  el BOOL      = Bool
+  el CRYPT     = AES
+  el (HOME k)  = el k
 
--- Decoding function
-el : U -> Type
-el NAT       = Nat
-el (TEXT k)  = String
-el REAL      = Double
-el BOOL      = Bool
-el (CRYPT f) with (f)
-  el (CRYPT f) | (Heq x pkey) = Crypt "Heq" x
-  el (CRYPT f) | (AES x skey) = Crypt "AES" x
-el (HOME k)  = el k
+  instance Eq U where
+    NAT == NAT           = True
+    (TEXT x) == (TEXT y) = x == y
+    REAL == REAL         = True
+    BOOL == BOOL         = True
+    (HOME x) == (HOME y) = x == y
+    CRYPT == CRYPT       = True
+    x == y               = False
 
+  instance DecEq U where
+    decEq NAT       NAT       = Yes Refl
+    decEq (TEXT x)  (TEXT y)  with (decEq x y)
+      decEq (TEXT x)  (TEXT x)  | (Yes Refl)
+                                = Yes Refl
+      decEq (TEXT x)  (TEXT y)  | (No contra)
+                                = No (\txIsTy => contra $ cong txIsTy {f=getNat})
+        where
+        getNat : U -> Nat
+        getNat (TEXT x) = x
+        getNat _        = Z
+    decEq REAL      REAL      = Yes Refl
+    decEq BOOL      BOOL      = Yes Refl
+    decEq (HOME x)  (HOME y)  with (decEq x y)
+      decEq (HOME x)  (HOME x)  | (Yes Refl)
+                              = Yes Refl
+      decEq (HOME x)  (HOME y)  | (No contra)
+                              = No (\hxIsHy => contra $ cong hxIsHy {f=getU})
+        where
+        getU : U -> U
+        getU (HOME x) = x
+        getU x        = x
+    -- decEq (CRYPT x) (CRYPT y) = ?jkl
+    decEq x         y         = No believemeNotEq
+        where
+        postulate believemeNotEq : x = y -> Void
+
+
+-- I. Schemas, Tables and Rows
 -- A schema describes the type of a table.
 --
 -- It consists of a set of pairs of column names and types. We do not
@@ -178,23 +310,22 @@ nbMeeting ra =
 -- requête et de fonctions de protections entrelacées. Typiquement, je
 -- peux représenter mon calcule par une monade.
 
+
+
 -- Comment vérifier qu'un calcul ne fuite pas de données
 PC : Type
 PC = List (List Attribute)
 
-data Sub : List a -> List a -> Type where
-  Stop : Sub [] l
-  Pop  : Sub xs ys -> {auto p: Elem x ys} -> Sub (x :: xs) ys
-
 data Leak : PC -> Schema -> Type where
-  Here  : {auto p: Sub pc s} -> Leak (pc :: pcs) s
+  Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
   There : Leak pcs s -> Leak (pc :: pcs) s
-
-data Nop : a -> Bool -> Type where
-  nopp : a -> Nop a False
-
-run : RA s -> {auto p: Leak [[("Date", TEXT 10)]] s} -> Unit
-run ra = ()
 
 -- Test inequality
 -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
+data NotLeak : PC -> Schema -> Type where
+  NLStop : NotLeak [] s
+  NLPop  : NotLeak pcs s -> {p : Include pc s -> Void} -> {default Refl ok : No p = isInclude pc s}-> NotLeak (pc :: pcs) s
+
+
+run : RA s -> {auto p: NotLeak [[("Da", TEXT 10)]] s} -> Unit
+run ra = ()
