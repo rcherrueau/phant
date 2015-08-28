@@ -19,11 +19,12 @@ import Data.List
 
 infixr 7 |:
 
+-- List Inclusion.
+--
+-- Assert that elements of the first list are elements of the second
+-- list.
 namespace inclusion
-  -- List Inclusion.
-  --
-  -- Assert that elements of the first list are elements of the second
-  -- list.
+  -- Inclusion predicate
   Include : List a -> List a -> Type
   Include xs ys = (z : _) -> Elem z xs -> Elem z ys
 
@@ -95,6 +96,8 @@ namespace inclusion
   --     isInclude (x :: xs) ys | (Yes xsIncYs) | (No nxInYs)
   --                                = No (\xxsIncYs => notFirstIn nxInYs xxsIncYs)
 
+
+-- Cryptographic encryption
 namespace encryption
   Key : Type
   Key = String
@@ -115,7 +118,7 @@ namespace encryption
     (MkAES x) == (MkAES y) = x == y
 
   -- Cryptographic encryption
-  -- String here to define type clases only on correct encryption scheme
+  -- String here defines type clases only on correct encryption scheme
   -- data Crypt : String -> a -> Type where
   --   Heq : a -> (pkey : String) -> Crypt "Heq" a
   --   AES : a -> (key : String) -> Crypt "AES" a
@@ -134,10 +137,11 @@ namespace encryption
   --   el (CRYPT f) | (Heq x pkey) = Crypt "Heq" x
   --   el (CRYPT f) | (AES x skey) = Crypt "AES" x
 
+
 -- Universe for Database allowed types (both `U` and `el`)
 --
 -- Every data constructor of U corresponds to a type.
-namespace dbuniverse
+namespace rauniverse
   data U : Type where
     NAT   : U
     TEXT  : Nat -> U
@@ -168,9 +172,9 @@ namespace dbuniverse
     decEq NAT       NAT       = Yes Refl
     decEq (TEXT x)  (TEXT y)  with (decEq x y)
       decEq (TEXT x)  (TEXT x)  | (Yes Refl)
-                                = Yes Refl
+                              = Yes Refl
       decEq (TEXT x)  (TEXT y)  | (No contra)
-                                = No (\txIsTy => contra $ cong txIsTy {f=getNat})
+                              = No (\txIsTy => contra $ cong txIsTy {f=getNat})
         where
         getNat : U -> Nat
         getNat (TEXT x) = x
@@ -192,36 +196,141 @@ namespace dbuniverse
         postulate believemeNotEq : x = y -> Void
 
 
--- I. Schemas, Tables and Rows
--- A schema describes the type of a table.
---
--- It consists of a set of pairs of column names and types. We do not
--- allow any type to occur in a Schema, but restrict ourself to the
--- Univers (U, el)
-Attribute: Type
-Attribute = (String, U)
+-- Relational Algebra
+namespace ra
+  -- A schema describes the type of a table.
+  --
+  -- It consists of a set of pairs of column names and types. We do not
+  -- allow any type to occur in a Schema, but restrict ourself to the
+  -- Univers (U, el)
+  Attribute: Type
+  Attribute = (String, U)
 
-Schema : Type
-Schema = List Attribute
+  Schema : Type
+  Schema = List Attribute
 
--- Now we have our schema, we can define a table. A table consists of
--- a list of rows. A row is a sequence of values, in accordance with
--- the types dictated by the table's schema.
+  -- Now we have our schema, we can define a table. A table consists of
+  -- a list of rows. A row is a sequence of values, in accordance with
+  -- the types dictated by the table's schema.
 
--- A row for a table.
---
--- RNil corresponds to the row with an empty schema. To create a row
--- in a schema of the form `[(name, u), xs]`, you need to provide an
--- element of type `el u`, together with a row adhering to the schema
--- `s` (passing an element of `el u` as argument allows to use Idris
--- base type instead of `U` types)
-data Row : Schema -> Type where
-  RNil : Row Nil
-  (|:) : {n: String} -> el u -> Row xs -> Row $ (n, u) :: xs
+  -- A row for a table.
+  --
+  -- RNil corresponds to the row with an empty schema. To create a row
+  -- in a schema of the form `[(name, u), xs]`, you need to provide an
+  -- element of type `el u`, together with a row adhering to the schema
+  -- `s` (passing an element of `el u` as argument allows to use Idris
+  -- base type instead of `U` types)
+  data Row : Schema -> Type where
+    RNil : Row Nil
+    (|:) : {n : String} -> {u : U} -> el u -> Row xs -> Row $ (n, u) :: xs
 
--- A table is a list of `Row s`
-Table : Schema -> Type
-Table s = List (Row s)
+  -- A table is a list of `Row s`
+  Table : Schema -> Type
+  Table s = List (Row s)
+
+  -- A query expression (Relation Algebra)
+  --
+  -- An expression of `RA s` corresponds to a query that will return a
+  -- table with schema `s`. Operations are those ones of relational
+  -- algebra.
+  --
+  -- Relational algebra uses set union, set difference and cartesian
+  -- product from set theory, but adds additional constraints. Unions
+  -- and difference must be /union-compatible/, i.e., the two relations
+  -- must have the *same set of attributes*.
+  --
+  -- Cartesion product must have disjoint headers.
+  -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
+  using (s: Schema, s': Schema)
+    data RA : Schema -> Type where
+      -- Set operatos
+      Union   : RA s -> RA s -> RA s
+      Diff    : RA s -> RA s -> RA s
+      Product : RA s -> RA s' -> RA (s ++ s')
+      -- Others
+      Project : (s : Schema) -> RA s' -> RA (intersect s s')
+      Select  : RA s -> RA s
+      -- Introduce
+      Unit    : Table s -> RA s
+
+namespace raoperational
+  attrEq : {u,v : U} -> el u -> el v -> Bool
+  attrEq x y {u = NAT}      {v = NAT}      = x == y
+  attrEq x y {u = NAT}      {v}            = False
+  attrEq x y {u = (TEXT k)} {v = (TEXT L)} = x == y
+  attrEq x y {u = (TEXT k)} {v}            = False
+  attrEq x y {u = REAL}     {v = REAL}     = x == y
+  attrEq x y {u = REAL}     {v}            = False
+  attrEq x y {u = BOOL}     {v = BOOL}     = x == y
+  attrEq x y {u = BOOL}     {v}            = False
+  attrEq x y {u = CRYPT}    {v = CRYPT}    = x == y
+  attrEq x y {u = CRYPT}    {v}            = False
+  attrEq x y {u = (HOME h)} {v = (HOME i)} = attrEq {u=h} {v=i} x y
+  attrEq x y {u = (HOME z)} {v}            = False
+
+  instance Eq (Row s) where
+    RNil          == RNil            = True
+    (attr |: row) == (attr' |: row') = attrEq attr attr' && row == row'
+
+  union : Table s -> Table s -> Table s
+  union t1 t2 = List.union t1 t2
+
+  diff : Table s -> Table s -> Table s
+  diff t1 t2 = t1 \\ t2
+
+  product : Table s -> Table s' -> Table (s ++ s')
+  product t1 t2 = [ union r1 r2 | r1 <- t1, r2 <- t2 ]
+    where
+    union : Row s -> Row s' -> Row (s ++ s')
+    union RNil       r  = r
+    union (a |: r1)  r2 = a |: union r1 r2
+
+  project : (s : Schema) -> Table s' -> Table (intersect s s')
+  project s t = [ project r | r <- t ]
+    where
+    project : Row s' -> Row (intersect s s')
+
+  run : RA s -> Table s
+  run (Union q r)   = raoperational.union (run q) (run r)
+  run (Diff q r)    = diff (run q) (run r)
+  run (Product q r) = product (run q) (run r)
+  run (Project s q) = project s (run q)
+  run (Select x)    = ?mlkjlmkj_5
+  run (Unit table)  = table
+
+namespace leak
+  -- Privacy Constraints Specification
+  PC : Type
+  PC = List (List Attribute)
+
+  -- Leak predicate.
+  --
+  -- Ensures that an Privacy Constraint leaks
+  data Leak : PC -> Schema -> Type where
+    Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
+    There : Leak pcs s -> Leak (pc :: pcs) s
+
+  -- Zero leak predicate.
+  --
+  -- Ensures that no Privacy Constraints leak.
+  data ZeroLeak : PC -> Schema -> Type where
+    ZLStop : ZeroLeak [] s
+    -- In idris this is how test inequality
+    -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
+    NLPop  : ZeroLeak pcs s -> {p : Include pc s -> Void} ->
+      {default Refl ok : No p = isInclude pc s} -> ZeroLeak (pc :: pcs) s
+
+  -- test
+  run : RA s -> {auto p : ZeroLeak [[("Date", TEXT 10)]] s} -> Unit
+  run ra = ()
+  -- run (Unit agenda) -- Can't solve goal NotLeak [[("Date", TEXT 10)]]
+  -- run (Project [("Addr", NAT)] $ Unit agenda)
+
+  run' : RA s -> PC -> Unit
+  run' ra pc {s} = let noleak = proofNoLeak in ()
+    where
+    proofNoLeak : (ZeroLeak pc s)
+    proofNoLeak = ?proofNoLeak_rhs
 
 -- Examples
 scAgenda : Schema
@@ -239,39 +348,13 @@ row3 = "2015-07-10" |: "Alice" |: 1 |: RNil
 agenda : Table scAgenda
 agenda = [row1, row2, row3]
 
--- II. Constructing queries
-
--- A query expression (Relation Algebra)
---
--- An expression of `RA s` corresponds to a query that will return a
--- table with schema `s`. Operations are those ones of relational
--- algebra.
---
--- Relational algebra uses set union, set difference and cartesian
--- product from set theory, but adds additional constraints. Unions
--- and difference must be /union-compatible/, i.e., the two relations
--- must have the *same set of attributes*.
---
--- Cartesion product must have disjoint headers.
--- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
-using (s: Schema, s': Schema)
-  data RA : Schema -> Type where
-    -- Set operatos
-    Union   : RA s -> RA s -> RA s
-    Diff    : RA s -> RA s -> RA s
-    Product : RA s -> RA s' -> RA (s ++ s')
-    -- Others
-    Project : (s : Schema) -> RA s' -> RA (intersect s s')
-    Select  : RA s -> RA s
-    -- Introduce
-    Unit    : Table s -> RA s
-
 -- Number of meeting per day
 nbMeeting : RA s -> RA (intersect [("Date", TEXT 10)] s)
 nbMeeting ra =
   -- Count $ Group [("Date", TEXT 10)] $ Project [("Date", TEXT 10)] ra
   Project [("Date", TEXT 10)] ra
 
+-- Some thought:
 -- Symbolic simulations
 --
 -- Symbolic simulations are like deterministic simulations one
@@ -288,12 +371,10 @@ nbMeeting ra =
 -- - You can construct the simulation following the structure of the
 --   program.
 
-
 -- C'est quoi le point de variation dans mon programe ?
 -- 1. Le schema de la base
 -- 2. Les requêtes fait sur un schéma
 -- 3. Le calcul utilisés pour protéger le schéma
-
 
 -- Du coup, qu'est ce que je peux tester pour la propriété de fuite
 -- des données ?
@@ -305,27 +386,6 @@ nbMeeting ra =
 --    n'importe quelle requête lorsque je connais le schéma.
 -- On se focalise sur 2 et 3.
 
-
 -- Qu'est-ce que le calcul ? Le calcule est une combinaison d'une
 -- requête et de fonctions de protections entrelacées. Typiquement, je
 -- peux représenter mon calcule par une monade.
-
-
-
--- Comment vérifier qu'un calcul ne fuite pas de données
-PC : Type
-PC = List (List Attribute)
-
-data Leak : PC -> Schema -> Type where
-  Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
-  There : Leak pcs s -> Leak (pc :: pcs) s
-
--- Test inequality
--- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
-data NotLeak : PC -> Schema -> Type where
-  NLStop : NotLeak [] s
-  NLPop  : NotLeak pcs s -> {p : Include pc s -> Void} -> {default Refl ok : No p = isInclude pc s}-> NotLeak (pc :: pcs) s
-
-
-run : RA s -> {auto p: NotLeak [[("Da", TEXT 10)]] s} -> Unit
-run ra = ()
