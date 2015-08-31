@@ -95,6 +95,84 @@ namespace inclusion
   --                                = Yes $ firstInRestInc xInYs xsIncYs
   --     isInclude (x :: xs) ys | (Yes xsIncYs) | (No nxInYs)
   --                                = No (\xxsIncYs => notFirstIn nxInYs xxsIncYs)
+  notIncNotElem : (xs : List a) -> (ys : List a) -> Elem x xs -> (Include xs ys -> Void) -> Elem x ys -> Void
+
+  interInc2nd : (Eq a, DecEq a) => (ws, ys : List a) -> Include (intersect ws ys) ys
+  interInc2nd ws ys = let zs = intersect ws ys in prop
+    where
+    getZInXs : (z = x -> Void) -> Elem z (x :: xs) -> Elem z xs
+    getZInXs nzIsX zInXxs {xs} with (xs)
+      -- zInLX : Elem z [x]
+      getZInXs nzIsX zInLX  | [] = let zIsX = elemSingleton zInLX in
+                                   void (nzIsX zIsX)
+      -- If xs in not empty, then two possibilities:
+      -- z is the first element of xs, so zInXxs is Here, so z and x
+      -- are equal which is not possible according to our assumption
+      getZInXs nzIsX Here          | (z :: tl) = void (nzIsX Refl)
+        -- z is an element of xs, so we have to pop the proof to
+        -- discard the `x`.
+      getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
+
+    prop : Include zs ys
+    prop {zs = []       } = \z,zInZs => case isElem z ys of
+                                          No nzInYs => absurd zInZs
+                                          Yes zInYs => zInYs
+    prop {zs = (x :: xs)} = case isInclude xs ys of
+                            No nxsIncYs =>
+                              let xsIncYs = prop {zs = xs} in
+                              void $ nxsIncYs xsIncYs
+                            Yes xsIncYs =>
+                              case isElem x ys of
+                              No nxInYs =>
+                                let nzsIncYs = notFirstIn nxInYs {xs=xs} in
+                                -- Quest ce que je peux dire sur x?
+                                -- x /∈ ys
+                                -- x ∈ x :: xs : Here
+                                -- xs ⊆ ys
+                                -- x :: xs /⊆ ys
+                                case isInclude (x :: xs) ys of
+                                Yes prf => prf
+                                No contra => ?todo
+                              Yes xInYs =>
+                                let zsIncYs = (firstInRestInc xInYs xsIncYs) in
+                                \z,zInZs => zsIncYs z zInZs
+
+                              -- case decEq z x of
+                              -- No nzIsX => let zInXs = getZInXs nzIsX zInZs in
+                              --             xsIncYs z zInXs
+                              -- -- z is the first element of the list
+                              -- -- zInZs = Here
+                              -- Yes zIsX => ?todo
+
+
+                                            --   -- notFirstIn : (Elem x ys -> Void) -> Include (x :: xs) ys -> Void
+                                            --   No nxInYs =>
+                                            --     case (decEq z x) of
+                                            --     No nzIsX => let zInXs = getZInXs nzIsX zInZs in
+                                            --                 xsIncYs z zInXs
+                                            --     Yes zIsX => let notIn = (notFirstIn nxInYs {xs = xs}) in
+                                            --                 void $ notIn ?getme
+
+                                            --     -- let nzInYs = ?rewrite_nxtonz in
+                                              -- Yes xInYs =>
+                                              --   let zsIncYs = (firstInRestInc xInYs xsIncYs) in
+                                              --   zsIncYs z zInZs
+
+    -- prop {zs} = \z,zinzs => case (isInclude zs ys) of
+    --                           Yes zsIncYs => zsIncYs z zinzs
+    --                           No nzsIncYs => l?todo
+  -- interInc2nd xs ys = let zs = intersect xs ys in lemma
+  --   where
+  --   lemma : Include zs ys
+  --   lemma {zs = []     } = \z,zinzs => case isElem z ys of
+  --                                        No contra => absurd zinzs
+  --                                        Yes prf   => prf
+  --   lemma {zs = a :: as} = \z,zinzs => case isElem a ys of
+  --                                        No naInYs => ?todo1
+  --                                        Yes aInYs =>
+  --                                            case isInclude as ys of
+  --                                              No nasIncYs => ?todo2
+  --                                              Yes asIncYs => ?todo3
 
 
 -- Cryptographic encryption
@@ -285,10 +363,51 @@ namespace raoperational
     union RNil       r  = r
     union (a |: r1)  r2 = a |: union r1 r2
 
+  -- intersectNilLemma : (s : Schema) -> intersect s [] = []
+  -- intersectNilLemma []        = Refl
+  -- intersectNilLemma (x :: xs) = intersectNilLemma xs
+
   project : (s : Schema) -> Table s' -> Table (intersect s s')
-  project s t = [ project r | r <- t ]
+  project s t {s'} = let zs = intersect s s' in
+                     [ project r | r <- t ]
     where
-    project : Row s' -> Row (intersect s s')
+    get : (a : Attribute) -> Row zs ->  {auto p : Elem a zs} -> (el (snd a))
+    get _ (v |: r) {p = Here     } = v
+    get a (v |: r) {p = (There z)} = get a r {p = z}
+
+    -- isInclude : DecEq a => (xs : List a) -> (ys : List a) -> Dec (Include xs ys)
+    -- -- 2 Strategies:
+    -- -- 1. First head is elem of ys. Then manage tail included in ys
+    -- isInclude (x :: xs) ys with (isElem x ys)
+    --   isInclude (x :: xs) ys | (No nxInYs)
+    --                                = No $ notFirstIn nxInYs
+    --   isInclude (x :: xs) ys | (Yes xInYs) with (isInclude xs ys)
+    --     isInclude (x :: xs) ys | (Yes xInYs) | (No nxsIncYs)
+    --                                = No (\xxsIncYs => notTailInc nxsIncYs xxsIncYs)
+    --     isInclude (x :: xs) ys | (Yes xInYs) | (Yes xsIncYs)
+    --                                = Yes $ firstInRestInc xInYs xsIncYs
+
+    zsIncS' : Include zs s'
+    zsIncS' {zs = []       } = \z,zinzs => case isElem z s' of
+                                             No contra => absurd zinzs
+                                             Yes prf   => prf
+    zsIncS' {zs = (x :: xs)} = ?getInclusion_rhs_2_rhs
+
+    project : Row s' -> Row zs
+    project r {zs = []         } = RNil
+    project r {zs = (n,u) :: xs} = let hypo   = project r {zs = xs} in
+                                   let nuInS' = zsIncS' {zs = (n,u) :: xs}
+                                                        (n,u) Here in
+                                   let val    = get (n,u) r {p = nuInS'} in
+                                   val |: hypo
+
+
+
+
+    -- Problem: this def returns a value of type `Row []` and not one
+    -- of type `Row (intersect s [])`. To convince the type checker of
+    -- this fact, we need to proove a lemma.
+
 
   run : RA s -> Table s
   run (Union q r)   = raoperational.union (run q) (run r)
