@@ -70,6 +70,17 @@ namespace inclusion
         -- discard the `x`.
       getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
 
+  -- In intersection predicate
+  InIntersection : a -> List a -> List a -> Type
+  InIntersection z xs ys = (Elem z xs, Elem z ys)
+
+  inIntersection : DecEq a => (z : a) -> (xs : List a) -> (ys : List a) -> Dec (InIntersection z xs ys)
+  inIntersection z xs ys with (isElem z xs)
+    inIntersection z xs ys | (Yes zinxs) with (isElem z ys)
+      inIntersection z xs ys | (Yes zinxs) | (Yes zinys) = Yes (zinxs, zinys)
+      inIntersection z xs ys | (Yes zinxs) | (No zninys) = No (\(_,zinys) => zninys zinys)
+    inIntersection z xs ys | (No zninxs) = No (\(zinxs,_) => zninxs zinxs)
+
   -- Is the elements of the first list are elements of the second
   -- list.
   isInclude : DecEq a => (xs : List a) -> (ys : List a) -> Dec (Include xs ys)
@@ -121,36 +132,52 @@ namespace inclusion
     prop {zs = []       } = \z,zInZs => case isElem z ys of
                                           No nzInYs => absurd zInZs
                                           Yes zInYs => zInYs
-    prop {zs = (x :: xs)} = case isInclude xs ys of
-                            No nxsIncYs =>
-                              let xsIncYs = prop {zs = xs} in
-                              void $ nxsIncYs xsIncYs
-                            Yes xsIncYs =>
-                              case isElem x ys of
-                              No nxInYs =>
+    prop {zs = (x :: xs)} = let xsIncYs = prop {zs = xs} in
+                            case isElem x ys of
+                            Yes xInYs =>
+                              let xxsIncYs = (firstInRestInc xInYs xsIncYs) in
+                              \z,zInZs => xxsIncYs z zInZs
+                            No nxInYs =>
                                 let nxInXs = notElemInc nxInYs xsIncYs in
-                                let nzsIncYs = notFirstIn nxInYs {xs = xs} in
-                                void $ nzsIncYs
-                                -- other possibilities : construct xsIncYs -> void
-                                -- void $ nzsIncYs ?todo1
-                              --   -- Quest ce que je peux dire sur x?
-                              --   -- x /∈ ys
-                              --   -- x ∈ x :: xs ≡ Here
-                              --   -- xs ⊆ ys : ? x ∈ xs ⇒ x ∈ ys
-                              --   -- x :: xs /⊆ ys
-                              --   let nzsIncYs = notFirstIn nxInYs {xs = xs} in
-                              --   let zsIncYs = \z,zinzs => (case decEq z x of
-                              --                                No np =>
-                              --                                Yes p => ) in
-                              --   void $ (nzsIncYs zsIncYs)
-                              Yes xInYs =>
-                                let zsIncYs = (firstInRestInc xInYs xsIncYs) in
-                                \z,zInZs => zsIncYs z zInZs
+                                let nxxsIncYs = notFirstIn nxInYs {xs = xs} in
+                                -- let truc = nxxsIncYs (\z,zinXxs => ?todoa1) in
+                                ?todo
+
+
+    -- prop {zs = []       } = \z,zInZs => case isElem z ys of
+    --                                       No nzInYs => absurd zInZs
+    --                                       Yes zInYs => zInYs
+    -- prop {zs = (x :: xs)} = case isInclude xs ys of
+    --                         No nxsIncYs =>
+    --                           let xsIncYs = prop {zs = xs} in
+    --                           void $ nxsIncYs xsIncYs
+    --                         Yes xsIncYs =>
+    --                           case isElem x ys of
+    --                           No nxInYs =>
+    --                             let nxInXs = notElemInc nxInYs xsIncYs in
+    --                             let nxxsIncYs = notFirstIn nxInYs {xs = xs} in
+    --                             void $ nxxsIncYs (\z => \__pi_arg => ?todo1)
+    --                             -- other possibilities : construct xsIncYs -> void
+    --                             -- void $ nzsIncYs ?todo1
+    --                           --   -- Quest ce que je peux dire sur x?
+    --                           --   -- x /∈ ys
+    --                           --   -- x ∈ x :: xs ≡ Here
+    --                           --   -- xs ⊆ ys : ? x ∈ xs ⇒ x ∈ ys
+    --                           --   -- x :: xs /⊆ ys
+    --                           --   let nzsIncYs = notFirstIn nxInYs {xs = xs} in
+    --                           --   let zsIncYs = \z,zinzs => (case decEq z x of
+    --                           --                                No np =>
+    --                           --                                Yes p => ) in
+    --                           --   void $ (nzsIncYs zsIncYs)
+    --                           Yes xInYs =>
+    --                             let xxsIncYs = (firstInRestInc xInYs xsIncYs) in
+    --                             \z,zInZs => xxsIncYs z zInZs
+
                               -- case decEq z x of
                               -- No nzIsX => let zInXs = getZInXs nzIsX zInZs in
                               --             xsIncYs z zInXs
-                              -- -- z is the first element of the list
-                              -- -- zInZs = Here
+                              -- z is the first element of the list
+                              -- zInZs = Here
                               -- Yes zIsX => ?todo
 
 
@@ -183,6 +210,12 @@ namespace inclusion
   --                                              No nasIncYs => ?todo2
   --                                              Yes asIncYs => ?todo3
 
+  -- disjointTy : Nat -> Type
+  -- disjointTy Z     = ()
+  -- disjointTy (S k) = Void
+
+  -- disjoint : (n : Nat) -> Z = S n -> Void
+  -- disjoint n p = replace {P = disjointTy} p ()
 
 -- Cryptographic encryption
 namespace encryption
