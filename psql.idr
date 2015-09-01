@@ -95,7 +95,11 @@ namespace inclusion
   --                                = Yes $ firstInRestInc xInYs xsIncYs
   --     isInclude (x :: xs) ys | (Yes xsIncYs) | (No nxInYs)
   --                                = No (\xxsIncYs => notFirstIn nxInYs xxsIncYs)
-  notIncNotElem : (xs : List a) -> (ys : List a) -> Elem x xs -> (Include xs ys -> Void) -> Elem x ys -> Void
+  -- notIncNotElem : (xs : List a) -> (ys : List a) -> Elem x xs -> (Include xs ys -> Void) -> Elem x ys -> Void
+
+  notElemInc : {xs,ys : List a} -> (Elem x ys -> Void) -> Include xs ys -> Elem x xs -> Void
+  notElemInc nxInYs xsIncYs xInXs {x} = let xInYs = xsIncYs x xInXs in
+                                        void $ nxInYs xInYs
 
   interInc2nd : (Eq a, DecEq a) => (ws, ys : List a) -> Include (intersect ws ys) ys
   interInc2nd ws ys = let zs = intersect ws ys in prop
@@ -124,19 +128,24 @@ namespace inclusion
                             Yes xsIncYs =>
                               case isElem x ys of
                               No nxInYs =>
-                                let nzsIncYs = notFirstIn nxInYs {xs=xs} in
-                                -- Quest ce que je peux dire sur x?
-                                -- x /∈ ys
-                                -- x ∈ x :: xs : Here
-                                -- xs ⊆ ys
-                                -- x :: xs /⊆ ys
-                                case isInclude (x :: xs) ys of
-                                Yes prf => prf
-                                No contra => ?todo
+                                let nxInXs = notElemInc nxInYs xsIncYs in
+                                let nzsIncYs = notFirstIn nxInYs {xs = xs} in
+                                void $ nzsIncYs
+                                -- other possibilities : construct xsIncYs -> void
+                                -- void $ nzsIncYs ?todo1
+                              --   -- Quest ce que je peux dire sur x?
+                              --   -- x /∈ ys
+                              --   -- x ∈ x :: xs ≡ Here
+                              --   -- xs ⊆ ys : ? x ∈ xs ⇒ x ∈ ys
+                              --   -- x :: xs /⊆ ys
+                              --   let nzsIncYs = notFirstIn nxInYs {xs = xs} in
+                              --   let zsIncYs = \z,zinzs => (case decEq z x of
+                              --                                No np =>
+                              --                                Yes p => ) in
+                              --   void $ (nzsIncYs zsIncYs)
                               Yes xInYs =>
                                 let zsIncYs = (firstInRestInc xInYs xsIncYs) in
                                 \z,zInZs => zsIncYs z zInZs
-
                               -- case decEq z x of
                               -- No nzIsX => let zInXs = getZInXs nzIsX zInZs in
                               --             xsIncYs z zInXs
