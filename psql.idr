@@ -127,54 +127,90 @@ namespace inclusion
   -- lemma nop zInZs = nop (?lemma_rhs_1, ?lemma_rhs_2)
 
 
-  elemInterFirst : (Eq a, DecEq a) => {ys : List a} -> (xs : List a) -> (z : a) ->
-      Elem z (intersect xs ys) -> Elem z xs
-  elemInterFirst []        z zInZs = absurd zInZs
-  elemInterFirst (x :: xs) z zInZs with (decEq z x)
-    elemInterFirst (x :: xs) z zInZs | (No nzIsX) = -- let hypo = elemInterFirst xs z zInZs in
-                                                    There ?truc_rhs
+  -- elemInterFirst : (Eq a, DecEq a) => {ys : List a} -> (xs : List a) -> (z : a) ->
+  --     Elem z (intersect xs ys) -> Elem z xs
+  -- elemInterFirst []        z zInZs = absurd zInZs
+  -- elemInterFirst (x :: xs) z zInZs with (decEq z x)
+  --   elemInterFirst (x :: xs) z zInZs | (No nzIsX) = -- let hypo = elemInterFirst xs z zInZs in
+  --                                                   There ?truc_rhs
+  --     where
+  --     getZInXs : (z = x -> Void) -> Elem z (intersect (x :: xs) ys) -> Elem z (intersect xs ys)
+  --     getZInXs nzIsX zInZs with (xs)
+  --       getZInXs nzIsX zInZs | []         = ?getZInXs_rhs_rhs_3_rhs_1
+  --       getZInXs nzIsX zInZs | (hd :: tl) = ?getZInXs_rhs_rhs_3_rhs_2
+  --     -- getZInXs : (z = x -> Void) -> Elem z (x :: xs) -> Elem z xs
+  --     -- getZInXs nzIsX zInXxs with (xs)
+  --     --   getZInXs nzIsX zInLX  | [] = let zIsX = elemSingleton zInLX in
+  --     --                                void (nzIsX zIsX)
+  --     --   getZInXs nzIsX Here          | (z :: tl) = void (nzIsX Refl)
+  --     --   getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
+  --   elemInterFirst (z :: xs) z zInZs | (Yes Refl) = Here
+
+
+  elemInterRedYs : (Eq a) => {z : a} -> (z = y -> Void) -> Elem z (intersect xs (y :: ys)) -> Elem z (intersect xs ys)
+  elemInterRedYs nzIsY zInZs = ?elemInterRedYs_rhs
+
+  elemInterYs : (Eq a, DecEq a) => {z : a} -> Elem z (intersect xs ys) -> Elem z ys
+  elemInterYs zInZs {z} {xs} {ys = []        } =
+                            rewrite sym $ lemma_intersectNil xs in zInZs
+  elemInterYs zInZs {z} {xs} {ys  = (y :: ys)} with (decEq z y)
+    elemInterYs zInZs {z} {xs} {ys = (z :: ys)} | (Yes Refl)  = Here
+    elemInterYs zInZs {z} {xs} {ys = (y :: ys)} | (No contra) =
+                            let hypoRec = elemInterYs {xs = xs} zInZsReduc in
+                            There hypoRec
       where
-      getZInXs : (z = x -> Void) -> Elem z (intersect (x :: xs) ys) -> Elem z (intersect xs ys)
-      getZInXs nzIsX zInZs with (xs)
-        getZInXs nzIsX zInZs | [] = ?getZInXs_rhs_rhs_3_rhs_1
-        getZInXs nzIsX zInZs | (hd :: tl) = ?getZInXs_rhs_rhs_3_rhs_2
-      -- getZInXs : (z = x -> Void) -> Elem z (x :: xs) -> Elem z xs
-      -- getZInXs nzIsX zInXxs with (xs)
-      --   getZInXs nzIsX zInLX  | [] = let zIsX = elemSingleton zInLX in
-      --                                void (nzIsX zIsX)
-      --   getZInXs nzIsX Here          | (z :: tl) = void (nzIsX Refl)
-      --   getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
-    elemInterFirst (z :: xs) z zInZs | (Yes Refl) = Here
+      zInZsReduc : Elem z (intersect xs ys)
+      zInZsReduc = elemInterRedYs contra zInZs
+
+  lemma1 : a :: List.Nil = b :: List.Nil -> a = b
+  lemma1 prf = ?mlkjmlkj
+
+  lemma_interReduc : (Eq a) => {x : a} -> Elem x ys -> intersect [x] ys = [x]
+  lemma_interReduc xInYs = ?lemma_interReduc_rhs
+
+
+  elemInterRedXs : (Eq a,DecEq a) => {z : a} -> (z = x -> Void) -> Elem z (intersect (x :: xs) ys) -> Elem z (intersect xs ys)
+  elemInterRedXs nzIsX zInZs {xs} with (xs)
+    elemInterRedXs nzIsX zInZs | []        = lemma zInZs
+      where
+    -- intersect [x] ys -> Elem x ys -> [x]
+      lemma : (Eq a, DecEq a) => {z,x : a} -> Elem z (intersect [x] ys) -> Elem z []
+      lemma zInZs {z} {x} {ys} with (isElem x ys)
+        lemma zInZs {z} {x} {ys} | (Yes prf) = ?lemma_rhs_rhs_2_rhs_1
+        lemma zInZs {z} {x} {ys} | (No contra) = ?lemma_rhs_rhs_2_rhs_2
+    elemInterRedXs nzIsX zInZs | (x :: xs) = ?elemInterRedXs_rhs_rhs_2
+
+
+  elemInterXs : (Eq a, DecEq a) => {z : a} -> Elem z (intersect xs ys) -> Elem z xs
+  elemInterXs zInZs {z} {xs = []       } = zInZs
+  elemInterXs zInZs {z} {xs = (x :: xs)} {ys} with (decEq z x)
+    elemInterXs zInZs {z} {xs = (z :: xs)} {ys} | (Yes Refl)  = Here
+    elemInterXs zInZs {z} {xs = (x :: xs)} {ys} | (No contra) =
+                            let hypoRec = elemInterXs zInZsReduc {ys = ys} in
+                            There hypoRec
+      where
+      zInZsReduc : Elem z (intersect xs ys)
+      zInZsReduc = elemInterRedXs contra zInZs
+
 
   elemInter : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
       Elem z (intersect xs ys) -> InIntersection z xs ys
-  elemInter [] ys z zInZs = absurd zInZs
-  elemInter xs [] z zInZs = ?elemInter_rhs1
-    -- rewrite lemma_intersectNil xs in absurd zInZs
-  elemInter (x :: xs) ys z zInZs with (inIntersection z xs ys)
-    elemInter (x :: xs) ys z zInZs | (Yes (zInXs, zInYs)) = (There zInXs, zInYs)
-    -- elemInter xs ys z zInZs | (No contra) = let nzInZs = lemma contra in
-    --                                         void $ nzInZs zInZs
-    elemInter (x :: xs) ys z zInZs | (No contra) with (isElem z xs)
-      elemInter (x :: xs) ys z zInZs | (No contra) | (Yes zInXs) = ?elemInter_rhs2_rhs_1 -- absurd
-      elemInter (x :: xs) ys z zInZs | (No contra) | (No f) = ?elemInter_rhs2_rhs_2
-
-  -- elemInter (x :: xs) ys z zInZs with (decEq x z)
-  --   elemInter (z :: xs) ys z zInZs | (Yes Refl) = (Here, )
-  --   elemInter (x :: xs) ys z zInZs | (No contra) = ?elemInter_rhs2_2_rhs_3
+  elemInter xs ys z zInZs = (elemInterXs zInZs, elemInterYs zInZs)
 
 
   interInc2nd : (Eq a, DecEq a) => (xs, ys : List a) -> Include (intersect xs ys) ys
-  interInc2nd xs ys = let zs = intersect xs ys in prop
+  interInc2nd xs ys = let zs = intersect xs ys in
+                      -- let el = elemInter xs ys in
+                      prop
     -- zs is the result of intersection
     where
-    elemInter : Elem z zs -> InIntersection z xs ys
-    elemInter zInZs = ?todo
+    elemInter' : Elem z zs -> InIntersection z xs ys
+    elemInter' zInZs = ?todo
 
     prop : Include zs ys
     prop {zs = []      } = \z,zInZs => absurd zInZs
     prop {zs = hd :: tl} = let tlIncYs = prop {zs = tl} in
-                           let hdInYs = snd $ elemInter Here {zs = hd :: tl} in
+                           let hdInYs = snd $ elemInter' Here {zs = hd :: tl} in
                            let zsIncYs = (firstInRestInc hdInYs tlIncYs) in
                            \z,zInZs => zsIncYs z zInZs
 
@@ -398,67 +434,68 @@ namespace raoperational
   run (Select x)    = ?mlkjlmkj_5
   run (Unit table)  = table
 
-namespace leak
-  -- Privacy Constraints Specification
-  PC : Type
-  PC = List (List Attribute)
+-- namespace leak
+--   -- Privacy Constraints Specification
+--   PC : Type
+--   PC = List (List Attribute)
 
-  -- Leak predicate.
-  --
-  -- Ensures that an Privacy Constraint leaks
-  data Leak : PC -> Schema -> Type where
-    Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
-    There : Leak pcs s -> Leak (pc :: pcs) s
+--   -- Leak predicate.
+--   --
+--   -- Ensures that an Privacy Constraint leaks
+--   data Leak : PC -> Schema -> Type where
+--     Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
+--     There : Leak pcs s -> Leak (pc :: pcs) s
 
-  -- Zero leak predicate.
-  --
-  -- Ensures that no Privacy Constraints leak.
-  data ZeroLeak : PC -> Schema -> Type where
-    ZLStop : ZeroLeak [] s
-    -- In idris this is how test inequality
-    -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
-    NLPop  : ZeroLeak pcs s -> {p : Include pc s -> Void} ->
-      {default Refl ok : No p = isInclude pc s} -> ZeroLeak (pc :: pcs) s
+--   -- Zero leak predicate.
+--   --
+--   -- Ensures that no Privacy Constraints leak.
+--   data ZeroLeak : PC -> Schema -> Type where
+--     ZLStop : ZeroLeak [] s
+--     -- In idris this is how test inequality
+--     -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
+--     NLPop  : ZeroLeak pcs s -> {p : Include pc s -> Void} ->
+--       {default Refl ok : No p = isInclude pc s} -> ZeroLeak (pc :: pcs) s
 
-  -- test
-  run : RA s -> {auto p : ZeroLeak [[("Date", TEXT 10)]] s} -> Unit
-  run ra = ()
-  -- run (Unit agenda) -- Can't solve goal NotLeak [[("Date", TEXT 10)]]
-  -- run (Project [("Addr", NAT)] $ Unit agenda)
+--   -- test
+--   run : RA s -> {auto p : ZeroLeak [[("Date", TEXT 10)]] s} -> Unit
+--   run ra = ()
+--   -- run (Unit agenda) -- Can't solve goal NotLeak [[("Date", TEXT 10)]]
+--   -- run (Project [("Addr", NAT)] $ Unit agenda)
 
-  run' : RA s -> PC -> Unit
-  run' ra pc {s} = let noleak = proofNoLeak in ()
-    where
-    proofNoLeak : (ZeroLeak pc s)
-    proofNoLeak = ?project
+--   run' : RA s -> PC -> Unit
+--   run' ra pc {s} = let noleak = proofNoLeak in ()
+--     where
+--     proofNoLeak : (ZeroLeak pc s)
+--     proofNoLeak = ?project
 
--- Examples
-scAgenda : Schema
-scAgenda = [("Date", TEXT 10), ("Name", TEXT 255), ("Addr", NAT)]
+-- -- Examples
+-- scAgenda : Schema
+-- scAgenda = [("Date", TEXT 10), ("Name", TEXT 255), ("Addr", NAT)]
 
-row1 : Row scAgenda
-row1 = "2015-07-08" |: "Alice" |: 0 |: RNil
+-- row1 : Row scAgenda
+-- row1 = "2015-07-08" |: "Alice" |: 0 |: RNil
 
-row2 : Row scAgenda
-row2 = "2015-07-08" |: "Bob"   |: 0 |: RNil
+-- row2 : Row scAgenda
+-- row2 = "2015-07-08" |: "Bob"   |: 0 |: RNil
 
-row3 : Row scAgenda
-row3 = "2015-07-10" |: "Alice" |: 1 |: RNil
+-- row3 : Row scAgenda
+-- row3 = "2015-07-10" |: "Alice" |: 1 |: RNil
 
-agenda : Table scAgenda
-agenda = [row1, row2, row3]
+-- agenda : Table scAgenda
+-- agenda = [row1, row2, row3]
 
--- Number of meeting per day
-nbMeeting : RA s -> RA (intersect [("Date", TEXT 10)] s)
-nbMeeting ra =
-  -- Count $ Group [("Date", TEXT 10)] $ Project [("Date", TEXT 10)] ra
-  Project [("Date", TEXT 10)] ra
+-- -- Number of meeting per day
+-- nbMeeting : RA s -> RA (intersect [("Date", TEXT 10)] s)
+-- nbMeeting ra =
+--   -- Count $ Group [("Date", TEXT 10)] $ Project [("Date", TEXT 10)] ra
+--   Project [("Date", TEXT 10)] ra
 
-test: Table [("Date", TEXT 10)]
-test = project [("Date", TEXT 10)] agenda
+-- test: Table [("Date", TEXT 10)]
+-- test = project [("Date", TEXT 10)] agenda
 
-test2 : Table [("Date", TEXT 10)]
-test2 = run $ nbMeeting (Unit agenda)
+-- test2 : Table [("Date", TEXT 10)]
+-- test2 = run $ nbMeeting (Unit agenda)
+
 
 -- Some thought:
 -- Symbolic simulations
@@ -495,14 +532,3 @@ test2 = run $ nbMeeting (Unit agenda)
 -- Qu'est-ce que le calcul ? Le calcule est une combinaison d'une
 -- requête et de fonctions de protections entrelacées. Typiquement, je
 -- peux représenter mon calcule par une monade.
-
----------- Proofs ----------
-
-phant.sql.inclusion.elemInter_rhs1 = proof
-  intro
-  intro
-  intro
-  intro
-  rewrite sym $ lemma_intersectNil xs
-  intro
-  exact absurd zInZs
