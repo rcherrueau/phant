@@ -24,6 +24,13 @@ infixr 7 |:
 -- Assert that elements of the first list are elements of the second
 -- list.
 namespace inclusion
+  %hide List.intersect
+  intersect : Eq a => List a -> List a -> List a
+  intersect [] ys = []
+  intersect (x :: xs) ys with (elem x ys)
+    intersect (x :: xs) ys | True  = x :: (intersect xs ys)
+    intersect (x :: xs) ys | False = intersect xs ys
+
   -- Inclusion predicate
   Include : List a -> List a -> Type
   Include xs ys = (z : _) -> Elem z xs -> Elem z ys
@@ -70,6 +77,10 @@ namespace inclusion
         -- discard the `x`.
       getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
 
+  lemma_intersectNil : Eq a => (s : List a) -> intersect s [] = []
+  lemma_intersectNil []        = Refl
+  lemma_intersectNil (x :: xs) = lemma_intersectNil xs
+
   -- Reduction on the Include predicate
   incReduc : Include (x :: xs) ys -> Include xs ys
   incReduc xxsIncYs = \z,zInXs => xxsIncYs z (There zInXs)
@@ -112,7 +123,46 @@ namespace inclusion
       inIntersection z xs ys | (Yes zinxs) | (No zninys) = No (\(_,zinys) => zninys zinys)
     inIntersection z xs ys | (No zninxs) = No (\(zinxs,_) => zninxs zinxs)
 
-  postulate elemInter : Eq a => (z : a) -> Elem z (intersect xs ys) -> InIntersection z xs ys
+  -- lemma : Eq a => {z : a} -> (InIntersection z xs ys -> Void) -> Elem z (intersect xs ys) -> Void
+  -- lemma nop zInZs = nop (?lemma_rhs_1, ?lemma_rhs_2)
+
+
+  elemInterFirst : (Eq a, DecEq a) => {ys : List a} -> (xs : List a) -> (z : a) ->
+      Elem z (intersect xs ys) -> Elem z xs
+  elemInterFirst []        z zInZs = absurd zInZs
+  elemInterFirst (x :: xs) z zInZs with (decEq z x)
+    elemInterFirst (x :: xs) z zInZs | (No nzIsX) = -- let hypo = elemInterFirst xs z zInZs in
+                                                    There ?truc_rhs
+      where
+      getZInXs : (z = x -> Void) -> Elem z (intersect (x :: xs) ys) -> Elem z (intersect xs ys)
+      getZInXs nzIsX zInZs with (xs)
+        getZInXs nzIsX zInZs | [] = ?getZInXs_rhs_rhs_3_rhs_1
+        getZInXs nzIsX zInZs | (hd :: tl) = ?getZInXs_rhs_rhs_3_rhs_2
+      -- getZInXs : (z = x -> Void) -> Elem z (x :: xs) -> Elem z xs
+      -- getZInXs nzIsX zInXxs with (xs)
+      --   getZInXs nzIsX zInLX  | [] = let zIsX = elemSingleton zInLX in
+      --                                void (nzIsX zIsX)
+      --   getZInXs nzIsX Here          | (z :: tl) = void (nzIsX Refl)
+      --   getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
+    elemInterFirst (z :: xs) z zInZs | (Yes Refl) = Here
+
+  elemInter : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
+      Elem z (intersect xs ys) -> InIntersection z xs ys
+  elemInter [] ys z zInZs = absurd zInZs
+  elemInter xs [] z zInZs = ?elemInter_rhs1
+    -- rewrite lemma_intersectNil xs in absurd zInZs
+  elemInter (x :: xs) ys z zInZs with (inIntersection z xs ys)
+    elemInter (x :: xs) ys z zInZs | (Yes (zInXs, zInYs)) = (There zInXs, zInYs)
+    -- elemInter xs ys z zInZs | (No contra) = let nzInZs = lemma contra in
+    --                                         void $ nzInZs zInZs
+    elemInter (x :: xs) ys z zInZs | (No contra) with (isElem z xs)
+      elemInter (x :: xs) ys z zInZs | (No contra) | (Yes zInXs) = ?elemInter_rhs2_rhs_1 -- absurd
+      elemInter (x :: xs) ys z zInZs | (No contra) | (No f) = ?elemInter_rhs2_rhs_2
+
+  -- elemInter (x :: xs) ys z zInZs with (decEq x z)
+  --   elemInter (z :: xs) ys z zInZs | (Yes Refl) = (Here, )
+  --   elemInter (x :: xs) ys z zInZs | (No contra) = ?elemInter_rhs2_2_rhs_3
+
 
   interInc2nd : (Eq a, DecEq a) => (xs, ys : List a) -> Include (intersect xs ys) ys
   interInc2nd xs ys = let zs = intersect xs ys in prop
@@ -380,7 +430,7 @@ namespace leak
   run' ra pc {s} = let noleak = proofNoLeak in ()
     where
     proofNoLeak : (ZeroLeak pc s)
-    proofNoLeak = ?proofNoLeak_rhs
+    proofNoLeak = ?project
 
 -- Examples
 scAgenda : Schema
@@ -445,3 +495,14 @@ test2 = run $ nbMeeting (Unit agenda)
 -- Qu'est-ce que le calcul ? Le calcule est une combinaison d'une
 -- requête et de fonctions de protections entrelacées. Typiquement, je
 -- peux représenter mon calcule par une monade.
+
+---------- Proofs ----------
+
+phant.sql.inclusion.elemInter_rhs1 = proof
+  intro
+  intro
+  intro
+  intro
+  rewrite sym $ lemma_intersectNil xs
+  intro
+  exact absurd zInZs
