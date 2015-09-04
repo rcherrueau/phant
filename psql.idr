@@ -19,11 +19,9 @@ import Data.List
 
 infixr 7 |:
 
--- List Inclusion.
---
--- Assert that elements of the first list are elements of the second
--- list.
-namespace inclusion
+-- List intersection.
+namespace intersect
+  -- Intersection operation
   %hide List.intersect
   intersect : Eq a => List a -> List a -> List a
   intersect [] ys = []
@@ -31,137 +29,136 @@ namespace inclusion
     intersect (x :: xs) ys | True  = x :: (intersect xs ys)
     intersect (x :: xs) ys | False = intersect xs ys
 
-  -- In intersection predicate
-  InIntersection : a -> List a -> List a -> Type
-  InIntersection z xs ys = (Elem z xs, Elem z ys)
-
-  inIntersection : DecEq a => (z : a) -> (xs : List a) -> (ys : List a) -> Dec (InIntersection z xs ys)
-  inIntersection z xs ys with (isElem z xs)
-    inIntersection z xs ys | (Yes zinxs) with (isElem z ys)
-      inIntersection z xs ys | (Yes zinxs) | (Yes zinys) = Yes (zinxs, zinys)
-      inIntersection z xs ys | (Yes zinxs) | (No zninys) = No (\(_,zinys) => zninys zinys)
-    inIntersection z xs ys | (No zninxs) = No (\(zinxs,_) => zninxs zinxs)
-
+  -- Some lemmas specifying the semantic of intersection
   lemma_intersectNil : Eq a => (s : List a) -> intersect s [] = []
   lemma_intersectNil []        = Refl
   lemma_intersectNil (x :: xs) = lemma_intersectNil xs
 
-  postulate intersectReducY : Eq a => (xs, ys : List a) -> (z : a) ->
-                              (z = y -> Void) ->
-                              Elem z (intersect xs (y :: ys)) ->
-                              intersect xs (y :: ys) = intersect xs ys
+  postulate lemma_intersectReducX : Eq a => (xs, ys : List a) -> (z : a) ->
+                                    (z = x -> Void) ->
+                                    Elem z (intersect (x :: xs) ys) ->
+                                    intersect (x :: xs) ys = intersect xs ys
 
-  postulate intersectReducX : Eq a => (xs, ys : List a) -> (z : a) ->
-                              (z = x -> Void) ->
-                              Elem z (intersect (x :: xs) ys) ->
-                              intersect (x :: xs) ys = intersect xs ys
+  postulate lemma_intersectReducY : Eq a => (xs, ys : List a) -> (z : a) ->
+                                    (z = y -> Void) ->
+                                    Elem z (intersect xs (y :: ys)) ->
+                                    intersect xs (y :: ys) = intersect xs ys
 
-  elemInterYs : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
-                Elem z (intersect xs ys) -> Elem z ys
-  elemInterYs xs [] z zInZs = rewrite sym $ lemma_intersectNil xs in zInZs
-  elemInterYs xs (y :: ys) z zInZs with (decEq z y)
-    elemInterYs xs (z :: ys) z zInZs | (Yes Refl) = Here
-    elemInterYs xs (y :: ys) z zInZs | (No contra) =
-                              let zInZsReduc = ?zInZsReducY in
-                              let zInYs = elemInterYs xs ys z zInZsReduc in
-                              There zInYs
+  -- In intersection predicate
+  InIntersection : a -> List a -> List a -> Type
+  InIntersection z xs ys = (Elem z xs, Elem z ys)
 
-  elemInterXs : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
-                Elem z (intersect xs ys) -> Elem z xs
-  elemInterXs [] _ z zInZs = zInZs
-  elemInterXs (x :: xs) ys z zInZs with (decEq z x)
-    elemInterXs (z :: xs) _  z zInZs  | (Yes Refl)  = Here
-    elemInterXs (x :: xs) ys z zInZs  | (No contra) =
-                             let zInZsReduc = ?zInZsReducX in
-                             let zInXs = elemInterXs xs ys z zInZsReduc in
-                             There zInXs
+  -- Decides whether an element is in the intersection of two list or not
+  inIntersection : DecEq a => (z : a) -> (xs : List a) -> (ys : List a) ->
+                   Dec (InIntersection z xs ys)
+  inIntersection z xs ys with (isElem z xs)
+    inIntersection z xs ys | (Yes zinxs) with (isElem z ys)
+      inIntersection z xs ys | (Yes zinxs) | (Yes zinys) =
+                                           Yes (zinxs, zinys)
+      inIntersection z xs ys | (Yes zinxs) | (No zninys) =
+                                           No (\(_,zinys) => zninys zinys)
+    inIntersection z xs ys | (No zninxs) = No (\(zinxs,_) => zninxs zinxs)
 
+  -- z ∈ (xs ∩ ys) ⇒ z ∈ xs ∧ z ∈ ys
   elemInter : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
               Elem z (intersect xs ys) -> InIntersection z xs ys
-  elemInter xs ys z zInZs = (elemInterXs xs ys z zInZs, elemInterYs xs ys z zInZs)
+  elemInter xs ys z zInZs = let zInXs = elemInterXs xs ys z zInZs in
+                            let zInYs = elemInterYs xs ys z zInZs in
+                            (zInXs, zInYs)
+    where
+    elemInterXs : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
+                  Elem z (intersect xs ys) -> Elem z xs
+    elemInterXs []        _  z zInZs = zInZs
+    elemInterXs (x :: xs) ys z zInZs with (decEq z x)
+      elemInterXs (z :: xs) _  z zInZs  | (Yes Refl)  = Here
+      elemInterXs (x :: xs) ys z zInZs  | (No contra) =
+                                let zInZsReduc = ?zInZsReducX in
+                                let zInXs = elemInterXs xs ys z zInZsReduc in
+                                There zInXs
 
+    elemInterYs : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
+                  Elem z (intersect xs ys) -> Elem z ys
+    elemInterYs xs []        z zInZs =
+                                rewrite sym $ lemma_intersectNil xs in zInZs
+    elemInterYs xs (y :: ys) z zInZs with (decEq z y)
+      elemInterYs xs (z :: ys) z zInZs | (Yes Refl) = Here
+      elemInterYs xs (y :: ys) z zInZs | (No contra) =
+                                let zInZsReduc = ?zInZsReducY in
+                                let zInYs = elemInterYs xs ys z zInZsReduc in
+                                There zInYs
+
+-- List Inclusion.
+namespace inclusion
   -- Inclusion predicate
+  --
+  -- Asserts that the elements of the first list are elements of the
+  -- second list.
   Include : List a -> List a -> Type
   Include xs ys = (z : _) -> Elem z xs -> Elem z ys
 
-  -- Be an element of a singletong list implies to being the singleton
+  -- Reduction of the Include predicate
+  includeReduc : Include (x :: xs) ys -> Include xs ys
+  includeReduc xxsIncYs = \z,zInXs => xxsIncYs z (There zInXs)
+
+  -- Being an element of a singleton list implies to be that singleton
   elemSingleton : Elem z [x] -> z = x
   elemSingleton Here           = Refl
   elemSingleton (There zInNil) = absurd zInNil
 
-  -- The first element of the first list is not an element of the
-  -- second list implies that the inclusion doesn't holds.
-  notFirstIn : (Elem x ys -> Void) -> Include (x :: xs) ys -> Void
-  notFirstIn nxInYs xxsIncYs {x} {xs} = let xInYs  = xxsIncYs x Here in
-                                        nxInYs xInYs
-
-  -- The tail of the first list is not included implies the first list
-  -- is not included.
-  notTailInc : (Include xs ys -> Void) -> Include (x :: xs) ys -> Void
-  notTailInc nxsIncYs xxsIncYs {x} {xs} =
-                                 nxsIncYs (\z,zInXs => xxsIncYs z (There zInXs))
-
-  -- The head of the first list is an element of the second list AND
-  -- the tail of the first list is included in the second list implies
-  -- that the first list is included in the second list.
-  firstInRestInc : DecEq a => {x : a} -> Elem x ys -> Include xs ys ->
-    Include (x :: xs) ys
-  firstInRestInc xInYs xsIncYs {x} {xs} =
-                                 \z,zInXxs => case decEq z x of
-                                   Yes zIsX => rewrite zIsX in xInYs
-                                   -- z ≠ x ∧ z ∈ (x :: xs) ⇒ z ∈ xs
-                                   No nzIsX => let zInXs = getZInXs nzIsX zInXxs in
-                                               xsIncYs z zInXs
-    where
-    getZInXs : (z = x -> Void) -> Elem z (x :: xs) -> Elem z xs
-    getZInXs nzIsX zInXxs with (xs)
-      -- zInLX : Elem z [x]
-      getZInXs nzIsX zInLX  | [] = let zIsX = elemSingleton zInLX in
-                                   void (nzIsX zIsX)
-      -- If xs in not empty, then two possibilities:
-      -- z is the first element of xs, so zInXxs is Here, so z and x
-      -- are equal which is not possible according to our assumption
-      getZInXs nzIsX Here          | (z :: tl) = void (nzIsX Refl)
-        -- z is an element of xs, so we have to pop the proof to
-        -- discard the `x`.
-      getZInXs nzIsX (There zInTl) | (_ :: tl) = zInTl
-
-  -- Reduction on the Include predicate
-  incReduc : Include (x :: xs) ys -> Include xs ys
-  incReduc xxsIncYs = \z,zInXs => xxsIncYs z (There zInXs)
+  -- Being an element of a non empty list and not being the fisrt
+  -- element implies to be an element of the tail.
+  elemTail : (z = hd -> Void) -> Elem z (hd :: tl) -> Elem z tl
+  -- (z ∈ [hd] => z = hd) ∧ z ≠ hd
+  elemTail nzIsHd zInHdTl   {tl = []} = let zIsHd = elemSingleton zInHdTl in
+                                        void $ nzIsHd zIsHd
+  -- (z ∈ z :: tl => z = hd) ∧ z ≠ hd
+  elemTail nzIsHd Here      {tl}      = void $ nzIsHd Refl
+  -- z ∈ _ :: tl => z ∈ tl
+  elemTail nzIsHd (There p) {tl}      = p
 
   -- Is the elements of the first list are elements of the second
   -- list.
-  isInclude : DecEq a => (xs : List a) -> (ys : List a) -> Dec (Include xs ys)
-  isInclude []        ys         = Yes (\z,zinxs => case isElem z ys of
-                                                      No contra => absurd zinxs
-                                                      Yes prf   => prf)
-  -- 2 Strategies:
-  -- 1. First head is elem of ys. Then manage tail included in ys
-  isInclude (x :: xs) ys with (isElem x ys)
-    isInclude (x :: xs) ys | (No nxInYs)
-                                 = No $ notFirstIn nxInYs
-    isInclude (x :: xs) ys | (Yes xInYs) with (isInclude xs ys)
-      isInclude (x :: xs) ys | (Yes xInYs) | (No nxsIncYs)
-                                 = No (\xxsIncYs => notTailInc nxsIncYs xxsIncYs)
-      isInclude (x :: xs) ys | (Yes xInYs) | (Yes xsIncYs)
-                                 = Yes $ firstInRestInc xInYs xsIncYs
-  -- 2. First tl included in xs. Then manage head is elem of ys
-  -- isInclude (x :: xs) ys with (isInclude xs ys)
-  --   isInclude (x :: xs) ys | (No nxsIncYs)
-  --                                = No (\xxsIncYs => notTailInc nxsIncYs xxsIncYs)
-  --   isInclude (x :: xs) ys | (Yes xsIncYs) with (isElem x ys)
-  --     isInclude (x :: xs) ys | (Yes xsIncYs) | (Yes xInYs)
-  --                                = Yes $ firstInRestInc xInYs xsIncYs
-  --     isInclude (x :: xs) ys | (Yes xsIncYs) | (No nxInYs)
-  --                                = No (\xxsIncYs => notFirstIn nxInYs xxsIncYs)
-  -- notIncNotElem : (xs : List a) -> (ys : List a) -> Elem x xs -> (Include xs ys -> Void) -> Elem x ys -> Void
+  isIncluded : DecEq a => (xs : List a) -> (ys : List a) ->
+               Dec (Include xs ys)
+  -- This definition seems correct since I cannot provide any `z` due
+  -- to the empty `xs`.
+  isIncluded []        ys         = Yes (\z,zInXs => absurd zInXs)
+  -- First check if `xs` is included in `ys` or not.
+  isIncluded (x :: xs) ys with (isIncluded xs ys)
+    isIncluded (x :: xs) ys | (No nxsIncYs) =
+                               No $ notTailInc nxsIncYs
+      where
+      notTailInc : (Include xs ys -> Void) -> Include (x :: xs) ys -> Void
+      notTailInc nxsIncYs xxsIncYs = nxsIncYs (\z,zInXs =>
+                                                 xxsIncYs z (There zInXs))
 
-  -- elemInter : (Eq a, DecEq a) => (xs, ys : List a) -> (z : a) ->
-  --             Elem z (intersect xs ys) -> InIntersection z xs ys
+    isIncluded (x :: xs) ys | (Yes xsIncYs) with (isElem x ys)
+      -- Then manage `x` is an element of `ys` or not.
+      isIncluded (x :: xs) ys | (Yes xsIncYs) | (Yes xInYs) =
+                               Yes $ headInTailInc xInYs xsIncYs
+        where
+        headInTailInc : Elem x ys -> Include xs ys -> Include (x :: xs) ys
+        headInTailInc xInYs xsIncYs = \z,zInXxs => case decEq z x of
+                         No nzIsX => let zInXs = elemTail nzIsX zInXxs in
+                                     xsIncYs z zInXs
+                         Yes zIsX => rewrite zIsX in xInYs
 
-  interInc2nd : (Eq a, DecEq a) => (xs, ys : List a) -> Include (intersect xs ys) ys
-  interInc2nd xs ys = \z,zInZs => snd $ elemInter xs ys z zInZs
+      isIncluded (x :: xs) ys | (Yes xsIncYs) | (No nxInYs) =
+                               No $ notHeadIn nxInYs
+        where
+        notHeadIn : (Elem x ys -> Void) -> Include (x :: xs) ys -> Void
+        notHeadIn nxInYs xxsIncYs = let xInYs = xxsIncYs x Here in
+                                    nxInYs xInYs
+
+  -- The result of the intersection between two list `xs` and `ys` is
+  -- both included in `xs` and `ys`.
+  intersectIncluded : (Eq a, DecEq a) => (xs, ys : List a) ->
+                      (Include (intersect xs ys) xs,
+                       Include (intersect xs ys) ys)
+  intersectIncluded xs ys =
+    let zsIncXs = \z,zInZs => fst $ elemInter xs ys z zInZs in
+    let zsIncYs = \z,zInZs => snd $ elemInter xs ys z zInZs in
+    (zsIncXs, zsIncYs)
 
 -- Cryptographic encryption
 namespace encryption
@@ -240,7 +237,8 @@ namespace rauniverse
       decEq (TEXT x)  (TEXT x)  | (Yes Refl)
                               = Yes Refl
       decEq (TEXT x)  (TEXT y)  | (No contra)
-                              = No (\txIsTy => contra $ cong txIsTy {f=getNat})
+                              = No (\txIsTy =>
+                                      contra $ cong txIsTy {f = getNat})
         where
         getNat : U -> Nat
         getNat (TEXT x) = x
@@ -251,7 +249,8 @@ namespace rauniverse
       decEq (HOME x)  (HOME x)  | (Yes Refl)
                               = Yes Refl
       decEq (HOME x)  (HOME y)  | (No contra)
-                              = No (\hxIsHy => contra $ cong hxIsHy {f=getU})
+                              = No (\hxIsHy =>
+                                      contra $ cong hxIsHy {f = getU})
         where
         getU : U -> U
         getU (HOME x) = x
@@ -353,19 +352,20 @@ namespace raoperational
 
   project : (s : Schema) -> Table s' -> Table (intersect s s')
   project s t {s'} = let zs = intersect s s' in
-                     let zsIncS' = interInc2nd s s' in
+                     let zsIncS' = snd $ intersectIncluded s s' in
                      [ project r zsIncS' | r <- t ]
     where
-    get : {s : Schema} -> (a : Attribute) -> Row s ->  Elem a s -> (el (snd a))
+    get : {s : Schema} -> (a : Attribute) -> Row s ->  Elem a s -> el (snd a)
     get _ (v |: r) Here      = v
     get a (v |: r) (There p) = get a r p
 
     project : Row s' -> Include zs s' -> Row zs
     project r inc {zs = []         } = RNil
-    project r inc {zs = (n,u) :: xs} = let hypo    = project r (incReduc inc) {zs = xs} in
-                                       let nuInS'  = inc (n,u) Here in
-                                       let val     = get (n,u) r nuInS' in
-                                       val |: hypo
+    project r inc {zs = (n,u) :: xs} =
+                    let hypo = project r (includeReduc inc) in
+                    let nuInS' = inc (n,u) Here in
+                    let val = get (n,u) r nuInS' in
+                    val |: hypo
 
   run : RA s -> Table s
   run (Union q r)   = raoperational.union (run q) (run r)
@@ -375,39 +375,40 @@ namespace raoperational
   run (Select x)    = ?mlkjlmkj_5
   run (Unit table)  = table
 
--- namespace leak
---   -- Privacy Constraints Specification
---   PC : Type
---   PC = List (List Attribute)
+namespace leak
+  -- Privacy Constraints Specification
+  PC : Type
+  PC = List (List Attribute)
 
---   -- Leak predicate.
---   --
---   -- Ensures that an Privacy Constraint leaks
---   data Leak : PC -> Schema -> Type where
---     Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
---     There : Leak pcs s -> Leak (pc :: pcs) s
+  -- Leak predicate.
+  --
+  -- Ensures that an Privacy Constraint leaks
+  data Leak : PC -> Schema -> Type where
+    Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
+    There : Leak pcs s -> Leak (pc :: pcs) s
 
---   -- Zero leak predicate.
---   --
---   -- Ensures that no Privacy Constraints leak.
---   data ZeroLeak : PC -> Schema -> Type where
---     ZLStop : ZeroLeak [] s
---     -- In idris this is how test inequality
---     -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
---     NLPop  : ZeroLeak pcs s -> {p : Include pc s -> Void} ->
---       {default Refl ok : No p = isInclude pc s} -> ZeroLeak (pc :: pcs) s
+  -- Zero leak predicate.
+  --
+  -- Ensures that no Privacy Constraints leak.
+  data ZeroLeak : PC -> Schema -> Type where
+    ZLStop : ZeroLeak [] s
+    -- In idris this is how test inequality
+    -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
+    NLPop  : ZeroLeak pcs s -> {p : Include pc s -> Void} ->
+      {default Refl ok : No p = isIncluded pc s} -> ZeroLeak (pc :: pcs) s
 
---   -- test
---   run : RA s -> {auto p : ZeroLeak [[("Date", TEXT 10)]] s} -> Unit
---   run ra = ()
---   -- run (Unit agenda) -- Can't solve goal NotLeak [[("Date", TEXT 10)]]
---   -- run (Project [("Addr", NAT)] $ Unit agenda)
+  -- test
+  runZL: RA s -> {auto p : ZeroLeak [[("Date", TEXT 10)]] s} -> Table s
+  runZL ra = raoperational.run ra
+  -- runZl (Unit agenda) -- Can't solve goal NotLeak [[("Date", TEXT 10)]]
+  -- runZl (Project [("Addr", NAT)] $ Unit agenda)
 
---   run' : RA s -> PC -> Unit
---   run' ra pc {s} = let noleak = proofNoLeak in ()
---     where
---     proofNoLeak : (ZeroLeak pc s)
---     proofNoLeak = ?project
+  -- impossibru
+  -- run' : RA s -> PC -> Unit
+  -- run' ra pc {s} = let noleak = proofNoLeak in ()
+  --   where
+  --   proofNoLeak : (ZeroLeak pc s)
+  --   proofNoLeak = ?project
 
 -- Examples
 scAgenda : Schema
@@ -476,13 +477,13 @@ test2 = run $ nbMeeting (Unit agenda)
 
 ---------- Proofs ----------
 
-phant.sql.inclusion.zInZsReducX = proof
+phant.sql.intersect.zInZsReducX = proof
   intros
-  rewrite intersectReducX xs ys z contra zInZs
+  rewrite lemma_intersectReducX xs ys z contra zInZs
   exact zInZs
 
 
-phant.sql.inclusion.zInZsReducY = proof
+phant.sql.intersect.zInZsReducY = proof
   intros
-  rewrite intersectReducY xs ys z contra zInZs
+  rewrite lemma_intersectReducY xs ys z contra zInZs
   exact zInZs
