@@ -14,6 +14,7 @@
 module phant.sql
 
 import Data.List
+import Data.VectType
 
 %default total
 
@@ -314,7 +315,7 @@ namespace ra
       Product : RA s -> RA s' -> RA (s ++ s')
       -- Others
       Project : (s : Schema) -> RA s' -> RA (intersect s s')
-      Select  : RA s -> RA s
+      Select  : (Row s -> Bool) -> RA s -> RA s
       -- Introduce
       Unit    : Table s -> RA s
 
@@ -367,12 +368,15 @@ namespace raoperational
                     let val = get (n,u) r nuInS' in
                     val |: hypo
 
+  select : (Row s -> Bool) -> Table s -> Table s
+  select p t = [ r | r <- t, p r ]
+
   run : RA s -> Table s
   run (Union q r)   = raoperational.union (run q) (run r)
   run (Diff q r)    = diff (run q) (run r)
   run (Product q r) = product (run q) (run r)
   run (Project s q) = project s (run q)
-  run (Select x)    = ?mlkjlmkj_5
+  run (Select p q)  = select p (run q)
   run (Unit table)  = table
 
 namespace leak
@@ -438,6 +442,27 @@ test = project [("Date", TEXT 10)] agenda
 test2 : Table [("Date", TEXT 10)]
 test2 = run $ nbMeeting (Unit agenda)
 
+
+-- Testuuu
+test3 : Table [("Date", TEXT 10)]
+test3 = run (Project [("Date", TEXT 10)] $
+             Select (\r => let (d,n,a) = row2Tuple r in
+                           d == "2015-07-08") $
+             Unit agenda)
+  where
+  row2Tuple : Row scAgenda -> (String, String, Nat)
+  row2Tuple (d |: n |: a |: RNil) = (d,n,a)
+
+-- other
+VSchema : Schema -> Type
+VSchema s = Vect (length s) Type
+
+sch2VSch : (s : Schema) -> VSchema s
+sch2VSch s = map (\(_,u) => el u) $ fromList s
+
+vsch2Tuple : {n : Nat} -> Vect (S n) Type -> Type
+vsch2Tuple {n = Z    } [t]       = t
+vsch2Tuple {n = (S k)} (t :: ts) = Pair t $ vsch2Tuple {n = k} ts
 
 -- Some thought:
 -- Symbolic simulations
