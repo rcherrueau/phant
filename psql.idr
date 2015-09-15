@@ -94,6 +94,8 @@ namespace inclusion
   --
   -- Asserts that the elements of the first list are elements of the
   -- second list.
+  -- Axiom of power set:
+  -- https://en.wikipedia.org/wiki/Axiom_of_power_set
   Include : List a -> List a -> Type
   Include xs ys = (z : _) -> Elem z xs -> Elem z ys
 
