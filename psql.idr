@@ -11,6 +11,11 @@
 --   url =          {http://doi.acm.org/10.1145/1411204.1411213},
 --   doi =          {10.1145/1411204.1411213}
 -- }
+
+
+-- TODO: https://groups.google.com/forum/#!topic/idris-lang/vuLe6gPmnlI
+-- TODO: https://gist.github.com/cbiffle/82d15e015ab1191b73c3
+
 module phant.sql
 
 import Data.List
