@@ -73,7 +73,24 @@ test3 : Eff (RA [("id", NAT)]) [GUARD $ Frag  [("date", TEXT 10)]
 test3 = queryR (Project [("id", NAT)] .
                 Select (\(n |: a |: id |: RNil) => True))
 
+test4 : Eff (RA [("id", NAT)]) [GUARD $ Plain [("date", TEXT 10),
+                                                     ("name", TEXT 255),
+                                                     ("addr", NAT),
+                                                     ("id", NAT)]]
+                                     [GUARD $ Frag  [("date", TEXT 10)]
+                                                    [("name", CRYPT),
+                                                     ("addr", NAT),
+                                                     ("id", NAT)]]
+test4 = do qL <- test2
+           qR <- test3
+           return qR
 
+instance Handler Guard m where
+    handle r (FragV   s) k = ?Handler_rhs_2
+    handle r (Encrypt a) k = ?Handler_rhs_3
+    handle r (Query   q) k = ?Handler_rhs_4
+    handle r (QueryL  q) k = ?Handler_rhs_5
+    handle r (QueryR  q) k = ?Handler_rhs_6
 
 -- Local Variables:
 -- idris-load-packages: ("effects")
