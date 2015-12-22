@@ -324,103 +324,104 @@ namespace ra
       -- Others
       Project : (s : Schema) -> RA s' -> RA (intersect s s')
       Select  : (Row s -> Bool) -> RA s -> RA s
+      Join   : RA s -> RA s' -> RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))
       -- Introduce
-      Unit    : Table s -> RA s
+      Unit    : (s : Schema) -> RA s
 
-namespace raoperational
-  attrEq : {u,v : U} -> el u -> el v -> Bool
-  attrEq x y {u = NAT}      {v = NAT}      = x == y
-  attrEq x y {u = NAT}      {v}            = False
-  attrEq x y {u = (TEXT k)} {v = (TEXT L)} = x == y
-  attrEq x y {u = (TEXT k)} {v}            = False
-  attrEq x y {u = REAL}     {v = REAL}     = x == y
-  attrEq x y {u = REAL}     {v}            = False
-  attrEq x y {u = BOOL}     {v = BOOL}     = x == y
-  attrEq x y {u = BOOL}     {v}            = False
-  attrEq x y {u = CRYPT}    {v = CRYPT}    = x == y
-  attrEq x y {u = CRYPT}    {v}            = False
-  attrEq x y {u = (HOME h)} {v = (HOME i)} = attrEq {u=h} {v=i} x y
-  attrEq x y {u = (HOME z)} {v}            = False
+-- namespace raoperational
+--   attrEq : {u,v : U} -> el u -> el v -> Bool
+--   attrEq x y {u = NAT}      {v = NAT}      = x == y
+--   attrEq x y {u = NAT}      {v}            = False
+--   attrEq x y {u = (TEXT k)} {v = (TEXT L)} = x == y
+--   attrEq x y {u = (TEXT k)} {v}            = False
+--   attrEq x y {u = REAL}     {v = REAL}     = x == y
+--   attrEq x y {u = REAL}     {v}            = False
+--   attrEq x y {u = BOOL}     {v = BOOL}     = x == y
+--   attrEq x y {u = BOOL}     {v}            = False
+--   attrEq x y {u = CRYPT}    {v = CRYPT}    = x == y
+--   attrEq x y {u = CRYPT}    {v}            = False
+--   attrEq x y {u = (HOME h)} {v = (HOME i)} = attrEq {u=h} {v=i} x y
+--   attrEq x y {u = (HOME z)} {v}            = False
 
-  instance Eq (Row s) where
-    RNil          == RNil            = True
-    (attr |: row) == (attr' |: row') = attrEq attr attr' && row == row'
+--   instance Eq (Row s) where
+--     RNil          == RNil            = True
+--     (attr |: row) == (attr' |: row') = attrEq attr attr' && row == row'
 
-  union : Table s -> Table s -> Table s
-  union t1 t2 = List.union t1 t2
+--   union : Table s -> Table s -> Table s
+--   union t1 t2 = List.union t1 t2
 
-  diff : Table s -> Table s -> Table s
-  diff t1 t2 = t1 \\ t2
+--   diff : Table s -> Table s -> Table s
+--   diff t1 t2 = t1 \\ t2
 
-  product : Table s -> Table s' -> Table (s ++ s')
-  product t1 t2 = [ union r1 r2 | r1 <- t1, r2 <- t2 ]
-    where
-    union : Row s -> Row s' -> Row (s ++ s')
-    union RNil       r  = r
-    union (a |: r1)  r2 = a |: union r1 r2
+--   product : Table s -> Table s' -> Table (s ++ s')
+--   product t1 t2 = [ union r1 r2 | r1 <- t1, r2 <- t2 ]
+--     where
+--     union : Row s -> Row s' -> Row (s ++ s')
+--     union RNil       r  = r
+--     union (a |: r1)  r2 = a |: union r1 r2
 
-  project : (s : Schema) -> Table s' -> Table (intersect s s')
-  project s t {s'} = let zs = intersect s s' in
-                     let zsIncS' = snd $ intersectIncluded s s' in
-                     [ project r zsIncS' | r <- t ]
-    where
-    get : {s : Schema} -> (a : Attribute) -> Row s ->  Elem a s -> el (snd a)
-    get _ (v |: r) Here      = v
-    get a (v |: r) (There p) = get a r p
+--   project : (s : Schema) -> Table s' -> Table (intersect s s')
+--   project s t {s'} = let zs = intersect s s' in
+--                      let zsIncS' = snd $ intersectIncluded s s' in
+--                      [ project r zsIncS' | r <- t ]
+--     where
+--     get : {s : Schema} -> (a : Attribute) -> Row s ->  Elem a s -> el (snd a)
+--     get _ (v |: r) Here      = v
+--     get a (v |: r) (There p) = get a r p
 
-    project : Row s' -> Include zs s' -> Row zs
-    project r inc {zs = []         } = RNil
-    project r inc {zs = (n,u) :: xs} =
-                    let hypo = project r (includeReduc inc) in
-                    let nuInS' = inc (n,u) Here in
-                    let val = get (n,u) r nuInS' in
-                    val |: hypo
+--     project : Row s' -> Include zs s' -> Row zs
+--     project r inc {zs = []         } = RNil
+--     project r inc {zs = (n,u) :: xs} =
+--                     let hypo = project r (includeReduc inc) in
+--                     let nuInS' = inc (n,u) Here in
+--                     let val = get (n,u) r nuInS' in
+--                     val |: hypo
 
-  select : (Row s -> Bool) -> Table s -> Table s
-  select p t = [ r | r <- t, p r ]
+--   select : (Row s -> Bool) -> Table s -> Table s
+--   select p t = [ r | r <- t, p r ]
 
-  run : RA s -> Table s
-  run (Union q r)   = raoperational.union (run q) (run r)
-  run (Diff q r)    = diff (run q) (run r)
-  run (Product q r) = product (run q) (run r)
-  run (Project s q) = project s (run q)
-  run (Select p q)  = select p (run q)
-  run (Unit table)  = table
+--   run : RA s -> Table s
+--   run (Union q r)   = raoperational.union (run q) (run r)
+--   run (Diff q r)    = diff (run q) (run r)
+--   run (Product q r) = product (run q) (run r)
+--   run (Project s q) = project s (run q)
+--   run (Select p q)  = select p (run q)
+--   run (Unit table)  = table
 
-namespace leak
-  -- Privacy Constraints Specification
-  PC : Type
-  PC = List (List Attribute)
+-- namespace leak
+--   -- Privacy Constraints Specification
+--   PC : Type
+--   PC = List (List Attribute)
 
-  -- Leak predicate.
-  --
-  -- Ensures that an Privacy Constraint leaks
-  data Leak : PC -> Schema -> Type where
-    Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
-    There : Leak pcs s -> Leak (pc :: pcs) s
+--   -- Leak predicate.
+--   --
+--   -- Ensures that an Privacy Constraint leaks
+--   data Leak : PC -> Schema -> Type where
+--     Here  : {auto p: Include pc s} -> Leak (pc :: pcs) s
+--     There : Leak pcs s -> Leak (pc :: pcs) s
 
-  -- Zero leak predicate.
-  --
-  -- Ensures that no Privacy Constraints leak.
-  data ZeroLeak : PC -> Schema -> Type where
-    ZLStop : ZeroLeak [] s
-    -- In idris this is how test inequality
-    -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
-    NLPop  : ZeroLeak pcs s -> {p : Include pc s -> Void} ->
-      {default Refl ok : No p = isIncluded pc s} -> ZeroLeak (pc :: pcs) s
+--   -- Zero leak predicate.
+--   --
+--   -- Ensures that no Privacy Constraints leak.
+--   data ZeroLeak : PC -> Schema -> Type where
+--     ZLStop : ZeroLeak [] s
+--     -- In idris this is how test inequality
+--     -- https://groups.google.com/forum/#!msg/idris-lang/WvpU_-6glYM/h0r-tHDY_EUJ
+--     NLPop  : ZeroLeak pcs s -> {p : Include pc s -> Void} ->
+--       {default Refl ok : No p = isIncluded pc s} -> ZeroLeak (pc :: pcs) s
 
-  -- test
-  runZL: RA s -> {auto p : ZeroLeak [[("Date", TEXT 10)]] s} -> Table s
-  runZL ra = raoperational.run ra
-  -- runZl (Unit agenda) -- Can't solve goal NotLeak [[("Date", TEXT 10)]]
-  -- runZl (Project [("Addr", NAT)] $ Unit agenda)
+--   -- test
+--   runZL: RA s -> {auto p : ZeroLeak [[("Date", TEXT 10)]] s} -> Table s
+--   runZL ra = raoperational.run ra
+--   -- runZl (Unit agenda) -- Can't solve goal NotLeak [[("Date", TEXT 10)]]
+--   -- runZl (Project [("Addr", NAT)] $ Unit agenda)
 
-  -- impossibru
-  -- run' : RA s -> PC -> Unit
-  -- run' ra pc {s} = let noleak = proofNoLeak in ()
-  --   where
-  --   proofNoLeak : (ZeroLeak pc s)
-  --   proofNoLeak = ?project
+--   -- impossibru
+--   -- run' : RA s -> PC -> Unit
+--   -- run' ra pc {s} = let noleak = proofNoLeak in ()
+--   --   where
+--   --   proofNoLeak : (ZeroLeak pc s)
+--   --   proofNoLeak = ?project
 
 -- Examples
 scAgenda : Schema
@@ -429,17 +430,17 @@ scAgenda = [("Date", TEXT 10), ("Name", TEXT 255), ("Addr", NAT)]
 -- Qualify the name according to Idris 0.9.20 and its new rules for
 -- lower-case names in type signatures.
 -- https://github.com/idris-lang/Idris-dev/issues/2673
-row1 : Row phant.sql.scAgenda
-row1 = "2015-07-08" |: "Alice" |: 0 |: RNil
+-- row1 : Row phant.sql.scAgenda
+-- row1 = "2015-07-08" |: "Alice" |: 0 |: RNil
 
-row2 : Row phant.sql.scAgenda
-row2 = "2015-07-08" |: "Bob"   |: 0 |: RNil
+-- row2 : Row phant.sql.scAgenda
+-- row2 = "2015-07-08" |: "Bob"   |: 0 |: RNil
 
-row3 : Row phant.sql.scAgenda
-row3 = "2015-07-10" |: "Alice" |: 1 |: RNil
+-- row3 : Row phant.sql.scAgenda
+-- row3 = "2015-07-10" |: "Alice" |: 1 |: RNil
 
-agenda : Table phant.sql.scAgenda
-agenda = [row1, row2, row3]
+-- agenda : Table phant.sql.scAgenda
+-- agenda = [row1, row2, row3]
 
 
 -- Number of meeting per day
@@ -448,25 +449,36 @@ nbMeeting ra =
   -- Count $ Group [("Date", TEXT 10)] $ Project [("Date", TEXT 10)] ra
   Project [("Date", TEXT 10)] ra
 
-test: Table [("Date", TEXT 10)]
-test = project [("Date", TEXT 10)] agenda
+raAgenda : RA phant.sql.scAgenda
+raAgenda = Unit scAgenda
 
-test2 : Table [("Date", TEXT 10)]
-test2 = run $ nbMeeting (Unit agenda)
+testJoin : RA phant.sql.scAgenda
+testJoin = Join raAgenda raAgenda
 
-test3 : Table [("Date", TEXT 10)]
-test3 = run (Project [("Date", TEXT 10)] $
-             Select (\r => let (d,n,a) = row2Tuple r in
-                           d == "2015-07-08") $
-             Unit agenda)
-  where
-  row2Tuple : Row phant.sql.scAgenda -> (String, String, Nat)
-  row2Tuple (d |: n |: a |: RNil) = (d,n,a)
+testJoin2 : RA [("Date", TEXT 10), ("Name", TEXT 255), ("Addr", NAT), ("Id", NAT)]
+testJoin2 = Join (Project [("Date", TEXT 10), ("Id", NAT)] $ raAgenda)
+                  (Product raAgenda (Unit [("Id", NAT)]))
 
-test4 : Table [("Date", TEXT 10)]
-test4 = run (Project [("Date", TEXT 10)] $
-             Select (\(d |: _ |: _ |: RNil ) => d == "2015-07-08") $
-             Unit agenda)
+
+-- test: Table [("Date", TEXT 10)]
+-- test = project [("Date", TEXT 10)] agenda
+
+-- test2 : Table [("Date", TEXT 10)]
+-- test2 = run $ nbMeeting (Unit agenda)
+
+-- test3 : Table [("Date", TEXT 10)]
+-- test3 = run (Project [("Date", TEXT 10)] $
+--              Select (\r => let (d,n,a) = row2Tuple r in
+--                            d == "2015-07-08") $
+--              Unit agenda)
+--   where
+--   row2Tuple : Row phant.sql.scAgenda -> (String, String, Nat)
+--   row2Tuple (d |: n |: a |: RNil) = (d,n,a)
+
+-- test4 : Table [("Date", TEXT 10)]
+-- test4 = run (Project [("Date", TEXT 10)] $
+--              Select (\(d |: _ |: _ |: RNil ) => d == "2015-07-08") $
+--              Unit agenda)
 
 -- Some thought:
 -- Symbolic simulations
