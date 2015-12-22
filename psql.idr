@@ -454,8 +454,6 @@ test = project [("Date", TEXT 10)] agenda
 test2 : Table [("Date", TEXT 10)]
 test2 = run $ nbMeeting (Unit agenda)
 
-
--- Testuuu
 test3 : Table [("Date", TEXT 10)]
 test3 = run (Project [("Date", TEXT 10)] $
              Select (\r => let (d,n,a) = row2Tuple r in
@@ -465,16 +463,10 @@ test3 = run (Project [("Date", TEXT 10)] $
   row2Tuple : Row phant.sql.scAgenda -> (String, String, Nat)
   row2Tuple (d |: n |: a |: RNil) = (d,n,a)
 
--- other
--- VSchema : Schema -> Type
--- VSchema s = Vect (length s) Type
-
--- sch2VSch : (s : Schema) -> VSchema s
--- sch2VSch s = map (\(_,u) => el u) $ fromList s
-
--- vsch2Tuple : {n : Nat} -> Vect (S n) Type -> Type
--- vsch2Tuple {n = Z    } [t]       = t
--- vsch2Tuple {n = (S k)} (t :: ts) = Pair t $ vsch2Tuple {n = k} ts
+test4 : Table [("Date", TEXT 10)]
+test4 = run (Project [("Date", TEXT 10)] $
+             Select (\(d |: _ |: _ |: RNil ) => d == "2015-07-08") $
+             Unit agenda)
 
 -- Some thought:
 -- Symbolic simulations
