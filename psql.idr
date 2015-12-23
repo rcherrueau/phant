@@ -174,19 +174,21 @@ namespace encryption
   Key = String
 
   class Crypt a where
-    encrypt : String -> Key -> a
-    decrypt : a -> Key -> String
+    encrypt : Key -> String -> a
+    decrypt : Key -> a -> Maybe String
 
   -- AES
   data AES : Type where
-    MkAES : String -> AES
+    MkAES : Key -> String -> AES
 
   instance Crypt AES where
-    encrypt s k = MkAES s
-    decrypt a k = "str"
+    encrypt k  s            = MkAES k s
+    decrypt k1 (MkAES k2 y) = case k1 == k2 of
+                                   True  => Just y
+                                   False => Nothing
 
   instance Eq AES where
-    (MkAES x) == (MkAES y) = x == y
+    (MkAES k1 x) == (MkAES k2 y) = k1 == k2 && x == y
 
   -- Cryptographic encryption
   -- String here defines type clases only on correct encryption scheme

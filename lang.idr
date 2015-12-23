@@ -13,7 +13,8 @@ data Loc : (a : Type) -> Type where
 getIp : Loc a -> String
 getIp ((@) x ip) = ip
 
-data LocIp : (a : Type) -> String -> Type  where
+-- abstract to keep constroctor inside this file
+abstract data LocIp : (a : Type) -> String -> Type  where
      MkLocIp : (l : Loc a) -> LocIp a (getIp l)
 
 map : (a -> a) -> Loc a -> Loc a
@@ -99,8 +100,8 @@ A = ("Addr", NAT)
 ScAg : Schema
 ScAg = [D,N,A]
 
-protectAg : Eff () [GUARD $ Plain (ScAg@"1.1.1.1")]
-                   [GUARD $ Frag  ?FragLeftTy ?FragRightTy]
+-- protectAg : Eff () [GUARD $ Plain (ScAg@"1.1.1.1")]
+--                    [GUARD $ Frag  ?FragLeftTy ?FragRightTy]
 protectAg = do encrypt "Name"
                frag [D] "1.1.1.2" "1.1.1.3"
 
@@ -111,22 +112,22 @@ FragLeftTy  = [Id,D]@"1.1.1.2"
 FragRightTy = [Id,NC,A]@"1.1.1.3"
 
 -- queryOnFL : Eff (LocTy $ RA [Id,D]@"1.1.1.2") [GUARD $ Frag ([Id,D]@"1.1.1.2") fragR]
-queryOnFL : Eff (LocIp (RA [Id,D]) "1.1.1.2") [GUARD $ Frag Main.FragLeftTy fragR]
+-- queryOnFL : Eff (LocIp (RA [Id,D]) "1.1.1.2") [GUARD $ Frag Main.FragLeftTy fragR]
 queryOnFL = queryL (Select (\(_ |: d |: _) => True))
 
 -- queryOnFR : Eff (LocTy $ RA [Id]@"1.1.1.3") [GUARD $ Frag fragL ([NC,A,Id]@"1.1.1.3")]
-queryOnFR : Eff (LocIp (RA [Id]) "1.1.1.3") [GUARD $ Frag fragL Main.FragRightTy]
+-- queryOnFR : Eff (LocIp (RA [Id]) "1.1.1.3") [GUARD $ Frag fragL Main.FragRightTy]
 queryOnFR = queryR (Project [Id] .
                     Select (\(_ |: n |: _) =>
                     -- > Type mismatche between String and AES
-                    -- n == "Alice"))
+                    -- n == "Bob"))
                     -- > Can't resolve type class Ord (AES)
-                    -- n >= (encrypt "mickey" "Alice")))
+                    -- n >= (encrypt "mickey" "Bob")))
                     -- > OK
-                    n == (encrypt "mickey" "Alice")))
+                    n == (encrypt "mickey" "Bob")))
 
-lFirstStrat : Eff (LocIp (RA [Id,D]) "local") [GUARD $ Plain (ScAg@"1.1.1.1")]
-                                              [GUARD $ Frag  Main.FragLeftTy Main.FragRightTy]
+-- lFirstStrat : Eff (LocIp (RA [Id,D]) "local") [GUARD $ Plain (ScAg@"1.1.1.1")]
+--                                               [GUARD $ Frag  Main.FragLeftTy Main.FragRightTy]
 lFirstStrat = do protectAg
                  qL <- queryOnFL
                  qR <- queryOnFR
