@@ -131,10 +131,18 @@ lFirstStrat = do protectAg
                  qL <- queryOnFL
                  qR <- queryOnFR
                  pure $ njoin qL qR
-   where
-   njoin : LocIp (RA s) ipL -> LocIp (RA s') ipR ->
-           LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
-   njoin (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
+  where
+  -- better: defrag↓
+  njoin : LocIp (RA s) ipL -> LocIp (RA s') ipR ->
+          LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
+  njoin (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
+
+  -- ⵑ : 0x2D51
+  defragⵑ :
+    LocIp (RA s) ipL -> LocIp (RA s') ipR ->
+    LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
+  defragⵑ (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
+
 
 -- Local Variables:
 -- idris-load-packages: ("effects")
