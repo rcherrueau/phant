@@ -3,17 +3,29 @@ import psql
 
 %default total
 
+Id : Attribute
+Id = ("Id", NAT)
+
 infix 5 @
 data Loc : (a : Type) -> Type where
      (@) :  a -> (ip : String) -> Loc a
 
+getIp : Loc a -> String
+getIp ((@) x ip) = ip
+
+data LocIp : (a : Type) -> String -> Type  where
+     MkLocIp : (l : Loc a) -> LocIp a (getIp l)
+
+map : (a -> a) -> Loc a -> Loc a
+map f ((@) x ip) = f x @ ip
 
 -- Cloud state : plain or frag
 data CState : Type where
      Plain : Loc Schema -> CState
      Frag  : Loc Schema -> Loc Schema -> CState
 
-data LocTy : Loc a -> Type
+-- data LocTy : Loc a -> Type where
+--      MkLocTy : (l : Loc a) -> LocTy l
 
 -- Cloud Environement
 data CEnv : CState -> Type
@@ -28,48 +40,48 @@ data Guard : Effect where
      FragV   : (s : Schema) -> (ipFL : String) -> (ipFR : String) ->
                Guard ()
                      (CEnv $ Plain (s'@ip))
-                     (\x => CEnv $ Frag ((intersect s s')@ipFL)
-                                        ((s' \\ s)@ipFR))
+                     (\x => CEnv $ Frag (Id :: (intersect s s')@ipFL)
+                                        (Id :: (s' \\ s)@ipFR))
      Encrypt : (a : String) ->
                Guard ()
                      (CEnv $ Plain (s@ip))
                      (\x => CEnv $ Plain ((encryptSc a s)@ip))
      Query   : (q: RA s -> RA s') ->
-               Guard (LocTy $ RA s'@ip)
+               Guard (LocIp (RA s') ip)
                      (CEnv $ Plain (s@ip))
                      (\x => CEnv $ Plain (s@ip))
      QueryL  : (q: RA sL -> RA sL') ->
-               Guard (LocTy $ RA sL'@ip)
+               Guard (LocIp (RA sL') ip)
                      (CEnv $ Frag (sL@ip) fR)
                      (\x => CEnv $ Frag (sL@ip) fR)
      QueryR  : (q: RA sR -> RA sR') ->
-               Guard (LocTy $ RA sR'@ip)
+               Guard (LocIp (RA sR') ip)
                      (CEnv $ Frag fL (sR@ip))
                      (\x => CEnv $ Frag fL (sR@ip))
 
 GUARD : CState -> EFFECT
 GUARD x = MkEff (CEnv x) Guard
 
-frag : (s : Schema) -> (ipFL : String) -> (ipFR : String) ->
+frag : (s : Schema) -> (ipL : String) -> (ipR : String) ->
        Eff () [GUARD $ Plain (s'@ip)]
-              [GUARD $ Frag ((intersect s s')@ipFL)
-                            ((s' \\ s)@ipFR)]
-frag s ipFL ipFR = call (FragV s ipFL ipFR)
+              [GUARD $ Frag (Id :: (intersect s s')@ipL)
+                            (Id :: (s' \\ s)@ipR)]
+frag s ipL ipR = call (FragV s ipL ipR)
 
 encrypt : (a : String) -> Eff () [GUARD $ Plain (s@ip)]
                                  [GUARD $ Plain ((encryptSc a s)@ip)]
 encrypt a = call (Encrypt a)
 
-query : (RA s -> RA s') -> Eff (LocTy $ RA s'@ip) [GUARD $ Plain (s@ip)]
+query : (RA s -> RA s') -> Eff (LocIp (RA s') ip) [GUARD $ Plain (s@ip)]
 query q = call (Query q)
 
-queryL : (RA sL -> RA sL') -> Eff (LocTy $ RA sL'@ip) [GUARD $ Frag (sL@ip) sR]
+queryL : (RA sL -> RA sL') -> Eff (LocIp (RA sL') ip) [GUARD $ Frag (sL@ip) sR]
 queryL q = call (QueryL q)
 
-queryR : (RA sR -> RA sR') -> Eff (LocTy $ RA sR'@ip) [GUARD $ Frag sL (sR@ip)]
+queryR : (RA sR -> RA sR') -> Eff (LocIp (RA sR') ip) [GUARD $ Frag sL (sR@ip)]
 queryR q = call (QueryR q)
 
-test1 : Eff (LocTy $ RA s@ip) [GUARD (Plain (s@ip))]
+test1 : Eff (LocIp (RA s) ip) [GUARD (Plain (s@ip))]
 test1 = query (id)
 
 D : Attribute
@@ -84,11 +96,8 @@ NC = ("Name", CRYPT)
 A : Attribute
 A = ("Addr", NAT)
 
-Id : Attribute
-Id = ("Id", NAT)
-
 ScAg : Schema
-ScAg = [D,N,A,Id]
+ScAg = [D,N,A]
 
 protectAg : Eff () [GUARD $ Plain (ScAg@"1.1.1.1")]
                    [GUARD $ Frag  ?FragLeftTy ?FragRightTy]
@@ -98,17 +107,17 @@ protectAg = do encrypt "Name"
 -- :printdef FRType
 -- FragLeftTy  = %runElab search
 -- FragRightTy = %runElab search
-FragLeftTy  = [D]@"1.1.1.2"
-FragRightTy = [NC,A,Id]@"1.1.1.3"
+FragLeftTy  = [Id,D]@"1.1.1.2"
+FragRightTy = [Id,NC,A]@"1.1.1.3"
 
--- queryOnFL : Eff (LocTy $ RA [D]@"1.1.1.2") [GUARD $ Frag ([D]@"1.1.1.2") fragR]
-queryOnFL : Eff (LocTy $ RA [D]@"1.1.1.2") [GUARD $ Frag Main.FragLeftTy fragR]
-queryOnFL = queryL (Select (\(d |: RNil) => True))
+-- queryOnFL : Eff (LocTy $ RA [Id,D]@"1.1.1.2") [GUARD $ Frag ([Id,D]@"1.1.1.2") fragR]
+queryOnFL : Eff (LocIp (RA [Id,D]) "1.1.1.2") [GUARD $ Frag Main.FragLeftTy fragR]
+queryOnFL = queryL (Select (\(_ |: d |: _) => True))
 
 -- queryOnFR : Eff (LocTy $ RA [Id]@"1.1.1.3") [GUARD $ Frag fragL ([NC,A,Id]@"1.1.1.3")]
-queryOnFR : Eff (LocTy $ RA [Id]@"1.1.1.3") [GUARD $ Frag fragL Main.FragRightTy]
-queryOnFR = queryR (Project [("Id", NAT)] .
-                    Select (\(n |: _) =>
+queryOnFR : Eff (LocIp (RA [Id]) "1.1.1.3") [GUARD $ Frag fragL Main.FragRightTy]
+queryOnFR = queryR (Project [Id] .
+                    Select (\(_ |: n |: _) =>
                     -- > Type mismatche between String and AES
                     -- n == "Alice"))
                     -- > Can't resolve type class Ord (AES)
@@ -116,13 +125,16 @@ queryOnFR = queryR (Project [("Id", NAT)] .
                     -- > OK
                     n == (encrypt "mickey" "Alice")))
 
-lFirstStrat : Eff (LocTy $ RA [Id]@"1.1.1.3") [GUARD $ Plain (ScAg@"1.1.1.1")]
+lFirstStrat : Eff (LocIp (RA [Id,D]) "local") [GUARD $ Plain (ScAg@"1.1.1.1")]
                                               [GUARD $ Frag  Main.FragLeftTy Main.FragRightTy]
 lFirstStrat = do protectAg
                  qL <- queryOnFL
                  qR <- queryOnFR
-                 pure qR
-
+                 pure $ njoin qL qR
+   where
+   njoin : LocIp (RA s) ipL -> LocIp (RA s') ipR ->
+           LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
+   njoin (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
 
 -- Local Variables:
 -- idris-load-packages: ("effects")
