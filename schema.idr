@@ -113,8 +113,14 @@ indexingS = getWitness . indexing
 encrypt : Attribute -> Schema -> Schema
 encrypt a []        = []
 encrypt a (x :: xs) with (a == x)
-  encrypt a      (x :: xs) | False = x :: (encrypt a xs)
-  encrypt (n, u) (x :: xs) | True  = (n, CRYPT u) :: xs
+  encrypt a     (x :: xs) | False = x :: (encrypt a xs)
+  encrypt (n,u) (x :: xs) | True  = (n, CRYPT u) :: xs
+
+decrypt : Attribute -> Schema -> Schema
+decrypt a []        = []
+decrypt a (x :: xs) with (a == x)
+  decrypt a     (x :: xs) | False = x :: (decrypt a xs)
+  decrypt (n,u) (x :: xs) | True  = (n, getU u) :: xs
 
 name : Attribute -> String
 name = fst
