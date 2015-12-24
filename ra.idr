@@ -29,7 +29,7 @@ data RA : Schema -> Type where
   Product : RA s -> RA s' -> RA (s * s')
   -- Others
   Project : (s : Schema) -> RA s' -> {auto sub : Sub s s'} -> RA s
-  Select  : (Row s -> Bool) -> RA s -> RA s
+  Select  : (Row s -> Bool) -> {auto sub : Sub s s'} -> RA s' -> RA s'
   Drop    : (s : Schema) -> RA s' -> {auto sub : Sub s s'} -> RA (s' \\ s)
 
 -- Indexing : RA s -> (r : RA s' ** Elem Id s')
@@ -44,9 +44,9 @@ Indexing x {s} = let isWPos = indexing s
 defragS : (Schema, Schema) -> Schema
 defragS (s1, s2) = (delete Id s1) * (delete Id s2)
 
-getSubS : (f : (Schema, Schema)) -> (s : Schema) ->
-          (sub : Sub s (defragS f)) ->
-          (Schema, Schema)
+-- getSubS : (f : (Schema, Schema)) -> (s : Schema) ->
+--           (sub : Sub s (defragS f)) ->
+--           (Schema, Schema)
 
 -- Portection
 Frag : (s : Schema) -> RA s' -> {auto sub : Sub s s'} ->
@@ -78,20 +78,32 @@ Decrypt a x {s} = Unit (decrypt a s)
 --      (idInFl : Elem Id (fst f)) -> (idInFr : Elem Id (snd f)) ->
 --      ((Project s) . (Defrag {idInS=idInFl} {idInS'=idInFr})) = ()
 
-and : (Row s -> Bool) -> (Row s' -> Bool) -> (Row (defragS (s,s')) -> Bool)
-and f g r = ?and_rhs
+and : (ql : Row sl -> Bool) -> (qr : Row sr -> Bool) ->
+      {auto sub : Sub sl s} -> {auto sub' : Sub sr s} ->
+      Row s -> Bool
+and ql qr r {sub} {sub'} = let rsl = getSub r sub
+                               rsr = getSub r sub'
+                           in (ql rsl) && (qr rsr)
 
-onBoth : (Row s -> Bool) -> (Row s' -> Bool) -> (RA s, RA s') -> (RA s, RA s')
-onBoth f g x = let l = Select f (fst x)
-                   r = Select g (snd x)
-               in (l,r)
+selectOnLR : (ql : Row sl -> Bool) -> (qr : Row sr -> Bool) ->
+             {auto sub : Sub sl sl'} -> {auto sub' : Sub sr sr'} ->
+             (RA sl', RA sr') -> (RA sl', RA sr')
+selectOnLR ql qr x = let l = Select ql (fst x)
+                         r = Select qr (snd x)
+                     in (l,r)
+
+lemma_t : (t : (a,b)) -> t = (fst t, snd t)
 
 l2 : (f : (Schema, Schema)) ->
      (pl : Row (fst f) -> Bool) -> (pr : Row (snd f) -> Bool) ->
      (idInFl : Elem Id (fst f)) -> (idInFr : Elem Id (snd f)) ->
-     (Select (and pl pr)) . (Defrag {idInS=idInFl} {idInS'=idInFr}) =
-     (Defrag {idInS=idInFl} {idInS'=idInFr}) . (onBoth pl pr)
-l2 f pl pr idInFl idInFr = ?l2_rhs
+     -- (subFl : Sub (fst f) (fst f)) -> (subFr : Sub (snd f) (snd f)) ->
+     -- (sub : Sub (defragS f) (defragS f)) ->
+     (Select {sub= ?sub} (and pl pr {sub= ?subFl} {sub'= ?subFr} {s=defragS f}))
+     . (Defrag {idInS=idInFl} {idInS'=idInFr}) =
+     (Defrag {idInS=idInFl} {idInS'=idInFr})
+     . (selectOnLR pl pr {sub= ?subFl} {sub'= ?subFr})
+-- l2 (l, r) pl pr idInFl idInFr = ?l2_rhs_1
 
 
 

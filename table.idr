@@ -6,6 +6,8 @@ module phant.table
 
 import schema
 
+import Data.List
+
 %default total
 
 namespace row
@@ -20,8 +22,23 @@ namespace row
        RNil : Row []
        (::) : {n : String} -> {u : U} -> el u -> Row xs -> Row $ (n, u) :: xs
 
-  schema : Row s -> Schema
-  schema _ {s} = s
+  attr : Row s -> Elem a s -> (String, U)
+  attr _ _ {a} = a
+
+  attrs : Row s -> Schema
+  attrs _ {s} = s
+
+  attrV : (r : Row s) -> (p : Elem a s) -> el (snd (attr r p))
+  attrV RNil      Here      impossible
+  attrV RNil      (There _) impossible
+  attrV (v :: as) Here      = v
+  attrV (v :: as) (There x) = attrV as x
+
+  getSub : Row s' -> Sub s s' -> Row s
+  getSub r Stop          = RNil
+  getSub r (Pop sub {p} {a=(n,u)}) = let v = attrV r p
+                                         recur = getSub r sub
+                                     in v :: recur
 
 --   -- Better row (with pair)
 --   -- I should go with a definition of schema that make imposible the
