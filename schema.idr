@@ -88,17 +88,33 @@ Attribute = (String, U)
 Id : Attribute
 Id = ("Id", NAT)
 
+
 Schema : Type
 Schema = List Attribute
 
--- utils opreration on schema
-join : Schema -> Schema -> Schema
-join x y = nub (x ++ y)
+-- Predicates
+-- s ⊆ s'
+data Sub : Schema -> Schema -> Type where
+     Stop : Sub [] s'
+     Pop  : Sub s s' -> {auto p: Elem a s'} -> Sub (a :: s) s'
+
+-- Utils opreration on schema
+(*) : Schema -> Schema -> Schema
+(*) x y = nub (x ++ y)
 
 indexing : Schema -> (s : Schema ** Elem Id s)
 indexing []        = ([Id] ** Here)
 indexing (a :: as) with (indexing as)
   indexing (a :: as) | (as' ** p) = (a :: as' ** There p)
+
+indexingS : Schema -> Schema
+indexingS = getWitness . indexing
+
+encrypt : Attribute -> Schema -> Schema
+encrypt a []        = []
+encrypt a (x :: xs) with (a == x)
+  encrypt a      (x :: xs) | False = x :: (encrypt a xs)
+  encrypt (n, u) (x :: xs) | True  = (n, CRYPT u) :: xs
 
 name : Attribute -> String
 name = fst

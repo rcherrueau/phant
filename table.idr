@@ -16,24 +16,31 @@ namespace row
   ||| provide an element of type `el u`, together with a row adhering
   ||| to the schema `s` (passing an element of `el u` as argument
   ||| allows to use Idris base type instead of `U` types)
-  -- data Row : Schema -> Type where
-  --      RNil : Row []
-  --      (::) : {n : String} -> {u : U} -> el u -> Row xs -> Row $ (n, u) :: xs
+  data Row : Schema -> Type where
+       RNil : Row []
+       (::) : {n : String} -> {u : U} -> el u -> Row xs -> Row $ (n, u) :: xs
 
-
-  -- Better row (with pair)
-  -- Should look at something like that
-  Row : (s : Schema) -> {auto ok : NonEmpty s} -> Type
-  Row []                     {ok} = absurd ok
-  Row [(_,u)]                {ok} = el u
-  Row ((_,u) :: s@(a :: as)) {ok} = Pair (el u) (Row s)
-
-  schema : {auto ok : NonEmpty s} -> Row s {ok}  -> Schema
+  schema : Row s -> Schema
   schema _ {s} = s
 
-  -- TODO getName, getVal, hasColumn ...
+--   -- Better row (with pair)
+--   -- I should go with a definition of schema that make imposible the
+--   -- empty list to avoid the NonEmpty proof. The implementation may
+--   -- look like that
+--   Row : (s : Schema) -> {auto ok : NonEmpty s} -> Type
+--   Row []                     {ok} = absurd ok
+--   Row [(_,u)]                {ok} = el u
+--   Row ((_,u) :: s@(a :: as)) {ok} = Pair (el u) (Row s)
 
+--   schema : {auto ok : NonEmpty s} -> Row s {ok}  -> Schema
+--   schema _ {s} = s
+
+
+-- Table : (s : Schema) -> {auto ok : NonEmpty s} -> Type
+-- Table s = List (Row s)
+
+-- TODO getName, getVal, hasColumn ...
 
 -- A table is a list of `Row s`
-Table : (s : Schema) -> {auto ok : NonEmpty s} -> Type
+Table : Schema -> Type
 Table s = List (Row s)
