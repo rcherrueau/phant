@@ -6,6 +6,7 @@
 module phant.schema
 
 import crypt
+import utils
 
 import Data.List
 
@@ -22,7 +23,6 @@ namespace universe
          | BOOL
          | CRYPT U
          | HOME U
-
 
   -- Decoding function
   el : U -> Type
@@ -81,6 +81,7 @@ namespace universe
         postulate believemeNotEq : x = y -> Void
 
 
+-- An attribute of the database is a paire of a name and a type
 Attribute: Type
 Attribute = (String, U)
 
@@ -88,35 +89,34 @@ Attribute = (String, U)
 Id : Attribute
 Id = ("Id", NAT)
 
-
+-- Schema that describes the type of the database
 Schema : Type
 Schema = List Attribute
 
--- Predicates
--- s ⊆ s'
-data Sub : Schema -> Schema -> Type where
-     Stop : Sub [] s'
-     Pop  : Sub s s' -> {auto p: Elem a s'} -> Sub (a :: s) s'
+----------------------------------------------------------- Predicates
+-- -- s ⊆ s'
+-- data Sub : Schema -> Schema -> Type where
+--      Stop : Sub [] s'
+--      Pop  : Sub s s' -> {auto p: Elem a s'} -> Sub (a :: s) s'
 
+-- getElem : {l : List a} -> Elem v l -> a
+-- getElem _ {v} = v
 
-getElem : {l : List a} -> Elem v l -> a
-getElem _ {v} = v
+-- getSub : (s' : Schema) -> Sub s s' -> Schema
+-- getSub s' Stop        = []
+-- getSub s' (Pop sub {p}) = (getElem p) :: (getSub s' sub)
 
-getSub : (s' : Schema) -> Sub s s' -> Schema
-getSub s' Stop        = []
-getSub s' (Pop sub {p}) = (getElem p) :: (getSub s' sub)
+-- -- lemmma_subInduct : (s,s' : Schema) -> Sub s s' = Sub (a :: s) (a :: s')
+-- -- lemmma_subInduct s s' = Refl
 
--- lemmma_subInduct : (s,s' : Schema) -> Sub s s' = Sub (a :: s) (a :: s')
--- lemmma_subInduct s s' = Refl
-
--- subIdent : (s : Schema) -> Sub s s
--- subIdent s         = subIdem s s
---   where
---   subIdem : (s1 : Schema) -> (s2 : Schema) -> Sub s1 s2
---   subIdem []        s2 = Stop
---   subIdem (x :: xs) s2 with (subIdem xs s2)
---     subIdem (x :: [])        s2 | Stop = Pop Stop {p=Here}
---     subIdem (x :: (a :: ys)) s2 | (Pop y {p}) = ?subIdem_rhs_2_rhs_2
+-- -- subIdent : (s : Schema) -> Sub s s
+-- -- subIdent s         = subIdem s s
+-- --   where
+-- --   subIdem : (s1 : Schema) -> (s2 : Schema) -> Sub s1 s2
+-- --   subIdem []        s2 = Stop
+-- --   subIdem (x :: xs) s2 with (subIdem xs s2)
+-- --     subIdem (x :: [])        s2 | Stop = Pop Stop {p=Here}
+-- --     subIdem (x :: (a :: ys)) s2 | (Pop y {p}) = ?subIdem_rhs_2_rhs_2
 
 
 
