@@ -5,7 +5,7 @@
 ||| in a Schema, but restrict ourself to the Univers (U, el)
 module phant.schema
 
-import crypt
+import public crypt
 import utils
 
 import Data.List
@@ -121,16 +121,35 @@ Schema = List Attribute
 
 
 -- Utils opreration on schema
+-- TODO: In addtion to the product (*), make a join that takes two
+-- elem `Elem a s1` & `Elem a s2` to do the join.
 (*) : Schema -> Schema -> Schema
 (*) x y = nub (x ++ y)
 
-indexing : Schema -> (s : Schema ** Elem Id s)
-indexing []        = ([Id] ** Here)
-indexing (a :: as) with (indexing as)
-  indexing (a :: as) | (as' ** p) = (a :: as' ** There p)
+indexingWP : Schema -> (s : Schema ** Elem Id s)
+indexingWP []        = ([Id] ** Here)
+indexingWP (a :: as) with (indexingWP as)
+  indexingWP (a :: as) | (as' ** p) = (a :: as' ** There p)
 
-indexingS : Schema -> Schema
-indexingS = getWitness . indexing
+indexing : Schema -> Schema
+indexing = getWitness . indexingWP
+
+fragWP : (s : Schema) -> (s' : Schema) -> {auto inc : Include s s'} ->
+         ((ls : Schema ** Elem Id ls), (rs: Schema ** Elem Id rs))
+fragWP s s' = let ls = s
+                  rs = s' \\ s
+              in (indexingWP ls, indexingWP rs)
+
+frag : (s : Schema) -> (s' : Schema) -> {auto inc : Include s s'} -> (Schema, Schema)
+frag s s' {inc} = let res = fragWP s s' {inc}
+                  in map getWitness res
+
+-- FIXME: falsy implementation: product then delete of Id
+defrag : (Schema, Schema) -> Schema
+defrag = (uncurry (*)) . (map (delete Id))
+
+defragWP : ((ls : Schema ** Elem Id ls), (rs: Schema ** Elem Id rs)) -> Schema
+defragWP = defrag . (map getWitness)
 
 encrypt : Attribute -> Schema -> Schema
 encrypt a []        = []

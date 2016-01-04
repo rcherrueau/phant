@@ -22,91 +22,45 @@ import Data.List
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
 data RA : Schema -> Type where
-  -- Introduce
-  Unit    : (s : Schema) -> RA s
   -- Set operatos
-  Union   : RA s -> RA s -> RA s
-  Diff    : RA s -> RA s' -> RA s
-  Product : RA s -> RA s' -> RA (s * s')
+  Union    : RA s -> RA s -> RA s
+  Diff     : RA s -> RA s' -> RA s
+  Product  : RA s -> RA s' -> RA (s * s')
   -- Others
-  Project : (s : Schema) -> RA s' -> {auto inc : Include s s'} -> RA s
-  Select  : (Row s -> Bool) -> {auto inc : Include s s'} -> RA s' -> RA s'
-  Drop    : (s : Schema) -> RA s' -> {auto inc : Include s s'} -> RA (s' \\ s)
+  Project  : (s : Schema) -> {auto inc : Include s s'} -> RA s' -> RA s
+  Select   : (Row s -> Bool) -> {auto inc : Include s s'} -> RA s' -> RA s'
+  Drop     : (s : Schema) -> RA s' -> {auto inc : Include s s'} -> RA (s' \\ s)
+  -- Protection
+  Indexing : RA s -> RA (indexing s)
+  Encrypt  : (a : Attribute) -> RA s -> RA (encrypt a s)
+  Decrypt  : (a : Attribute) -> RA s -> RA (decrypt a s)
+  -- Introduce
+  Unit     : (s : Schema) -> RA s
 
--- -- Indexing : RA s -> (r : RA s' ** Elem Id s')
--- Indexing : RA s -> (ra : RA $ indexingS s ** Elem Id (indexingS s))
--- Indexing x {s} = let isWPos = indexing s
---                      is = getWitness isWPos
---                      iPos = getProof isWPos
---                  in (Unit is ** iPos)
+IndexingWP : RA s -> (ra : RA $ indexing s ** Elem Id (indexing s))
+IndexingWP ra {s} = let iPos = getProof (indexingWP s)
+                    in (Indexing ra ** iPos)
 
+-- Portection
+FragWP : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
+         ((ral : RA (indexing s) ** Elem Id (indexing s)),
+          (rar : RA (indexing (s'\\s)) ** Elem Id (indexing (s'\\s))))
+FragWP s x {s'} {inc} = let ilfrag = IndexingWP (Project s x {inc})
+                            irfrag = IndexingWP (Drop s x {inc})
+                        in (ilfrag, irfrag)
 
--- -- Utils
--- defragS : (Schema, Schema) -> Schema
--- defragS (s1, s2) = (delete Id s1) * (delete Id s2)
+Frag : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
+       (RA (indexing s), RA (indexing (s' \\ s)))
+Frag s x {s'} {inc} = let ilfrag = Indexing (Project s x {inc})
+                          irfrag = Indexing (Drop s x {inc})
+                      in (ilfrag, irfrag)
 
--- -- getIncS : (f : (Schema, Schema)) -> (s : Schema) ->
--- --           (inc : Include s (defragS f)) ->
--- --           (Schema, Schema)
+Defrag : {auto idInS : Elem Id s} -> {auto idInS' : Elem Id s'} -> (RA s, RA s') ->
+         RA (defrag (s,s'))
+Defrag (x,y) {idInS} {idInS'} =
+              let lf = Drop [Id] x {inc = includeSingleton idInS}
+                  rf = Drop [Id] y {inc = includeSingleton idInS'}
+              in Product lf rf
 
--- -- Portection
--- Frag : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
---        ((ral : RA (indexingS s) ** Elem Id (indexingS s)),
---         (rar : RA (indexingS (s'\\s)) ** Elem Id (indexingS (s'\\s))))
--- Frag s x {s'} = let ilfrag = Indexing (Project s x)
---                     irfrag = Indexing (Drop s x)
---                 in (ilfrag, irfrag)
-
--- Defrag : {auto idInS : Elem Id s} -> {auto idInS' : Elem Id s'} ->
---          (RA s, RA s') ->
---          RA (defragS (s,s'))
--- Defrag (x,y) {idInS} {idInS'} =
---               let lf = Drop [Id] x {inc=Pop Stop {p=idInS}}
---                   rf = Drop [Id] y {inc=Pop Stop {p=idInS'}}
---               in Product lf rf
-
--- Encrypt : (a : Attribute) -> RA s -> RA (encrypt a s)
--- Encrypt a x {s} = Unit (encrypt a s)
-
--- Decrypt : (a : Attribute) -> RA s -> RA (decrypt a s)
--- Decrypt a x {s} = Unit (decrypt a s)
-
-
--- --
-
--- -- l1 : (f : (Schema , Schema)) -> (s : Schema) ->
--- --      (inc : Include s (defragS f)) ->
--- --      (idInFl : Elem Id (fst f)) -> (idInFr : Elem Id (snd f)) ->
--- --      ((Project s) . (Defrag {idInS=idInFl} {idInS'=idInFr})) = ()
-
--- and : (ql : Row sl -> Bool) -> (qr : Row sr -> Bool) ->
---       {auto inc : Include sl s} -> {auto inc' : Include sr s} ->
---       Row s -> Bool
--- and ql qr r {inc} {inc'} = let rsl = getInc r inc
---                                rsr = getInc r inc'
---                            in (ql rsl) && (qr rsr)
-
--- selectOnLR : (ql : Row sl -> Bool) -> (qr : Row sr -> Bool) ->
---              {auto inc : Include sl sl'} -> {auto inc' : Include sr sr'} ->
---              (RA sl', RA sr') -> (RA sl', RA sr')
--- selectOnLR ql qr x = let l = Select ql (fst x)
---                          r = Select qr (snd x)
---                      in (l,r)
-
--- lemma_t : (t : (a,b)) -> t = (fst t, snd t)
-
--- l2 : (f : (Schema, Schema)) ->
---      (pl : Row (fst f) -> Bool) -> (pr : Row (snd f) -> Bool) ->
---      (idInFl : Elem Id (fst f)) -> (idInFr : Elem Id (snd f)) ->
---      -- (incFl : Include (fst f) (fst f)) -> (incFr : Include (snd f) (snd f)) ->
---      -- (inc : Include (defragS f) (defragS f)) ->
---      (Select {inc= ?inc} (and pl pr {inc= ?incFl} {inc'= ?incFr} {s=defragS f}))
---      . (Defrag {idInS=idInFl} {idInS'=idInFr}) =
---      (Defrag {idInS=idInFl} {idInS'=idInFr})
---      . (selectOnLR pl pr {inc= ?incFl} {inc'= ?incFr})
--- -- l2 (l, r) pl pr idInFl idInFr = ?l2_rhs_1
-
-
-
-
--- -- (Project s . Defrag) = (Defrag .
+DefragWP : ((ral : RA s ** Elem Id s), (rar : RA s' ** Elem Id s')) -> RA (defrag (s,s'))
+DefragWP ((lf ** idInS), (rf ** idInS')) = Defrag {idInS} {idInS'} (lf,rf)

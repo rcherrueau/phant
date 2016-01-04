@@ -1,6 +1,6 @@
 module phant.utils
 
-import Data.List
+import public Data.List
 
 %default total
 
@@ -16,10 +16,7 @@ namespace inclusion
   Include : List a -> List a -> Type
   Include xs ys = (z : _) -> Elem z xs -> Elem z ys
 
-  -- Reduction of the Include predicate
-  includeReduc : Include (x :: xs) ys -> Include xs ys
-  includeReduc xxsIncYs = \z,zInXs => xxsIncYs z (There zInXs)
-
+  ------------------------------------------------------------ Utils
   -- Being an element of a singleton list implies to be that singleton
   elemSingleton : Elem z [x] -> z = x
   elemSingleton Here           = Refl
@@ -35,6 +32,19 @@ namespace inclusion
   elemTail nzIsHd Here      {tl}      = void $ nzIsHd Refl
   -- z ∈ _ :: tl => z ∈ tl
   elemTail nzIsHd (There p) {tl}      = p
+
+  ------------------------------------------------------------ Props
+  -- Reduction of the Include predicate
+  includeReduc : Include (x :: xs) ys -> Include xs ys
+  includeReduc xxsIncYs = \z,zInXs => xxsIncYs z (There zInXs)
+
+  -- Include from a singleton list
+  includeSingleton : Elem a l -> Include [a] l
+  includeSingleton p = \z,zInZ => rewrite (elemSingleton zInZ) in p
+
+  -- Include of a list with self
+  includeSelf : (l : List a) -> Include l l
+  includeSelf l = \z,zINl => zINl
 
   -- Is the elements of the first list are elements of the second
   -- list.
@@ -79,3 +89,13 @@ namespace inclusion
   --   let zsIncXs = \z,zInZs => fst $ elemInter xs ys z zInZs in
   --   let zsIncYs = \z,zInZs => snd $ elemInter xs ys z zInZs in
   --   (zsIncXs, zsIncYs)
+
+namespace other
+  map : (a -> b) -> (a, a) -> (b, b)
+  map f (x, y) = (f x, f y)
+
+  map2 : (a -> b) -> (c -> d) -> (a, c) -> (b, d)
+  map2 f g (a, c) = (f a, g c)
+
+  liftSigma : {m : Type -> Type} -> (f : a -> m a) -> (v : a ** p) -> (v : m a ** p)
+  liftSigma f (x ** pf) = (f x ** pf)

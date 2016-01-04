@@ -1,6 +1,7 @@
 module phant.crypt
 
 %default total
+%access public
 
 
 Key : Type
@@ -23,6 +24,12 @@ namespace sym
     decrypt k1 (MkAES k2 y) = case k1 == k2 of
                                    True  => Just y
                                    False => Nothing
+
+  -- instance Crypt String (AES String) where
+  --   encrypt k  s            = MkAES k s
+  --   decrypt k1 (MkAES k2 y) = case k1 == k2 of
+  --                                  True  => Just y
+  --                                  False => Nothing
 
   instance Eq a => Eq (AES a) where
     (MkAES k1 x) == (MkAES k2 y) = k1 == k2 && x == y

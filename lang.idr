@@ -100,8 +100,8 @@ A = ("Addr", NAT)
 ScAg : Schema
 ScAg = [D,N,A]
 
--- protectAg : Eff () [GUARD $ Plain (ScAg@"1.1.1.1")]
---                    [GUARD $ Frag  ?FragLeftTy ?FragRightTy]
+protectAg : Eff () [GUARD $ Plain (ScAg@"1.1.1.1")]
+                   [GUARD $ Frag  ?FragLeftTy ?FragRightTy]
 protectAg = do encrypt "Name"
                frag [D] "1.1.1.2" "1.1.1.3"
 
@@ -111,38 +111,38 @@ protectAg = do encrypt "Name"
 FragLeftTy  = [Id,D]@"1.1.1.2"
 FragRightTy = [Id,NC,A]@"1.1.1.3"
 
--- queryOnFL : Eff (LocTy $ RA [Id,D]@"1.1.1.2") [GUARD $ Frag ([Id,D]@"1.1.1.2") fragR]
+-- -- queryOnFL : Eff (LocTy $ RA [Id,D]@"1.1.1.2") [GUARD $ Frag ([Id,D]@"1.1.1.2") fragR]
 -- queryOnFL : Eff (LocIp (RA [Id,D]) "1.1.1.2") [GUARD $ Frag Main.FragLeftTy fragR]
-queryOnFL = queryL (Select (\(_ |: d |: _) => True))
+-- queryOnFL = queryL (Select (\(_ |: d |: _) => True))
 
--- queryOnFR : Eff (LocTy $ RA [Id]@"1.1.1.3") [GUARD $ Frag fragL ([NC,A,Id]@"1.1.1.3")]
+-- -- queryOnFR : Eff (LocTy $ RA [Id]@"1.1.1.3") [GUARD $ Frag fragL ([NC,A,Id]@"1.1.1.3")]
 -- queryOnFR : Eff (LocIp (RA [Id]) "1.1.1.3") [GUARD $ Frag fragL Main.FragRightTy]
-queryOnFR = queryR (Project [Id] .
-                    Select (\(_ |: n |: _) =>
-                    -- > Type mismatche between String and AES
-                    -- n == "Bob"))
-                    -- > Can't resolve type class Ord (AES)
-                    -- n >= (encrypt "mickey" "Bob")))
-                    -- > OK
-                    n == (encrypt "mickey" "Bob")))
+-- queryOnFR = queryR (Project [Id] .
+--                     Select (\(_ |: n |: _) =>
+--                     -- > Type mismatche between String and AES
+--                     -- n == "Bob"))
+--                     -- > Can't resolve type class Ord (AES)
+--                     -- n >= (encrypt "mickey" "Bob")))
+--                     -- > OK
+--                     n == (encrypt "mickey" "Bob")))
 
 -- lFirstStrat : Eff (LocIp (RA [Id,D]) "local") [GUARD $ Plain (ScAg@"1.1.1.1")]
 --                                               [GUARD $ Frag  Main.FragLeftTy Main.FragRightTy]
-lFirstStrat = do protectAg
-                 qL <- queryOnFL
-                 qR <- queryOnFR
-                 pure $ njoin qL qR
-  where
-  -- better: defrag↓
-  njoin : LocIp (RA s) ipL -> LocIp (RA s') ipR ->
-          LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
-  njoin (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
+-- lFirstStrat = do protectAg
+--                  qL <- queryOnFL
+--                  qR <- queryOnFR
+--                  pure $ njoin qL qR
+--   where
+--   -- better: defrag↓
+--   njoin : LocIp (RA s) ipL -> LocIp (RA s') ipR ->
+--           LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
+--   njoin (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
 
-  -- ⵑ : 0x2D51
-  defragⵑ :
-    LocIp (RA s) ipL -> LocIp (RA s') ipR ->
-    LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
-  defragⵑ (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
+--   -- ⵑ : 0x2D51
+--   defragⵑ :
+--     LocIp (RA s) ipL -> LocIp (RA s') ipR ->
+--     LocIp (RA (nubBy (\a1,a2 => (fst a1) == (fst a2)) (s ++ s'))) "local"
+--   defragⵑ (MkLocIp ((@) qL ipL)) (MkLocIp ((@) qR ipR)) = MkLocIp $ (Join qL qR)@"local"
 
 
 -- Local Variables:

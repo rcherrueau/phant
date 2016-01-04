@@ -33,11 +33,11 @@ namespace row
   attrV (v :: as) Here      = v
   attrV (v :: as) (There x) = attrV as x
 
-  includeRow : Row s' -> Include s s' -> Row s
-  includeRow r sIncS' {s = []       }     = RNil
-  includeRow r sIncS' {s = ((n,u) :: xs)} =
+  includedRow : Row s' -> Include s s' -> Row s
+  includedRow r sIncS' {s = []       }     = RNil
+  includedRow r sIncS' {s = ((n,u) :: xs)} =
                          let v = attrV r (sIncS' (n,u) Here)
-                             r = (includeRow r (includeReduc sIncS'))
+                             r = (includedRow r (includeReduc sIncS'))
                          in v :: r
 
 --   -- Better row (with pair)
