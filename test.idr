@@ -26,28 +26,28 @@ RightFragTy = [N_c, A, Id] @@ "fr"
 -- protectAg = do encrypt "mykey" N
 --                frag "fl" "fr" [D] {inc=includeSingleton Here}
 
--- queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
--- queryOnD = queryL (Select (\(d :: _) => True) {inc=includeSelf [D,Id]})
+queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
+queryOnD = queryL (Select (\(d :: _) => True) {inc=includeSelf [D,Id]})
 
--- queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
--- queryOnNA = queryR ((Project [Id] {inc=includeSingleton (There (There Here))}) .
---                     (Select (\(n :: _) => n == encrypt "mykey" "Bob")
---                             {inc=includeSelf [N_c,A,Id]}))
+queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
+queryOnNA = queryR ((Project [Id] {inc=includeSingleton (There (There Here))}) .
+                    (Select (\(n :: _) => n == encrypt "mykey" "Bob")
+                            {inc=includeSelf [N_c,A,Id]}))
 
--- -- lFirstStrat : Eff (LocTy $ RA [D,Id]@"local") [GUARD $ Plain $ [D,N,A]@"cloud"]
--- --                                               [GUARD $ FragV LeftFragTy RightFragTy]
--- -- lFirstStrat = do encrypt "mykey" N                               --
--- --                  frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
--- --                  ql <- queryOnD
--- --                  qr <- queryOnNA
--- --                  pure $ ?njoin ql qr
--- lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
---                                    [GUARD $ FragV LeftFragTy RightFragTy]
+-- lFirstStrat : Eff (LocTy $ RA [D,Id]@"local") [GUARD $ Plain $ [D,N,A]@"cloud"]
+--                                               [GUARD $ FragV LeftFragTy RightFragTy]
 -- lFirstStrat = do encrypt "mykey" N                               --
 --                  frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
 --                  ql <- queryOnD
 --                  qr <- queryOnNA
---                  pure ql
+--                  pure $ ?njoin ql qr
+lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
+                                   [GUARD $ FragV LeftFragTy RightFragTy]
+lFirstStrat = do encrypt "mykey" N                               --
+                 frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
+                 ql <- queryOnD
+                 qr <- queryOnNA
+                 pure ql
 
 -- Can I get the list of attribute, the state of the cloud and the
 -- list of pc, from a Guard effect ? Yes for the list of attribute and
@@ -60,13 +60,31 @@ RightFragTy = [N_c, A, Id] @@ "fr"
 -- all the first part of the file. Let's do this, but first define
 -- what is a list of pc:
 --
-PCs : Type
-PCs = List (List Attribute)
+PC : Type
+PC = List Attribute
 
--- Good! Now, let's generate the code from this information
-genPV : PCs -> Eff main [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
-genPV pcs eff {s} {ip} {cstate} = prelude
+-- The prelude of a pv file should look like something like this
+-- genConfSch : Schema -> List Schema
+-- genConfSch []        = [[]]
+-- genConfSch (x :: xs) = ?genConfSch_rhs_2
 
+-- hasPC : Schema -> PC -> Bool
+-- hasPC []        pc = True
+-- hasPC (x :: xs) pc = (elem x pc) && (hasPC xs pc)
+
+-- hasPCs : Schema -> PCs -> PCs
+-- hasPCs s []          = []
+-- hasPCs s (pc :: pcs) with (hasPC s pc)
+--   hasPCs s (pc :: pcs) | False = hasPCs s pcs
+--   hasPCs s (pc :: pcs) | True = pc :: (hasPCs s pcs)
+
+prelude : Schema -> List PC -> IO ()
+prelude s pcs = do putStrLn "(* Database attributes *)"
+                   dbAttributes (names s)
+                   putStrLn "(* Privacy constraints *)"
+                   pConstraints (map names pcs)
+                   putStrLn "(* Instruction for an attacker: what is a PC *)"
+                   -- genConfidentials s pcs
   where
   dbAttributes : List String -> IO ()
   dbAttributes []        = putStrLn ""
@@ -82,18 +100,29 @@ genPV pcs eff {s} {ip} {cstate} = prelude
                      putStrLn ("query attacker(" ++ pcId ++ ").")
                      pConstraints xs
 
-  prelude : IO ()
-  prelude = do putStrLn "(* Database attributes *)"
-               dbAttributes (names s)
-               putStrLn "(* Privacy constraints *)"
-               pConstraints (map names pcs)
-               putStrLn "(* Instruction for an attacker: what is a PC *)"
+  -- printRed : Schema -> List PC -> IO ()
+  -- printRed s pcs with (hasAnyBy (\x,y:))
+  --   printRed s pcs | with_pat = ?mlkj_rhs
+
+  -- genConfidentials : Schema -> PCs -> IO ()
+  -- genConfidentials s pcs = case genConfSch s of
+  --                               []          => putStrLn ""
+  --                               (s' :: ss') => case hasPCs s' pcs of
+  --                                                 [] => putStrLn ""
+  --                                                 pcs' => printRed s pcs'
 
 
 
--- test1 : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
---                [GUARD $ Plain $ [D,N_c,A]@@"cloud"]
--- test1 = encrypt "toto" N
+
+-- Good! Now, let's generate the code from this information
+genPV : List PC -> Eff main [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
+genPV pcs eff {s} {cstate = (Plain (s' @@ ip))} = prelude s pcs
+genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = prelude s pcs
+
+
+test1 : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
+               [GUARD $ Plain $ [D,N_c,A]@@"cloud"]
+test1 = encrypt "toto" N
 
 -- instance Handler Guard m where
 --     handle (MkPEnv s ip) (Encrypt x a) k = k () (MkPEnv (encrypt a s) ip)
@@ -148,7 +177,11 @@ genPV pcs eff {s} {ip} {cstate} = prelude
 
 main : IO ()
 -- main = runTest2 (MkPEnv [D,N,A] "cloud") lFirstStrat
-main = putStrLn "test"
+main = do let PCs =  [[N],[D,A]]
+          genPV PCs lFirstStrat
+          putStrLn "-----------------------"
+          genPV PCs test1
+-- main = putStrLn "test"
 
 
 -- λΠ> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "cloud" ] lFirstStrat
