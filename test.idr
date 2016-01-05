@@ -15,21 +15,21 @@ N_c = ("Name", CRYPT (TEXT 255))
 A : Attribute
 A = ("Addr", TEXT 255)
 
-LeftFragTy : Loc Schema
-LeftFragTy = [D,Id] @ "fl"
+LeftFragTy : Schema @ "fl"
+LeftFragTy = [D,Id] @@ "fl"
 
-RightFragTy : Loc Schema
-RightFragTy = [N_c, A, Id] @ "fr"
+RightFragTy : Schema @ "fr"
+RightFragTy = [N_c, A, Id] @@ "fr"
 
--- protectAg : Eff () [GUARD $ Plain $ [D,N,A]@"cloud"]
+-- protectAg : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
 --                    [GUARD $ FragV LeftFragTy RightFragTy]
 -- protectAg = do encrypt "mykey" N
 --                frag "fl" "fr" [D] {inc=includeSingleton Here}
 
--- queryOnD : Eff (LocTy $ RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy _]
+-- queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
 -- queryOnD = queryL (Select (\(d :: _) => True) {inc=includeSelf [D,Id]})
 
--- queryOnNA : Eff (LocTy $ RA [Id]@"fr") [GUARD $ FragV _ RightFragTy]
+-- queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
 -- queryOnNA = queryR ((Project [Id] {inc=includeSingleton (There (There Here))}) .
 --                     (Select (\(n :: _) => n == encrypt "mykey" "Bob")
 --                             {inc=includeSelf [N_c,A,Id]}))
@@ -41,17 +41,59 @@ RightFragTy = [N_c, A, Id] @ "fr"
 -- --                  ql <- queryOnD
 -- --                  qr <- queryOnNA
 -- --                  pure $ ?njoin ql qr
--- lFirstStrat : Eff (LocTy $ RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@"cloud"]
---                                               [GUARD $ FragV LeftFragTy RightFragTy]
+-- lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
+--                                    [GUARD $ FragV LeftFragTy RightFragTy]
 -- lFirstStrat = do encrypt "mykey" N                               --
 --                  frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
 --                  ql <- queryOnD
 --                  qr <- queryOnNA
 --                  pure ql
 
-test1 : Eff () [GUARD $ Plain $ [D,N,A]@"cloud"]
-               [GUARD $ Plain $ [D,N_c,A]@"cloud"]
-test1 = encrypt "toto" N
+-- Can I get the list of attribute, the state of the cloud and the
+-- list of pc, from a Guard effect ? Yes for the list of attribute and
+-- the cloud state :
+--
+-- > testPV : Eff r [GUARD $ Plain $ s@@ip] [GUARD $ FragV (sl@@ipl) (sr@@ipr)] -> (Schema, CState, List Schema)
+-- > testPV x {s} {sl} {ipl} {sr} {ipr} = (s, FragV (sl @@ ipl) (sr @@ ipr), [])
+--
+-- If I take the list of attribute in arguments, then I can generate
+-- all the first part of the file. Let's do this, but first define
+-- what is a list of pc:
+--
+PCs : Type
+PCs = List (List Attribute)
+
+-- Good! Now, let's generate the code from this information
+genPV : PCs -> Eff main [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
+genPV pcs eff {s} {ip} {cstate} = prelude
+
+  where
+  dbAttributes : List String -> IO ()
+  dbAttributes []        = putStrLn ""
+  dbAttributes (a :: as) =
+                  do putStrLn ("const " ++ a ++ ": bistring [private].")
+                     dbAttributes as
+
+  pConstraints : List (List String) -> IO ()
+  pConstraints []        = putStrLn ""
+  pConstraints (x :: xs) =
+                  do let pcId = "pc_" ++ (concat x)
+                     putStrLn ("const " ++ pcId ++ ": bitstring [private].")
+                     putStrLn ("query attacker(" ++ pcId ++ ").")
+                     pConstraints xs
+
+  prelude : IO ()
+  prelude = do putStrLn "(* Database attributes *)"
+               dbAttributes (names s)
+               putStrLn "(* Privacy constraints *)"
+               pConstraints (map names pcs)
+               putStrLn "(* Instruction for an attacker: what is a PC *)"
+
+
+
+-- test1 : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
+--                [GUARD $ Plain $ [D,N_c,A]@@"cloud"]
+-- test1 = encrypt "toto" N
 
 -- instance Handler Guard m where
 --     handle (MkPEnv s ip) (Encrypt x a) k = k () (MkPEnv (encrypt a s) ip)
@@ -69,29 +111,25 @@ test1 = encrypt "toto" N
 --                qLTy = MkLocTy (qRes @ ipr)
 --            in k qLTy (MkFEnv ipl ipr s inc)
 
-
-instance Handler Guard IO where
-    handle (MkPEnv s ip) (Encrypt x a) k =
-           do putStrLn "Encrypt"
-              k () (MkPEnv (encrypt a s) ip)
-    handle (MkPEnv s' ip) (Frag ipl ipr s inc) k =
-           do putStrLn "Frag"
-              k () (MkFEnv ipl ipr s inc)
-    handle (MkPEnv s ip) (Query q) k =
-           do putStrLn "Query"
-              let qRes = q (Unit s)
-              let qLTy = MkLocTy (qRes @ ip)
-              k qLTy (MkPEnv s ip)
-    handle (MkFEnv ipl ipr s inc) (QueryL q) k =
-           do putStrLn "QueryL"
-              let qRes = q (Unit (indexing s))
-              let qLTy = MkLocTy (qRes @ ipl)
-              k qLTy (MkFEnv ipl ipr s inc)
-    handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k =
-           do putStrLn "QueryR"
-              let qRes = q (Unit (indexing (s' \\ s)))
-              let qLTy = MkLocTy (qRes @ ipr)
-              k qLTy (MkFEnv ipl ipr s inc)
+-- instance Handler Guard IO where
+--     handle (MkPEnv s ip) (Encrypt x a) k =
+--            do putStrLn "Encrypt"
+--               k () (MkPEnv (encrypt a s) ip)
+--     handle (MkPEnv s' ip) (Frag ipl ipr s inc) k =
+--            do putStrLn "Frag"
+--               k () (MkFEnv ipl ipr s inc)
+--     handle (MkPEnv s ip) (Query q) k =
+--            do putStrLn "Query"
+--               let q' = q (Unit s)
+--               k (q' @@ ip) (MkPEnv s ip)
+--     handle (MkFEnv ipl ipr s inc) (QueryL q) k =
+--            do putStrLn "QueryL"
+--               let q' = q (Unit (indexing s))
+--               k (q' @@ ipl) (MkFEnv ipl ipr s inc)
+--     handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k =
+--            do putStrLn "QueryR"
+--               let q' = q (Unit (indexing (s' \\ s)))
+--               k (q' @@ ipr) (MkFEnv ipl ipr s inc)
 
 -- instance Handler Guard List where
 --   handle r (Encrypt x y) k = [] -- ?Handler_rhs_2
@@ -100,16 +138,17 @@ instance Handler Guard IO where
 --   handle r (QueryL q) k = [] --?Handler_rhs_5
 --   handle r (QueryR q) k = [] --?Handler_rhs_6
 
-runTest1 : IO ()
-runTest1 = runInit [ (MkPEnv [D,N,A] "cloud") ] test1
+-- runTest1 : IO ()
+-- runTest1 = runInit [ (MkPEnv [D,N,A] "cloud") ] test1
 
-runTest2 : (bd : CEnv $ Plain $ s@ip) -> Eff (LocTy $ RA s'@ip') [GUARD $ Plain $ s@ip ] -> IO ()
-runTest2 bd x {s'} {ip'} = let a  = the (IO (LocTy $ RA s'@ip')) $ runInit [bd] x
-                           in case (unsafePerformIO a) of
-                                   (MkLocTy (ra @ ip)) => eval ra
-  where
-  eval : RA s' -> IO ()
+-- runTest2 : (bd : CEnv $ Plain $ s@@ip) -> Eff (RA s'@ip') [GUARD $ Plain $ s@@ip ] [GUARD r] -> IO ()
+-- runTest2 bd x {s'} {ip'} = do av <- the (IO (RA s'@ip')) $ runInit [bd] x
+--                               let v = getVal av
+--                               eval v
 
+main : IO ()
+-- main = runTest2 (MkPEnv [D,N,A] "cloud") lFirstStrat
+main = putStrLn "test"
 
 
 -- λΠ> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "cloud" ] lFirstStrat

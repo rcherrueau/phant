@@ -25,42 +25,65 @@ data RA : Schema -> Type where
   -- Set operatos
   Union    : RA s -> RA s -> RA s
   Diff     : RA s -> RA s' -> RA s
+  -- Product  : RA s -> RA s' -> RA (s * s')
   Product  : RA s -> RA s' -> RA (s * s')
   -- Others
   Project  : (s : Schema) -> {auto inc : Include s s'} -> RA s' -> RA s
   Select   : (Row s -> Bool) -> {auto inc : Include s s'} -> RA s' -> RA s'
+  -- Join take an element to do the join
+  -- Join
   Drop     : (s : Schema) -> RA s' -> {auto inc : Include s s'} -> RA (s' \\ s)
   -- Protection
-  Indexing : RA s -> RA (indexing s)
-  Encrypt  : (a : Attribute) -> RA s -> RA (encrypt a s)
-  Decrypt  : (a : Attribute) -> RA s -> RA (decrypt a s)
+  -- Indexing : RA s -> RA (indexing s)
+  -- Encrypt  : (a : Attribute) -> RA s -> RA (encrypt a s)
+  -- Decrypt  : (a : Attribute) -> RA s -> RA (decrypt a s)
   -- Introduce
   Unit     : (s : Schema) -> RA s
 
-IndexingWP : RA s -> (ra : RA $ indexing s ** Elem Id (indexing s))
-IndexingWP ra {s} = let iPos = getProof (indexingWP s)
-                    in (Indexing ra ** iPos)
+eval : RA s -> IO ()
+eval (Union x y) = do putStrLn "Union"
+                      eval x
+                      eval y
+eval (Diff x y) = do putStrLn "Diff"
+                     eval x
+                     eval y
+eval (Product x y) = do putStrLn "Product"
+                        putStr " "
+                        eval x
+                        putStr " "
+                        eval y
+eval (Project s x) = do putStrLn "Project"
+                        eval x
+eval (Select f x) = do putStrLn "Select"
+                       eval x
+eval (Drop s x) = do putStrLn "Drop"
+                     eval x
+eval (Unit s) = putStr ""
 
--- Portection
-FragWP : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
-         ((ral : RA (indexing s) ** Elem Id (indexing s)),
-          (rar : RA (indexing (s'\\s)) ** Elem Id (indexing (s'\\s))))
-FragWP s x {s'} {inc} = let ilfrag = IndexingWP (Project s x {inc})
-                            irfrag = IndexingWP (Drop s x {inc})
-                        in (ilfrag, irfrag)
+-- IndexingWP : RA s -> (ra : RA $ indexing s ** Elem Id (indexing s))
+-- IndexingWP ra {s} = let iPos = getProof (indexingWP s)
+--                     in (Indexing ra ** iPos)
 
-Frag : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
-       (RA (indexing s), RA (indexing (s' \\ s)))
-Frag s x {s'} {inc} = let ilfrag = Indexing (Project s x {inc})
-                          irfrag = Indexing (Drop s x {inc})
-                      in (ilfrag, irfrag)
+-- -- Portection
+-- FragWP : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
+--          ((ral : RA (indexing s) ** Elem Id (indexing s)),
+--           (rar : RA (indexing (s'\\s)) ** Elem Id (indexing (s'\\s))))
+-- FragWP s x {s'} {inc} = let ilfrag = IndexingWP (Project s x {inc})
+--                             irfrag = IndexingWP (Drop s x {inc})
+--                         in (ilfrag, irfrag)
 
-Defrag : {auto idInS : Elem Id s} -> {auto idInS' : Elem Id s'} -> (RA s, RA s') ->
-         RA (defrag (s,s'))
-Defrag (x,y) {idInS} {idInS'} =
-              let lf = Drop [Id] x {inc = includeSingleton idInS}
-                  rf = Drop [Id] y {inc = includeSingleton idInS'}
-              in Product lf rf
+-- Frag : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
+--        (RA (indexing s), RA (indexing (s' \\ s)))
+-- Frag s x {s'} {inc} = let ilfrag = Indexing (Project s x {inc})
+--                           irfrag = Indexing (Drop s x {inc})
+--                       in (ilfrag, irfrag)
 
-DefragWP : ((ral : RA s ** Elem Id s), (rar : RA s' ** Elem Id s')) -> RA (defrag (s,s'))
-DefragWP ((lf ** idInS), (rf ** idInS')) = Defrag {idInS} {idInS'} (lf,rf)
+-- Defrag : {auto idInS : Elem Id s} -> {auto idInS' : Elem Id s'} -> (RA s, RA s') ->
+--          RA (defrag (s,s'))
+-- Defrag (x,y) {idInS} {idInS'} =
+--               let lf = Drop [Id] x {inc = includeSingleton idInS}
+--                   rf = Drop [Id] y {inc = includeSingleton idInS'}
+--               in Product lf rf
+
+-- DefragWP : ((ral : RA s ** Elem Id s), (rar : RA s' ** Elem Id s')) -> RA (defrag (s,s'))
+-- DefragWP ((lf ** idInS), (rf ** idInS')) = Defrag {idInS} {idInS'} (lf,rf)
