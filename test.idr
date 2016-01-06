@@ -1,6 +1,7 @@
 module Main
 
 import guard
+import pv
 import Effects
 
 D : Attribute
@@ -15,211 +16,44 @@ N_c = ("Name", CRYPT (TEXT 255))
 A : Attribute
 A = ("Addr", TEXT 255)
 
--- LeftFragTy : Schema @ "fl"
--- LeftFragTy = [D,Id] @@ "fl"
+LeftFragTy : Schema @ "fl"
+LeftFragTy = [D,Id] @@ "fl"
 
--- RightFragTy : Schema @ "fr"
--- RightFragTy = [N_c, A, Id] @@ "fr"
+RightFragTy : Schema @ "fr"
+RightFragTy = [N_c, A, Id] @@ "fr"
 
--- -- protectAg : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
--- --                    [GUARD $ FragV LeftFragTy RightFragTy]
--- -- protectAg = do encrypt "mykey" N
--- --                frag "fl" "fr" [D] {inc=includeSingleton Here}
+-- protectAg : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
+--                    [GUARD $ FragV LeftFragTy RightFragTy]
+-- protectAg = do encrypt "mykey" N
+--                frag "fl" "fr" [D] {inc=includeSingleton Here}
 
--- queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
--- queryOnD = queryL (Select (\(d :: _) => True) {inc=includeSelf [D,Id]})
+queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
+queryOnD = queryL (Select (\(d :: _) => True) {inc=includeSelf [D,Id]})
 
--- queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
--- queryOnNA = queryR ((Project [Id] {inc=includeSingleton (There (There Here))}) .
---                     (Select (\(n :: _) => n == encrypt "mykey" "Bob")
---                             {inc=includeSelf [N_c,A,Id]}))
+queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
+queryOnNA = queryR ((Project [Id] {inc=includeSingleton (There (There Here))}) .
+                    (Select (\(n :: _) => n == encrypt "mykey" "Bob")
+                            {inc=includeSelf [N_c,A,Id]}))
 
--- -- lFirstStrat : Eff (LocTy $ RA [D,Id]@"local") [GUARD $ Plain $ [D,N,A]@"cloud"]
--- --                                               [GUARD $ FragV LeftFragTy RightFragTy]
--- -- lFirstStrat = do encrypt "mykey" N                               --
--- --                  frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
--- --                  ql <- queryOnD
--- --                  qr <- queryOnNA
--- --                  pure $ ?njoin ql qr
--- lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
---                                    [GUARD $ FragV LeftFragTy RightFragTy]
+-- lFirstStrat : Eff (LocTy $ RA [D,Id]@"local") [GUARD $ Plain $ [D,N,A]@"cloud"]
+--                                               [GUARD $ FragV LeftFragTy RightFragTy]
 -- lFirstStrat = do encrypt "mykey" N                               --
 --                  frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
 --                  ql <- queryOnD
 --                  qr <- queryOnNA
---                  pure ql
+--                  pure $ ?njoin ql qr
+lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
+                                   [GUARD $ FragV LeftFragTy RightFragTy]
+lFirstStrat = do encrypt "mykey" N                               --
+                 frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
+                 ql <- queryOnD
+                 qr <- queryOnNA
+                 pure ql
 
--- test1 : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
---                [GUARD $ Plain $ [D,N_c,A]@@"cloud"]
--- test1 = encrypt "toto" N
+test1 : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
+               [GUARD $ Plain $ [D,N_c,A]@@"cloud"]
+test1 = encrypt "toto" N
 
--- http://evan-tech.livejournal.com/220036.html
-powerset : List a -> List (List a)
-powerset = filterM (const [True, False])
-  where
-  filterM : Monad m => (a -> m Bool) -> List a -> m (List a)
-  filterM _ []        = return []
-  filterM p (x :: xs) = do flg <- p x
-                           ys <- filterM p xs
-                           return (if flg then x :: ys else ys)
-
--- Can I get the list of attribute, the state of the cloud and the
--- list of pc, from a Guard effect ? Yes for the list of attribute and
--- the cloud state :
---
--- > testPV : Eff r [GUARD $ Plain $ s@@ip] [GUARD $ FragV (sl@@ipl) (sr@@ipr)] -> (Schema, CState, List Schema)
--- > testPV x {s} {sl} {ipl} {sr} {ipr} = (s, FragV (sl @@ ipl) (sr @@ ipr), [])
---
--- If I take the list of attribute in arguments, then I can generate
--- all the first part of the file. Let's do this, but first define
--- what is a list of pc:
---
-PC : Type
-PC = List Attribute
---
--- The prelude of a pv file should look like something like this
-prelude : Schema -> List PC -> IO ()
-prelude s pcs = do putStrLn "(* Database attributes *)"
-                   dbAttributes s
-                   putStrLn "(* Privacy constraints *)"
-                   pConstraints pcs
-                   putStrLn "(* Instruction for an attacker: what is a PC *)"
-                   genConfidentials s pcs
-                   putStrLn "(* DB operations *)"
-  where
-  included : Eq a => List a -> List a -> Bool
-  included xs ys = all (flip elem ys) xs
-
-  id : List Attribute -> String
-  id = concat . names
-
-  getInnerPCs : Schema -> List PC -> List PC
-  getInnerPCs s = filter (flip included s)
-
-  dbAttributes : Schema -> IO ()
-  dbAttributes []        = putStrLn ""
-  dbAttributes (a :: as) =
-                  do putStrLn ("const " ++ (name a) ++ ": bistring [private].")
-                     dbAttributes as
-
-  pConstraints : List PC -> IO ()
-  pConstraints []        = putStrLn ""
-  pConstraints (x :: xs) =
-                  do let pcId = "pc_" ++ (id x)
-                     putStrLn ("const " ++ pcId ++ ": bitstring [private].")
-                     putStrLn ("query attacker(" ++ pcId ++ ").")
-                     pConstraints xs
-
-  -- forall a<T>: attribute, ...; if (s \\ as) is not empty, nothing otherwise
-  -- @ s is the template
-  genForAll : (s : Schema) -> (as : List Attribute) -> IO ()
-  genForAll s as with (s \\ as)
-    -- no forall
-    genForAll s as | []  = putStr ""
-    -- forall
-    genForAll s as | out =
-                do let aTs = map (\a => "a" ++ (name a) ++ ": attribute") out
-                   putStr "forall "
-                   putStr (concat (intersperse ", " aTs))
-                   putStr ";"
-
-  -- (<attr>, ...) with attr := raw(<T>) | a<T>
-  -- Schema is the template
-  genTuple : Schema -> List Attribute -> IO ()
-  genTuple s as = do let attrTs =
-                         map (\attr => case (elem attr as) of
-                                            -- raw<T>
-                                            True  =>
-                                                  "raw(" ++ (name attr) ++")"
-                                            -- a<T>
-                                            False =>
-                                                  "a" ++ (name attr)) s
-                     putStr "("
-                     putStr (concat (intersperse ", " attrTs))
-                     putStr ")"
-
-
-  -- (pc_<T>, ...)
-  genPCs : List PC -> IO ()
-  genPCs []   = putStr ""
-  genPCs pcs  = do let pcsT = (map (\pc => "pc_" ++ (id pc)) pcs)
-                   putStr "("
-                   putStr (concat (intersperse ", " pcsT))
-                   putStr ")"
-
-  -- `reduc` <forall>?
-  -- `confidential_`<idc> `(`<tuple>`) = (`<pcs>`).`
-  -- if the list of pcs is empty, then the reduction rule is useless
-  genConfidential : Schema -> List Attribute -> List PC -> IO ()
-  genConfidential s as []  = putStr ""
-  genConfidential s as pcs =
-                     do let idc = (id as)
-                        putStr "reduc "
-                        genForAll s as
-                        putStrLn ""
-                        putStr ("confidential_" ++ idc)
-                        putStr "("
-                        genTuple s as
-                        putStr ") = "
-                        genPCs pcs
-                        putStrLn  "."
-
-  genConfidentials' : Schema -> List (List Attribute) -> List PC -> IO ()
-  genConfidentials' s []          pcs = putStrLn ""
-  genConfidentials' s (as :: ass) pcs = do genConfidential s as (getInnerPCs as pcs)
-                                           genConfidentials' s ass pcs
-
-  -- 1: Schema (template), 2: sub, 3: PCs
-  genConfidentials : Schema -> List PC -> IO ()
-  genConfidentials s pcs = genConfidentials' s (powerset s) pcs
-
--- Good! Now, let's generate the code from this information
-genPV : List PC -> Eff main [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
-genPV pcs eff {s} {cstate = (Plain (s' @@ ip))} = prelude s pcs
-genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = prelude s pcs
-
--- instance Handler Guard m where
---     handle (MkPEnv s ip) (Encrypt x a) k = k () (MkPEnv (encrypt a s) ip)
---     handle (MkPEnv s' ip) (Frag ipl ipr s inc) k = k () (MkFEnv ipl ipr s inc)
---     handle (MkPEnv s ip) (Query q) k =
---            let qRes = q (Unit s)
---                qLTy = MkLocTy (qRes @ ip)
---            in k qLTy (MkPEnv s ip)
---     handle (MkFEnv ipl ipr s inc) (QueryL q) k =
---            let qRes = q (Unit (indexing s))
---                qLTy = MkLocTy (qRes @ ipl)
---            in k qLTy (MkFEnv ipl ipr s inc)
---     handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k =
---            let qRes = q (Unit (indexing (s' \\ s)))
---                qLTy = MkLocTy (qRes @ ipr)
---            in k qLTy (MkFEnv ipl ipr s inc)
-
-instance Handler Guard IO where
-    handle (MkPEnv s ip) (Encrypt x a) k =
-           do putStrLn "Encrypt"
-              k () (MkPEnv (encrypt a s) ip)
-    handle (MkPEnv s' ip) (Frag ipl ipr s inc) k =
-           do putStrLn "Frag"
-              k () (MkFEnv ipl ipr s inc)
-    handle (MkPEnv s ip) (Query q) k =
-           do putStrLn "Query"
-              let q' = q (Unit s)
-              k (q' @@ ip) (MkPEnv s ip)
-    handle (MkFEnv ipl ipr s inc) (QueryL q) k =
-           do putStrLn "QueryL"
-              let q' = q (Unit (indexing s))
-              k (q' @@ ipl) (MkFEnv ipl ipr s inc)
-    handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k =
-           do putStrLn "QueryR"
-              let q' = q (Unit (indexing (s' \\ s)))
-              k (q' @@ ipr) (MkFEnv ipl ipr s inc)
-
--- instance Handler Guard List where
---   handle r (Encrypt x y) k = [] -- ?Handler_rhs_2
---   handle r (Frag ipl ipr s inc) k = [] --?Handler_rhs_3
---   handle r (Query q) k = [] --?Handler_rhs_4
---   handle r (QueryL q) k = [] --?Handler_rhs_5
---   handle r (QueryR q) k = [] --?Handler_rhs_6
 
 -- runTest1 : IO ()
 -- runTest1 = runInit [ (MkPEnv [D,N,A] "cloud") ] test1
@@ -231,11 +65,10 @@ instance Handler Guard IO where
 
 main : IO ()
 -- main = runTest2 (MkPEnv [D,N,A] "cloud") lFirstStrat
--- main = do let PCs =  [[N],[D,A]]
---           genPV PCs lFirstStrat
---           putStrLn "-----------------------"
---           genPV PCs test1
-main = putStrLn "test"
+main = do let PCs =  [[N],[D,A]]
+          genPV PCs lFirstStrat
+          putStrLn "-----------------------"
+          genPV PCs test1
 
 
 -- λΠ> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "cloud" ] lFirstStrat
