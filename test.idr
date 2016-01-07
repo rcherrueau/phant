@@ -1,7 +1,7 @@
 module Main
 
-import guard
 import pv
+import guard
 import Effects
 
 D : Attribute
@@ -67,8 +67,9 @@ main : IO ()
 -- main = runTest2 (MkPEnv [D,N,A] "cloud") lFirstStrat
 main = do let PCs =  [[N],[D,A]]
           genPV PCs lFirstStrat
-          putStrLn "-----------------------"
-          genPV PCs test1
+--           putStrLn "-----------------------"
+--           genPV PCs test1
+-- main = putStrLn "lala"
 
 
 -- λΠ> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "cloud" ] lFirstStrat

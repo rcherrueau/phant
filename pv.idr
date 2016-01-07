@@ -1,7 +1,9 @@
 module phant.pv
 
 import guard
+
 import Effects
+import Control.Monad.State
 
 %access public
 
@@ -214,59 +216,99 @@ prelude s pcs = do
     -- Get all pcs deduced by an underlying schema
     let usWithPCs = map (\us => (us, getInnerPCs us pcs)) (powerset s)
     -- Keep only underlying schemas that produce PCs
-    let uschemas = filter (isCons . snd) usWithPCs
-    let deducPCs = map (uncurry (genDeducPC s)) uschemas
+    let uschemas  = filter (isCons . snd) usWithPCs
+    let deducPCs  = map (uncurry (genDeducPC s)) uschemas
     sequence deducPCs
     putStrLn ""
 
+-- instance Handler Guard IO where
+--   handle (MkPEnv s ip) (Encrypt x a) k = do
+--     putStrLn "Encrypt"
+--     k () (MkPEnv (encrypt a s) ip)
+--   handle (MkPEnv s' ip) (Frag ipl ipr s inc) k = do
+--     putStrLn "Frag"
+--     k () (MkFEnv ipl ipr s inc)
+--   handle (MkPEnv s ip) (Query q) k = do
+--     putStrLn "Query"
+--     let q' = q (Unit s)
+--     k (q' @@ ip) (MkPEnv s ip)
+--   handle (MkFEnv ipl ipr s inc) (QueryL q) k = do
+--     putStrLn "QueryL"
+--     let q' = q (Unit (indexing s))
+--     k (q' @@ ipl) (MkFEnv ipl ipr s inc)
+--   handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k = do
+--     putStrLn "QueryR"
+--     let q' = q (Unit (indexing (s' \\ s)))
+--     k (q' @@ ipr) (MkFEnv ipl ipr s inc)
 
--- Good! Now, let's generate the code from this information
-genPV : List PC -> Eff main [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
-genPV pcs eff {s} {cstate = (Plain (s' @@ ip))} = prelude s pcs
-genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = prelude s pcs
+-- instance Handler Guard (StateT Integer IO) where
+--     handle (MkPEnv s ip) (Encrypt x a) k            = do
+--       put 1
+--       lift $ putStrLn $ "const " ++ ": skey [private]."
+--       k () (MkPEnv (encrypt a s) ip)
+--     handle (MkPEnv s ip) (Frag ipl ipr s' inc) k    = do
+--       skey <- get
+--       put skey
+--       k () (MkFEnv ipl ipr s' inc)
+--     handle (MkPEnv s ip) (Query q) k                = do
+--       lift $ putStrLn "Query"
+--       let q' = q (Unit s)
+--       k (q' @@ ip) (MkPEnv s ip)
+--     handle (MkFEnv ipl ipr s inc) (QueryL q) k      = do
+--       lift $ putStrLn "QueryL"
+--       let q' = q (Unit (indexing s))
+--       k (q' @@ ipl) (MkFEnv ipl ipr s inc)
+--     handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k = do
+--       lift $ putStrLn "QueryR"
+--       let q' = q (Unit (indexing (s' \\ s)))
+--       k (q' @@ ipr) (MkFEnv ipl ipr s inc)
 
--- instance Handler Guard m where
---     handle (MkPEnv s ip) (Encrypt x a) k = k () (MkPEnv (encrypt a s) ip)
---     handle (MkPEnv s' ip) (Frag ipl ipr s inc) k = k () (MkFEnv ipl ipr s inc)
---     handle (MkPEnv s ip) (Query q) k =
---            let qRes = q (Unit s)
---                qLTy = MkLocTy (qRes @ ip)
---            in k qLTy (MkPEnv s ip)
---     handle (MkFEnv ipl ipr s inc) (QueryL q) k =
---            let qRes = q (Unit (indexing s))
---                qLTy = MkLocTy (qRes @ ipl)
---            in k qLTy (MkFEnv ipl ipr s inc)
---     handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k =
---            let qRes = q (Unit (indexing (s' \\ s)))
---                qLTy = MkLocTy (qRes @ ipr)
---            in k qLTy (MkFEnv ipl ipr s inc)
+-- -- Good! Now, let's generate the code from this information
+-- genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
+-- genPV pcs eff {s} {ip} {a} {- cstate = (Plain (s' @@ ip)) -} = do
+--   -- prelude s pcs
+--   -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
+--   -- scId <- schema s'
+--   let val = the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
+--   let val' = runStateT val 1
+--   val'
+--   return ()
 
-instance Handler Guard IO where
-    handle (MkPEnv s ip) (Encrypt x a) k =
-           do putStrLn "Encrypt"
-              k () (MkPEnv (encrypt a s) ip)
-    handle (MkPEnv s' ip) (Frag ipl ipr s inc) k =
-           do putStrLn "Frag"
-              k () (MkFEnv ipl ipr s inc)
-    handle (MkPEnv s ip) (Query q) k =
-           do putStrLn "Query"
-              let q' = q (Unit s)
-              k (q' @@ ip) (MkPEnv s ip)
-    handle (MkFEnv ipl ipr s inc) (QueryL q) k =
-           do putStrLn "QueryL"
-              let q' = q (Unit (indexing s))
-              k (q' @@ ipl) (MkFEnv ipl ipr s inc)
-    handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k =
-           do putStrLn "QueryR"
-              let q' = q (Unit (indexing (s' \\ s)))
-              k (q' @@ ipr) (MkFEnv ipl ipr s inc)
+instance Handler Guard (StateT (CState, Maybe String) IO) where
+    handle (MkPEnv s ip) (Encrypt x a) k            = do
+      let skey = x ++ "_sk"
+      put (Plain $ s @@ ip, Just skey)
+      lift $ putStrLn $ "const " ++ skey ++ ": skey [private]."
+      k () (MkPEnv (encrypt a s) ip)
+    handle (MkPEnv s ip) (Frag ipl ipr s' inc) k    = do
+      let cstate = FragV ((indexing s')@@ipl) ((indexing (s'\\s))@@ipr)
+      (_, skey) <- get
+      put (cstate, skey)
+      k () (MkFEnv ipl ipr s' inc)
+    handle (MkPEnv s ip) (Query q) k                = do
+      lift $ putStrLn "Query"
+      let q' = q (Unit s)
+      k (q' @@ ip) (MkPEnv s ip)
+    handle (MkFEnv ipl ipr s inc) (QueryL q) k      = do
+      lift $ putStrLn "QueryL"
+      let q' = q (Unit (indexing s))
+      k (q' @@ ipl) (MkFEnv ipl ipr s inc)
+    handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k = do
+      lift $ putStrLn "QueryR"
+      let q' = q (Unit (indexing (s' \\ s)))
+      k (q' @@ ipr) (MkFEnv ipl ipr s inc)
 
--- instance Handler Guard List where
---   handle r (Encrypt x y) k = [] -- ?Handler_rhs_2
---   handle r (Frag ipl ipr s inc) k = [] --?Handler_rhs_3
---   handle r (Query q) k = [] --?Handler_rhs_4
---   handle r (QueryL q) k = [] --?Handler_rhs_5
---   handle r (QueryR q) k = [] --?Handler_rhs_6
+genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
+-- genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = prelude s pcs
+genPV pcs eff {s} {ip} {a} {- cstate = (Plain (s' @@ ip)) -} = do
+  prelude s pcs
+  -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
+  -- scId <- schema s'
+  let body = the (StateT (CState, Maybe String) IO a) $ runInit [MkPEnv s ip] eff
+  let val' = runStateT body (Plain $ s @@ ip, Nothing)
+  val'
+  return ()
+
 -- Local Variables:
 -- idris-load-packages: ("effects")
 -- End:
