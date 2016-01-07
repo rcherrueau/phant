@@ -71,6 +71,18 @@ genForAll s as with (s \\ as)
     putStr $ concat (intersperse ", " attrVIds)
     putStr ";"
 
+genSchema : (s : Schema) -> (us : List Attribute) -> (k : Maybe Key) -> IO ()
+genSchema s us k = do
+    let attrs = map (\a => case elem a us of
+                             True  => case isEncrypted a of
+                                        True  => mkAttId a k
+                                        False => mkAttId a Nothing
+                             False => "unit") s
+    putStr $ "(" ++ concat (intersperse ", " attrs) ++ ")"
+  where
+  mkAttId : Attribute -> Maybe Key -> String
+  mkAttId a Nothing  = mkRawAttId a
+  mkAttId a (Just k) = "senc(" ++ mkAttrId a ++ ", " ++ k ++ ")"
 
 ||| Generate an underlying schema.
 |||
@@ -85,26 +97,17 @@ genForAll s as with (s \\ as)
 ||| @ us the underlying schema
 genUSchema : (s : Schema) -> (us : List Attribute) -> IO ()
 genUSchema s us = do
-  let attrs = map (\a => case (elem a us) of
+  let attrs = map (\a => case elem a us of
                            True  => mkRawAttId a
                            False => mkAttrVId a) s
   putStr $ "(" ++ (concat (intersperse ", " attrs)) ++ ")"
 
--- Can I get the list of attribute, the state of the cloud and the
--- list of pc, from a Guard effect ? Yes for the list of attribute and
--- the cloud state :
---
--- > testPV : Eff r [GUARD $ Plain $ s@@ip] [GUARD $ FragV (sl@@ipl) (sr@@ipr)] -> (Schema, CState, List Schema)
--- > testPV x {s} {sl} {ipl} {sr} {ipr} = (s, FragV (sl @@ ipl) (sr @@ ipr), [])
---
--- If I take the list of attribute in arguments, then I can generate
--- all the first part of the file. Let's do this, but first define
--- what is a list of pc:
---
---
--- The prelude of a pv file should look like something like this
-prelude : Schema -> List PC -> IO ()
-prelude s pcs = do
+||| Generates the preamble of a ProVerif file.
+|||
+||| @ s   The list of attributes considered in this system.
+||| @ pcs The list of privacy constraints.
+preamble : (s : Schema) -> (pcs : List PC) -> IO ()
+preamble s pcs = do
     genDefault
     putStrLn "(* ----------------------------------------------- DB attribute and PC *)"
     putStrLn "(* Database attributes *)"
@@ -266,7 +269,7 @@ prelude s pcs = do
 -- -- Good! Now, let's generate the code from this information
 -- genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
 -- genPV pcs eff {s} {ip} {a} {- cstate = (Plain (s' @@ ip)) -} = do
---   -- prelude s pcs
+--   -- preamble s pcs
 --   -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
 --   -- scId <- schema s'
 --   let val = the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
@@ -274,20 +277,62 @@ prelude s pcs = do
 --   val'
 --   return ()
 
-instance Handler Guard (StateT (CState, Maybe String) IO) where
+mkTuple : Schema -> String
+mkTuple s = "(" ++ concat (intersperse "," (map mkAttrId s)) ++ ")"
+
+genRA : RA s -> Schema -> Maybe Key -> IO ()
+genRA (Union x y)      ts k = do
+  putStrLn "union("
+  genRA x ts k
+  genRA y ts k
+  putStrLn ")"
+genRA (Diff x y)       ts k = do
+  putStrLn "diff("
+  genRA x ts k
+  genRA y ts k
+  putStrLn ")"
+genRA (Product x y)    ts k = do
+  putStrLn "product("
+  genRA x ts k
+  genRA y ts k
+  putStrLn ")"
+genRA (Project s' x)   ts k = do
+  let attrs = mkTuple s'
+  putStrLn $ "proj(" ++ attrs ++ ","
+  genRA x ts k
+  putStrLn ")"
+genRA (Select q x) {s} ts k = do
+  -- FIXME: mkTuple should use something around `q`
+  let attrs = mkTuple s
+  putStrLn $ "select(" ++ attrs ++ ","
+  genRA x ts k
+  putStrLn ")"
+genRA (Drop s' x)      ts k = do
+  let attrs = mkTuple s'
+  putStrLn $ "drop(" ++ attrs ++ ","
+  genRA x ts k
+  putStrLn ")"
+genRA (Unit s)         ts k = genSchema ts s k
+
+instance Handler Guard (StateT (Schema, Maybe Key) IO) where
     handle (MkPEnv s ip) (Encrypt x a) k            = do
       let skey = x ++ "_sk"
-      put (Plain $ s @@ ip, Just skey)
+      (ts, _) <- get
+      put ((encrypt a ts), Just skey)
       lift $ putStrLn $ "const " ++ skey ++ ": skey [private]."
+      lift $ putStrLn ""
       k () (MkPEnv (encrypt a s) ip)
     handle (MkPEnv s ip) (Frag ipl ipr s' inc) k    = do
-      let cstate = FragV ((indexing s')@@ipl) ((indexing (s'\\s))@@ipr)
-      (_, skey) <- get
-      put (cstate, skey)
       k () (MkFEnv ipl ipr s' inc)
     handle (MkPEnv s ip) (Query q) k                = do
-      lift $ putStrLn "Query"
+      (ts, skey) <- get
+      lift $ putStrLn $ "let " ++ ip ++ "(request: channel) ="
+      lift $ putStrLn "  in (request, to: channel);"
+      lift $ putStrLn "  let res = "
       let q' = q (Unit s)
+      lift $ genRA q' ts skey
+      lift $ putStrLn "  in"
+      lift $ putStrLn $ "out (to, res)."
       k (q' @@ ip) (MkPEnv s ip)
     handle (MkFEnv ipl ipr s inc) (QueryL q) k      = do
       lift $ putStrLn "QueryL"
@@ -298,15 +343,27 @@ instance Handler Guard (StateT (CState, Maybe String) IO) where
       let q' = q (Unit (indexing (s' \\ s)))
       k (q' @@ ipr) (MkFEnv ipl ipr s inc)
 
+-- Can I get the list of attribute, the state of the cloud and the
+-- list of pc, from a Guard effect ? Yes for the list of attribute and
+-- the cloud state :
+--
+-- > testPV : Eff r [GUARD $ Plain $ s@@ip] [GUARD $ FragV (sl@@ipl) (sr@@ipr)] -> (Schema, CState, List Schema)
+-- > testPV x {s} {sl} {ipl} {sr} {ipr} = (s, FragV (sl @@ ipl) (sr @@ ipr), [])
+--
+-- If I take the list of attribute in arguments, then I can generate
+-- all the first part of the file. Let's do this, but first define
+-- what is a list of pc:
+--
+--
+-- The preamble of a pv file should look like something like this
 genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
--- genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = prelude s pcs
+-- genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = preamble s pcs
 genPV pcs eff {s} {ip} {a} {- cstate = (Plain (s' @@ ip)) -} = do
-  prelude s pcs
+  preamble s pcs
   -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
   -- scId <- schema s'
-  let body = the (StateT (CState, Maybe String) IO a) $ runInit [MkPEnv s ip] eff
-  let val' = runStateT body (Plain $ s @@ ip, Nothing)
-  val'
+  let body = the (StateT (Schema, Maybe Key) IO a) $ runInit [MkPEnv s ip] eff
+  runStateT body (s, Nothing)
   return ()
 
 -- Local Variables:

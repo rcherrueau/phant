@@ -1,5 +1,6 @@
 module Main
 
+import crypt
 import pv
 import guard
 import Effects
@@ -10,49 +11,56 @@ D = ("Date", NAT)
 N : Attribute
 N = ("Name", TEXT 255)
 
-N_c : Attribute
-N_c = ("Name", CRYPT (TEXT 255))
+Nc : Attribute
+Nc = ("Name", CRYPT (TEXT 255))
 
 A : Attribute
 A = ("Addr", TEXT 255)
 
-LeftFragTy : Schema @ "fl"
-LeftFragTy = [D,Id] @@ "fl"
+-- LeftFragTy : Schema @ "fl"
+-- LeftFragTy = [D,Id] @@ "fl"
 
-RightFragTy : Schema @ "fr"
-RightFragTy = [N_c, A, Id] @@ "fr"
+-- RightFragTy : Schema @ "fr"
+-- RightFragTy = [Nc, A, Id] @@ "fr"
 
 -- protectAg : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
 --                    [GUARD $ FragV LeftFragTy RightFragTy]
 -- protectAg = do encrypt "mykey" N
 --                frag "fl" "fr" [D] {inc=includeSingleton Here}
 
-queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
-queryOnD = queryL (Select (\(d :: _) => True) {inc=includeSelf [D,Id]})
+places : Eff (RA [A] @ "cloud") [GUARD $ Plain $ [D, Nc, A] @@ "cloud"]
+places = do
+  encrypt "mykey" N
+  query ((Project [A]
+                  {inc=includeSingleton (There (There Here))}) .
+         (Select (\(_ :: _ :: a :: _) => True)
+                 {inc=includeSelf [D,Nc,A]}))
 
-queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
-queryOnNA = queryR ((Project [Id] {inc=includeSingleton (There (There Here))}) .
-                    (Select (\(n :: _) => n == encrypt "mykey" "Bob")
-                            {inc=includeSelf [N_c,A,Id]}))
+meetings : Eff (RA [Nc] @ "cloud") [GUARD $ Plain $ [D, Nc, A] @@ "cloud"]
+meetings = do
+  let contact = the (AES String) $ encrypt "mykey" "Bob"
+  encrypt "mykey" N
+  query ((Project [Nc] {inc=includeSingleton (There Here)}).
+         (Select (\(_ :: nc :: _) => nc == contact)
+                 {inc=includeSelf [D,Nc,A]}))
 
--- lFirstStrat : Eff (LocTy $ RA [D,Id]@"local") [GUARD $ Plain $ [D,N,A]@"cloud"]
---                                               [GUARD $ FragV LeftFragTy RightFragTy]
+
+-- queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
+-- queryOnD = queryL (Select (\(d :: _) => True) {inc=includeSelf [D,Id]})
+
+-- queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
+-- queryOnNA = queryR ((Project [Id] {inc=includeSingleton (There (There Here))}) .
+--                     (Select (\(n :: _) => n == encrypt "mykey" "Bob")
+--                             {inc=includeSelf [Nc,A,Id]}))
+
+-- lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
+--                                    [GUARD $ FragV LeftFragTy RightFragTy]
 -- lFirstStrat = do encrypt "mykey" N                               --
 --                  frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
 --                  ql <- queryOnD
 --                  qr <- queryOnNA
---                  pure $ ?njoin ql qr
-lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
-                                   [GUARD $ FragV LeftFragTy RightFragTy]
-lFirstStrat = do encrypt "mykey" N                               --
-                 frag "fl" "fr" [D] {inc=includeSingleton Here}  -- protectAg
-                 ql <- queryOnD
-                 qr <- queryOnNA
-                 pure ql
+--                  pure ql
 
-test1 : Eff () [GUARD $ Plain $ [D,N,A]@@"cloud"]
-               [GUARD $ Plain $ [D,N_c,A]@@"cloud"]
-test1 = encrypt "toto" N
 
 
 -- runTest1 : IO ()
@@ -66,7 +74,8 @@ test1 = encrypt "toto" N
 main : IO ()
 -- main = runTest2 (MkPEnv [D,N,A] "cloud") lFirstStrat
 main = do let PCs =  [[N],[D,A]]
-          genPV PCs lFirstStrat
+          genPV PCs places
+          -- genPV PCs lFirstStrat
 --           putStrLn "-----------------------"
 --           genPV PCs test1
 -- main = putStrLn "lala"

@@ -163,6 +163,10 @@ decrypt a (x :: xs) with (a == x)
   decrypt a     (x :: xs) | False = x :: (decrypt a xs)
   decrypt (n,u) (x :: xs) | True  = (n, getU u) :: xs
 
+isEncrypted : Attribute -> Bool
+isEncrypted (_, CRYPT _) = True
+isEncrypted _            = False
+
 name : Attribute -> String
 name = fst
 
