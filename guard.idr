@@ -30,6 +30,11 @@ map f (v @@ ip) = f v @@ ip
 local : a -> a @ "local"
 local x = x @@ "local"
 
+fragWIp : (sproj : Schema) -> (s : Schema) ->
+          (ipl: String) -> (ipr : String) -> (Schema @ ipl, Schema @ ipr)
+fragWIp sproj s ipl ipr = let (fl, fr) = frag sproj s
+                          in (fl @@ ipl, fr @@ ipr)
+
 -- Cloud state : plain or frag
 data CState : Type where
   Plain : Schema @ ip -> CState
@@ -39,22 +44,18 @@ data CEnv : CState -> Type where
   MkPEnv : (s : Schema) -> (ip : String) ->
            CEnv (Plain $ s @@ ip)
   MkFEnv : (ipl : String) -> (ipr : String) ->
-           (s : Schema) -> (inc : Include s s') ->
-           CEnv (FragV ((indexing s)@@ipl) ((indexing (s' \\ s))@@ipr))
+           (sproj : Schema) ->
+           CEnv $ (uncurry FragV) (fragWIp sproj s ipl ipr)
 
 data Guard : Effect where
   Encrypt : (k : String) -> (a : Attribute) ->
             Guard ()
                   (CEnv $ Plain $ s@@ip)
                   (\_ => CEnv $ Plain $ (encrypt a s)@@ip)
-  Frag    : (ipl : String) -> (ipr : String) -> (s : Schema) ->
-            (inc : Include s s') ->
+  Frag    : (ipl : String) -> (ipr : String) -> (sproj : Schema) ->
             Guard ()
                   (CEnv $ Plain $ s'@@ip)
-                  -- (\_ => CEnv $ (uncurry FragV) $ map2 (flip (@@) ipl)
-                  --                                      (flip (@@) ipr)
-                  --                                      (frag s s' {inc}))
-                  (\_ => CEnv $ FragV ((indexing s)@@ipl) ((indexing (s' \\ s))@@ipr))
+                  (\_ => CEnv $ (uncurry FragV) (fragWIp sproj s ipl ipr))
   Query   : (q : RA s -> RA s') ->
             Guard (RA s' @ ip)
                   (CEnv $ Plain $ s@@ip)
@@ -76,14 +77,10 @@ encrypt : String -> (a : Attribute) ->
                  [GUARD $ Plain $ (encrypt a s)@@ip]
 encrypt k a = call (Encrypt k a)
 
-frag : (ipl : String) -> (ipr : String) -> (s : Schema) ->
-       {auto inc : Include s s'} ->
-       Eff () [GUARD $ Plain (s'@@ip)]
-              -- [GUARD $ (uncurry FragV) $ map2 (flip (@) ipl)
-              --                                 (flip (@) ipr)
-              --                                 (frag s s' {inc})]
-              [GUARD $ FragV ((indexing s)@@ipl) ((indexing (s' \\ s))@@ipr)]
-frag ipl ipr s {inc} = call (Frag ipl ipr s inc)
+frag : (ipl : String) -> (ipr : String) -> (sproj : Schema) ->
+       Eff () [GUARD $ Plain (s@@ip)]
+              [GUARD $ (uncurry FragV) (fragWIp sproj s ipl ipr)]
+frag ipl ipr sproj = call (Frag ipl ipr sproj)
 
 query : (RA s -> RA s') -> Eff (RA s'@ip) [GUARD $ Plain $ s@@ip]
 query q = call (Query q)
@@ -93,10 +90,6 @@ queryL q = call (QueryL q)
 
 queryR : (RA sr -> RA sr') -> Eff (RA sr'@ipr) [GUARD $ FragV (sl@@ipl) (sr@@ipr)]
 queryR q = call (QueryR q)
-
-
--- -- runEval : Eff s [GUARD g] -> List ?find_me
--- -- runEval x = ?runEval_rhs
 
 -- Local Variables:
 -- idris-load-packages: ("effects")

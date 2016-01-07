@@ -228,43 +228,43 @@ preamble s pcs = do
 --   handle (MkPEnv s ip) (Encrypt x a) k = do
 --     putStrLn "Encrypt"
 --     k () (MkPEnv (encrypt a s) ip)
---   handle (MkPEnv s' ip) (Frag ipl ipr s inc) k = do
+--   handle (MkPEnv s' ip) (Frag ipl ipr s) k = do
 --     putStrLn "Frag"
---     k () (MkFEnv ipl ipr s inc)
+--     k () (MkFEnv ipl ipr s)
 --   handle (MkPEnv s ip) (Query q) k = do
 --     putStrLn "Query"
 --     let q' = q (Unit s)
 --     k (q' @@ ip) (MkPEnv s ip)
---   handle (MkFEnv ipl ipr s inc) (QueryL q) k = do
+--   handle (MkFEnv ipl ipr s) (QueryL q) k = do
 --     putStrLn "QueryL"
 --     let q' = q (Unit (indexing s))
---     k (q' @@ ipl) (MkFEnv ipl ipr s inc)
---   handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k = do
+--     k (q' @@ ipl) (MkFEnv ipl ipr s)
+--   handle (MkFEnv ipl ipr s {s'}) (QueryR q) k = do
 --     putStrLn "QueryR"
 --     let q' = q (Unit (indexing (s' \\ s)))
---     k (q' @@ ipr) (MkFEnv ipl ipr s inc)
+--     k (q' @@ ipr) (MkFEnv ipl ipr s)
 
 -- instance Handler Guard (StateT Integer IO) where
 --     handle (MkPEnv s ip) (Encrypt x a) k            = do
 --       put 1
 --       lift $ putStrLn $ "const " ++ ": skey [private]."
 --       k () (MkPEnv (encrypt a s) ip)
---     handle (MkPEnv s ip) (Frag ipl ipr s' inc) k    = do
+--     handle (MkPEnv s ip) (Frag ipl ipr s') k    = do
 --       skey <- get
 --       put skey
---       k () (MkFEnv ipl ipr s' inc)
+--       k () (MkFEnv ipl ipr s')
 --     handle (MkPEnv s ip) (Query q) k                = do
 --       lift $ putStrLn "Query"
 --       let q' = q (Unit s)
 --       k (q' @@ ip) (MkPEnv s ip)
---     handle (MkFEnv ipl ipr s inc) (QueryL q) k      = do
+--     handle (MkFEnv ipl ipr s) (QueryL q) k      = do
 --       lift $ putStrLn "QueryL"
 --       let q' = q (Unit (indexing s))
---       k (q' @@ ipl) (MkFEnv ipl ipr s inc)
---     handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k = do
+--       k (q' @@ ipl) (MkFEnv ipl ipr s)
+--     handle (MkFEnv ipl ipr s {s'}) (QueryR q) k = do
 --       lift $ putStrLn "QueryR"
 --       let q' = q (Unit (indexing (s' \\ s)))
---       k (q' @@ ipr) (MkFEnv ipl ipr s inc)
+--       k (q' @@ ipr) (MkFEnv ipl ipr s)
 
 -- -- Good! Now, let's generate the code from this information
 -- genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
@@ -322,8 +322,8 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
       lift $ putStrLn $ "const " ++ skey ++ ": skey [private]."
       lift $ putStrLn ""
       k () (MkPEnv (encrypt a s) ip)
-    handle (MkPEnv s ip) (Frag ipl ipr s' inc) k    = do
-      k () (MkFEnv ipl ipr s' inc)
+    handle (MkPEnv s ip) (Frag ipl ipr s') k    = do
+      k () (MkFEnv ipl ipr s')
     handle (MkPEnv s ip) (Query q) k                = do
       (ts, skey) <- get
       lift $ putStrLn $ "let " ++ ip ++ "(request: channel) ="
@@ -334,14 +334,16 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
       lift $ putStrLn "  in"
       lift $ putStrLn $ "out (to, res)."
       k (q' @@ ip) (MkPEnv s ip)
-    handle (MkFEnv ipl ipr s inc) (QueryL q) k      = do
+    handle (MkFEnv ipl ipr sproj {s}) (QueryL q) k      = do
+      let fl = fst (frag sproj s)
       lift $ putStrLn "QueryL"
-      let q' = q (Unit (indexing s))
-      k (q' @@ ipl) (MkFEnv ipl ipr s inc)
-    handle (MkFEnv ipl ipr s inc {s'}) (QueryR q) k = do
+      let qRes = q (Unit fl)
+      k (qRes @@ ipl) (MkFEnv ipl ipr sproj)
+    handle (MkFEnv ipl ipr sproj {s}) (QueryR q) k = do
+      let fr = snd (frag sproj s)
       lift $ putStrLn "QueryR"
-      let q' = q (Unit (indexing (s' \\ s)))
-      k (q' @@ ipr) (MkFEnv ipl ipr s inc)
+      let q' = q (Unit fr)
+      k (q' @@ ipr) (MkFEnv ipl ipr sproj)
 
 -- Can I get the list of attribute, the state of the cloud and the
 -- list of pc, from a Guard effect ? Yes for the list of attribute and

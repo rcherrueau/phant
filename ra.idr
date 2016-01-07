@@ -22,68 +22,36 @@ import Data.List
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
 data RA : Schema -> Type where
-  -- Set operatos
+  -- Set operators
   Union    : RA s -> RA s -> RA s
   Diff     : RA s -> RA s' -> RA s
-  -- Product  : RA s -> RA s' -> RA (s * s')
   Product  : RA s -> RA s' -> RA (s * s')
   -- Others
-  Project  : (s : Schema) -> {auto inc : Include s s'} -> RA s' -> RA s
-  Select   : (Row s -> Bool) -> {auto inc : Include s s'} -> RA s' -> RA s'
-  -- Join take an element to do the join
-  -- Join
-  Drop     : (s : Schema) -> RA s' -> {auto inc : Include s s'} -> RA (s' \\ s)
-  -- Protection
-  -- Indexing : RA s -> RA (indexing s)
-  -- Encrypt  : (a : Attribute) -> RA s -> RA (encrypt a s)
-  -- Decrypt  : (a : Attribute) -> RA s -> RA (decrypt a s)
+  Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
+  -- TODO: Select on an element with specific operation
+  Select   : (Row s -> Bool) -> RA s -> RA s
+  -- TODO: Join take an element to do the join
+  Drop     : (sproj : Schema) -> RA s -> RA (s \\ sproj)
   -- Introduce
   Unit     : (s : Schema) -> RA s
 
-eval : RA s -> IO ()
-eval (Union x y) = do putStrLn "Union"
-                      eval x
-                      eval y
-eval (Diff x y) = do putStrLn "Diff"
-                     eval x
-                     eval y
-eval (Product x y) = do putStrLn "Product"
-                        putStr " "
-                        eval x
-                        putStr " "
-                        eval y
-eval (Project s x) = do putStrLn "Project"
-                        eval x
-eval (Select f x) = do putStrLn "Select"
-                       eval x
-eval (Drop s x) = do putStrLn "Drop"
-                     eval x
-eval (Unit s) = putStr ""
+-- eval : RA s -> IO ()
+-- eval (Union x y) = do putStrLn "Union"
+--                       eval x
+--                       eval y
+-- eval (Diff x y) = do putStrLn "Diff"
+--                      eval x
+--                      eval y
+-- eval (Product x y) = do putStrLn "Product"
+--                         putStr " "
+--                         eval x
+--                         putStr " "
+--                         eval y
+-- eval (Project s x) = do putStrLn "Project"
+--                         eval x
+-- eval (Select f x) = do putStrLn "Select"
+--                        eval x
+-- eval (Drop s x) = do putStrLn "Drop"
+--                      eval x
+-- eval (Unit s) = putStr ""
 
--- IndexingWP : RA s -> (ra : RA $ indexing s ** Elem Id (indexing s))
--- IndexingWP ra {s} = let iPos = getProof (indexingWP s)
---                     in (Indexing ra ** iPos)
-
--- -- Portection
--- FragWP : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
---          ((ral : RA (indexing s) ** Elem Id (indexing s)),
---           (rar : RA (indexing (s'\\s)) ** Elem Id (indexing (s'\\s))))
--- FragWP s x {s'} {inc} = let ilfrag = IndexingWP (Project s x {inc})
---                             irfrag = IndexingWP (Drop s x {inc})
---                         in (ilfrag, irfrag)
-
--- Frag : (s : Schema) -> RA s' -> {auto inc : Include s s'} ->
---        (RA (indexing s), RA (indexing (s' \\ s)))
--- Frag s x {s'} {inc} = let ilfrag = Indexing (Project s x {inc})
---                           irfrag = Indexing (Drop s x {inc})
---                       in (ilfrag, irfrag)
-
--- Defrag : {auto idInS : Elem Id s} -> {auto idInS' : Elem Id s'} -> (RA s, RA s') ->
---          RA (defrag (s,s'))
--- Defrag (x,y) {idInS} {idInS'} =
---               let lf = Drop [Id] x {inc = includeSingleton idInS}
---                   rf = Drop [Id] y {inc = includeSingleton idInS'}
---               in Product lf rf
-
--- DefragWP : ((ral : RA s ** Elem Id s), (rar : RA s' ** Elem Id s')) -> RA (defrag (s,s'))
--- DefragWP ((lf ** idInS), (rf ** idInS')) = Defrag {idInS} {idInS'} (lf,rf)

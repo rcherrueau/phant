@@ -93,33 +93,6 @@ Id = ("Id", NAT)
 Schema : Type
 Schema = List Attribute
 
------------------------------------------------------------ Predicates
--- -- s ⊆ s'
--- data Sub : Schema -> Schema -> Type where
---      Stop : Sub [] s'
---      Pop  : Sub s s' -> {auto p: Elem a s'} -> Sub (a :: s) s'
-
--- getElem : {l : List a} -> Elem v l -> a
--- getElem _ {v} = v
-
--- getSub : (s' : Schema) -> Sub s s' -> Schema
--- getSub s' Stop        = []
--- getSub s' (Pop sub {p}) = (getElem p) :: (getSub s' sub)
-
--- -- lemmma_subInduct : (s,s' : Schema) -> Sub s s' = Sub (a :: s) (a :: s')
--- -- lemmma_subInduct s s' = Refl
-
--- -- subIdent : (s : Schema) -> Sub s s
--- -- subIdent s         = subIdem s s
--- --   where
--- --   subIdem : (s1 : Schema) -> (s2 : Schema) -> Sub s1 s2
--- --   subIdem []        s2 = Stop
--- --   subIdem (x :: xs) s2 with (subIdem xs s2)
--- --     subIdem (x :: [])        s2 | Stop = Pop Stop {p=Here}
--- --     subIdem (x :: (a :: ys)) s2 | (Pop y {p}) = ?subIdem_rhs_2_rhs_2
-
-
-
 -- Utils opreration on schema
 -- TODO: In addtion to the product (*), make a join that takes two
 -- elem `Elem a s1` & `Elem a s2` to do the join.
@@ -134,17 +107,22 @@ indexingWP (a :: as) with (indexingWP as)
 indexing : Schema -> Schema
 indexing = getWitness . indexingWP
 
-fragWP : (s : Schema) -> (s' : Schema) -> {auto inc : Include s s'} ->
-         ((ls : Schema ** Elem Id ls), (rs: Schema ** Elem Id rs))
-fragWP s s' = let ls = s
-                  rs = s' \\ s
-              in (indexingWP ls, indexingWP rs)
+fragWP : (sproj : Schema) -> (s : Schema) ->
+         ((sl : Schema ** Elem Id sl), (sr: Schema ** Elem Id sr))
+fragWP sproj s = let sl = intersect sproj s
+                     sr = s \\ sproj
+                 in (indexingWP sl, indexingWP sr)
 
-frag : (s : Schema) -> (s' : Schema) -> {auto inc : Include s s'} -> (Schema, Schema)
-frag s s' {inc} = let res = fragWP s s' {inc}
-                  in map getWitness res
+frag : (sproj : Schema) -> (s : Schema) -> (Schema, Schema)
+frag sproj = (map getWitness) . (fragWP sproj)
 
--- FIXME: falsy implementation: product then delete of Id
+-- FIXME: false implementation: product then delete of Id. This is a
+-- false implementation regarding to what should be done at
+-- operational level on tuple of a database. However, this is OK for a
+-- schema since we are only interested in the result. Despite this, we
+-- should change the implementation to be equivalent of what is
+-- happening over the tuple to help the type checker during the
+-- unification.
 defrag : (Schema, Schema) -> Schema
 defrag = (uncurry (*)) . (map (delete Id))
 

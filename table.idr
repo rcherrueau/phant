@@ -33,13 +33,6 @@ namespace row
   attrV (v :: as) Here      = v
   attrV (v :: as) (There x) = attrV as x
 
-  includedRow : Row s' -> Include s s' -> Row s
-  includedRow r sIncS' {s = []       }     = RNil
-  includedRow r sIncS' {s = ((n,u) :: xs)} =
-                         let v = attrV r (sIncS' (n,u) Here)
-                             r = (includedRow r (includeReduc sIncS'))
-                         in v :: r
-
 --   -- Better row (with pair)
 --   -- I should go with a definition of schema that make imposible the
 --   -- empty list to avoid the NonEmpty proof. The implementation may
