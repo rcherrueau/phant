@@ -44,8 +44,8 @@ places' = do
   encrypt "mykey" N
   frag "fl" "fr" [D]
   -- FIXME: The selection should be available on RA
-  ids <- queryL (Project [Id] . Select' D (id))
-  q <- queryR (Select' Id (\i => ExpF2 (==) i (ExpRA ids) {u3=BOOL}))
+  ids <- queryL (Project [Id] . Select' D (const (ExpBool True)))
+  q <- queryR (Select' Id (\i => ExpF2 (==) i (ExpRA ids)))
   pure q
 
 -- meetings' : Eff (RA ([D, Id] @ "local")) [GUARD $ FragV LeftFragTy RightFragTy]

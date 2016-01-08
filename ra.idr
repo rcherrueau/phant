@@ -54,7 +54,7 @@ mutual
                    RA sIp -> RA sIp
     Select   : (a : Attribute) -> (type a -> Bool) ->
                {auto elem : Elem a (getVal sIp)} -> RA sIp -> RA sIp
-    Select'  : (a : Attribute) -> (Expr ((getU a)@ip) -> Expr ((getU a)@ip')) ->
+    Select'  : (a : Attribute) -> (Expr ((getU a)@ip) -> Expr (BOOL@ip')) ->
                {auto elem : Elem a s} -> RA (s @ ip) -> RA (s @ (manageIp ip ip'))
     -- -- TODO: Join take an element to do the join
     Drop     : (sproj : Schema) -> RA (s @ ip) -> RA (map (flip (\\) sproj) (s @ ip))
