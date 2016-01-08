@@ -91,6 +91,14 @@ queryL q = call (QueryL q)
 queryR : (RA sr -> RA sr') -> Eff (RA sr'@ipr) [GUARD $ FragV (sl@@ipl) (sr@@ipr)]
 queryR q = call (QueryR q)
 
+namespace cloud
+  Product : RA s1 @ ip -> RA s2 @ ip -> RA (s1 * s2) @ ip
+  Product (x @@ ip) (y @@ ip) = (Product x y) @@ ip
+
+namespace local
+  Product : RA s1 @ ip1 -> RA s2 @ ip2 -> RA (s1 * s2) @ "local"
+  Product (x @@ ip1) (y @@ ip2) = (Product x y) @@ "local"
+
 -- Local Variables:
 -- idris-load-packages: ("effects")
 -- End:

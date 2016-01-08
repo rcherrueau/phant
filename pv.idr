@@ -301,9 +301,15 @@ genRA (Project s' x)   ts k = do
   putStrLn $ "proj(" ++ attrs ++ ","
   genRA x ts k
   putStrLn ")"
-genRA (Select q x) {s} ts k = do
+genRA (UnsafeSelect q x) {s} ts k = do
   -- FIXME: mkTuple should use something around `q`
   let attrs = mkTuple s
+  putStrLn $ "select(" ++ attrs ++ ","
+  genRA x ts k
+  putStrLn ")"
+genRA (Select a q x) {s} ts k = do
+  -- FIXME: mkTuple should use something around `q`
+  let attrs = mkTuple [a]
   putStrLn $ "select(" ++ attrs ++ ","
   genRA x ts k
   putStrLn ")"

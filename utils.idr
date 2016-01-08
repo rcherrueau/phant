@@ -42,6 +42,28 @@ namespace inclusion
   includeSingleton : Elem a l -> Include [a] l
   includeSingleton p = \z,zInZ => rewrite (elemSingleton zInZ) in p
 
+  includeSingleton' : a -> {auto p : Elem a l} -> Include [a] l
+  includeSingleton' _ {p} = includeSingleton p
+
+  -- data Singleton : List a -> Type where
+  --   Single : (v : a) -> Singleton [v]
+
+  -- singleNonEmpty : Singleton l -> NonEmpty l
+  -- singleNonEmpty (Single x) = IsNonEmpty
+
+  -- singleIsHead : (s : Singleton l) -> l = [head {ok=singleNonEmpty s} l]
+  -- singleIsHead (Single x) = Refl
+
+  -- makeSingle : (l : List a) -> NonEmpty l -> Singleton  [(head l)]
+  -- makeSingle [] IsNonEmpty impossible
+  -- makeSingle (x :: xs) _ = (Single x)
+
+  -- includeSingle : (l : List a) ->
+  --                 {auto ok : NonEmpty l} ->
+  --                 {default (makeSingle l ok) single : Singleton l} ->
+  --                 {auto elem : Elem (head {ok=singleNonEmpty single} l) l'} -> Include l l'
+  -- includeSingle _ {single} {elem} = rewrite (singleIsHead single) in includeSingleton elem
+
   -- Include of a list with self
   includeSelf : (l : List a) -> Include l l
   includeSelf l = \z,zINl => zINl

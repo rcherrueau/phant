@@ -29,7 +29,13 @@ data RA : Schema -> Type where
   -- Others
   Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
   -- TODO: Select on an element with specific operation
-  Select   : (Row s -> Bool) -> RA s -> RA s
+  -- Select   : (Row s' -> Bool) ->
+  --            {auto ok : NonEmpty s'} ->
+  --            {default (|(includeSingle s' {ok}), (includeSelf s')|) inc: Include s' s} -> RA s -> RA s
+  UnsafeSelect : (Row s' -> Bool) ->
+                 {default (includeSelf s') inc : Include s' s} -> RA s -> RA s
+  Select   : (a : Attribute) -> (type a -> Bool) ->
+             {auto elem : Elem a s} -> RA s -> RA s
   -- TODO: Join take an element to do the join
   Drop     : (sproj : Schema) -> RA s -> RA (s \\ sproj)
   -- Introduce

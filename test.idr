@@ -18,7 +18,7 @@ A : Attribute
 A = ("Addr", TEXT 255)
 
 LeftFragTy : Schema @ "fl"
-LeftFragTy = [D,Id] @@ "fl"
+LeftFragTy = [D, Id] @@ "fl"
 
 RightFragTy : Schema @ "fr"
 RightFragTy = [Nc, A, Id] @@ "fr"
@@ -26,37 +26,40 @@ RightFragTy = [Nc, A, Id] @@ "fr"
 places : Eff (RA [A] @ "cloud") [GUARD $ Plain $ [D, Nc, A] @@ "cloud"]
 places = do
   encrypt "mykey" N
-  query (Project [A] .
-         Select (\(_ :: _ :: a :: _) => True))
+  query (Project [A] . Select D (const True))
 
 meetings : Eff (RA [Nc] @ "cloud") [GUARD $ Plain $ [D, Nc, A] @@ "cloud"]
 meetings = do
   let contact = the (AES String) $ encrypt "mykey" "Bob"
   encrypt "mykey" N
-  query (Project [Nc] .
-         Select (\(_ :: nc :: _) => nc == contact))
+  query (Project [Nc] . Select Nc ((==) contact))
 
-queryOnD : Eff (RA [D,Id]@"fl") [GUARD $ FragV LeftFragTy (sr @@ ipr)]
-queryOnD = queryL (Select (\(d :: _) => True))
+-- left-first strategy
+places' : Eff (RA [A] @ "fr") [GUARD $ Plain $ [D, N, A] @@ "cloud"]
+                              [GUARD $ FragV LeftFragTy RightFragTy]
+places' = do
+  encrypt "mykey" N
+  frag "fl" "fr" [D]
+  -- FIXME: The selection should be available on RA
+  ids <- queryL (Project [Id] . Select D (const True))
+  q   <- queryR (Project [A] . Select Id ((==) 1))
+  pure q
 
-queryOnNA : Eff (RA [Id]@"fr") [GUARD $ FragV (sl @@ ipl) RightFragTy]
-queryOnNA = queryR (Project [Id] .
-                    Select (\(n :: _) => n == encrypt "mykey" "Bob"))
-
-lFirstStrat : Eff (RA [D,Id]@"fl") [GUARD $ Plain $ [D,N,A]@@"cloud"]
-                                   [GUARD $ FragV LeftFragTy RightFragTy]
-lFirstStrat = do encrypt "mykey" N
-                 frag "fl" "fr" [D]
-                 ql <- queryOnD
-                 qr <- queryOnNA
-                 pure ql
+meetings' : Eff (RA [D, Id] @ "local") [GUARD $ FragV LeftFragTy RightFragTy]
+meetings' = do
+  let contact = the (AES String) $ encrypt "mykey" "Bob"
+  ql <- queryL (id)
+  qr <- queryR (Project [Id] . Select Nc ((==) contact))
+  pure $ Product ql qr
 
 main : IO ()
--- main = runTest2 (MkPEnv [D,N,A] "cloud") lFirstStrat
 main = do let PCs =  [[N],[D,A]]
-          genPV PCs places
-          genPV PCs meetings
-          genPV PCs lFirstStrat
+          genPV PCs (do
+            places
+            meetings)
+          genPV PCs (do
+            places'
+            meetings')
 -- main = putStrLn "lala"
 
 

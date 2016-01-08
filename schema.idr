@@ -148,11 +148,11 @@ isEncrypted _            = False
 name : Attribute -> String
 name = fst
 
-type : Attribute -> U
-type = snd
+type : Attribute -> Type
+type = el . snd
 
 names : Schema -> List String
 names = fst . unzip
 
-types : Schema -> List U
-types = snd . unzip
+types : Schema -> List Type
+types = map type
