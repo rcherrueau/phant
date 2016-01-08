@@ -10,8 +10,10 @@ import Data.List
 %access public
 
 mutual
-  -- -- TODO: Make Expr on schema, so that I can directly return a Expr
-  -- -- at Guard level and don't avec to lift it with ExprRA.
+  -- -- TODO: Make Expr on schema, so that I can directly return a
+  -- -- Expr at Guard level and don't avec to lift it with ExprRA.
+  -- -- Let's say that a query* of guard also always return a list of
+  -- -- schema.
   data Expr : Loc ip U -> Type where
     -- (==)    : Eq (el u) => {u : U} -> Expr (u@ip) -> Expr (u@ip') -> Expr (u@(manageIp ip ip'))
     ExpAttr : {a : Attribute} -> (type a) -> (ip : Ip) -> Expr ((getU a)@ip)
