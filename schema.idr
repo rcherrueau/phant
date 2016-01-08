@@ -22,7 +22,7 @@ namespace universe
          | REAL
          | BOOL
          | CRYPT U
-         | HOME U
+         -- | HOME U
 
   -- Decoding function
   el : U -> Type
@@ -31,21 +31,21 @@ namespace universe
   el REAL      = Double
   el BOOL      = Bool
   el (CRYPT U) = (AES (el U))
-  el (HOME U)  = el U
+  -- el (HOME U)  = el U
 
   -- Returns the inner u if any
-  private getU : U -> U
+  private
+  getU : U -> U
   getU (CRYPT u) = u
-  getU (HOME  u) = u
+  -- getU (HOME  u) = u
   getU u         = u
-
 
   instance Eq U where
     NAT == NAT           = True
     (TEXT x) == (TEXT y) = x == y
     REAL == REAL         = True
     BOOL == BOOL         = True
-    (HOME x) == (HOME y) = x == y
+    -- (HOME x) == (HOME y) = x == y
     (CRYPT x) == (CRYPT y)  = x == y
     _ == _               = False
 
@@ -63,12 +63,12 @@ namespace universe
         getNat _        = Z
     decEq REAL      REAL      = Yes Refl
     decEq BOOL      BOOL      = Yes Refl
-    decEq (HOME x)  (HOME y)  with (decEq x y)
-      decEq (HOME x)  (HOME x)  | (Yes Refl)
-                              = Yes Refl
-      decEq (HOME x)  (HOME y)  | (No contra)
-                              = No (\hxIsHy =>
-                                      contra $ cong hxIsHy {f = getU})
+    -- decEq (HOME x)  (HOME y)  with (decEq x y)
+    --   decEq (HOME x)  (HOME x)  | (Yes Refl)
+    --                           = Yes Refl
+    --   decEq (HOME x)  (HOME y)  | (No contra)
+    --                           = No (\hxIsHy =>
+    --                                   contra $ cong hxIsHy {f = getU})
     decEq (CRYPT x) (CRYPT y) with (decEq x y)
       decEq (CRYPT x) (CRYPT x) | (Yes Refl)
                                 = Yes Refl

@@ -3,6 +3,10 @@ module phant.utils
 import public Data.List
 
 %default total
+%access public
+
+infix 5 @
+infix 5 @@
 
 
 -- List Inclusion.
@@ -111,6 +115,41 @@ namespace inclusion
   --   let zsIncXs = \z,zInZs => fst $ elemInter xs ys z zInZs in
   --   let zsIncYs = \z,zInZs => snd $ elemInter xs ys z zInZs in
   --   (zsIncXs, zsIncYs)
+namespace location
+  Ip : Type
+  Ip = String
+
+  -- abstract -- to keep constructor private
+  -- TODO: rename @ as Loc. @@ as @. Make it instance of Functor
+  data Loc : (ip : Ip) -> (a : Type) -> Type where
+    (@) : (v : a) -> (ip : Ip) -> Loc ip a
+
+  getVal : Loc ip a -> a
+  getVal ((@) v ip) = v
+
+  getIp : Loc ip a -> Ip
+  getIp _ {ip} = ip
+
+  instance Functor (Loc ip) where
+      map m x = let v  = getVal x
+                    ip = getIp x
+                in (m v) @ ip
+
+  -- The algorithm is more complicated than this. The idea is the
+  -- following.
+  --
+  -- > Are the two ip equals?
+  -- > Yes => Keep the ip
+  -- > No => Is the computation involve attributes that are inside
+  -- >       the PCs?
+  -- >       Yes => Set ip to local
+  -- >       No  => Set ip to application
+  --
+  -- Unfortunately, this requires PC and schema, two information that
+  -- are not available as it.
+  manageIp : Ip -> Ip -> Ip
+  manageIp x y = if x == y then x
+                 else "local"
 
 namespace other
   map : (a -> b) -> (a, a) -> (b, b)

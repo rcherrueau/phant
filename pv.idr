@@ -280,7 +280,7 @@ preamble s pcs = do
 mkTuple : Schema -> String
 mkTuple s = "(" ++ concat (intersperse "," (map mkAttrId s)) ++ ")"
 
-genRA : RA s -> Schema -> Maybe Key -> IO ()
+genRA : RA (s @ ip) -> Schema -> Maybe Key -> IO ()
 genRA (Union x y)      ts k = do
   putStrLn "union("
   genRA x ts k
@@ -318,7 +318,7 @@ genRA (Drop s' x)      ts k = do
   putStrLn $ "drop(" ++ attrs ++ ","
   genRA x ts k
   putStrLn ")"
-genRA (Unit s)         ts k = genSchema ts s k
+genRA (Unit ((@) s ip))ts k = genSchema ts s k
 
 instance Handler Guard (StateT (Schema, Maybe Key) IO) where
     handle (MkPEnv s ip) (Encrypt x a) k            = do
@@ -335,21 +335,21 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
       lift $ putStrLn $ "let " ++ ip ++ "(request: channel) ="
       lift $ putStrLn "  in (request, to: channel);"
       lift $ putStrLn "  let res = "
-      let q' = q (Unit s)
+      let q' = q (Unit (s @ ip))
       lift $ genRA q' ts skey
       lift $ putStrLn "  in"
       lift $ putStrLn $ "out (to, res)."
-      k (q' @@ ip) (MkPEnv s ip)
+      k q' (MkPEnv s ip)
     handle (MkFEnv ipl ipr sproj {s}) (QueryL q) k      = do
       let fl = fst (frag sproj s)
       lift $ putStrLn "QueryL"
-      let qRes = q (Unit fl)
-      k (qRes @@ ipl) (MkFEnv ipl ipr sproj)
+      let qRes = q (Unit (fl @ ipl))
+      k qRes (MkFEnv ipl ipr sproj)
     handle (MkFEnv ipl ipr sproj {s}) (QueryR q) k = do
       let fr = snd (frag sproj s)
       lift $ putStrLn "QueryR"
-      let q' = q (Unit fr)
-      k (q' @@ ipr) (MkFEnv ipl ipr sproj)
+      let q' = q (Unit (fr @ ipr))
+      k q' (MkFEnv ipl ipr sproj)
 
 -- Can I get the list of attribute, the state of the cloud and the
 -- list of pc, from a Guard effect ? Yes for the list of attribute and
@@ -364,7 +364,7 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
 --
 --
 -- The preamble of a pv file should look like something like this
-genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
+genPV : List PC -> Eff a [GUARD $ Plain (s @ ip)] [GUARD cstate] -> IO ()
 -- genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = preamble s pcs
 genPV pcs eff {s} {ip} {a} {- cstate = (Plain (s' @@ ip)) -} = do
   preamble s pcs
