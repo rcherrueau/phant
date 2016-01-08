@@ -10,22 +10,22 @@ import Data.List
 %access public
 
 mutual
-  data Expr : Loc ip Attribute -> Type where
-    (==)    : Eq (type a) => Expr (a@ip) -> Expr (a@ip') -> Expr  (a@(manageIp ip ip'))
-    ExpAttr : {a : Attribute} -> (type a) -> (ip : Ip) -> Expr (a@ip)
-    -- TODO: Make Expr on schema, so that I can directly return a Expr
-    -- at Guard level and don't avec to lift it with ExprRA.
-    ExpRA   : RA ([a]@ip) -> Expr (a@ip)
-    ExpNat  : (n : Nat) -> Expr (("Osef", NAT)@"app")
-    ExpString : (s : String) -> Expr (("Osef", (TEXT (length s)))@"app")
-    ExpDouble : (d : Double) -> Expr (("Osef", REAL)@"app")
-    ExpBool   : (b : Bool) -> Expr ((n, BOOL)@"app")
-    ExpAES    : {u : U} -> (a : AES (el u)) -> Expr ((n,(CRYPT u))@"app")
-
-    -- Equal : {n : String} -> {u: U} -> el u -> RA (s @ ip') -> Expr (manageIp ip ip')
-    -- ExpU : Nat -> Expr "local"
-    -- ExpRA : RA (s @ ip) -> Expr ip
-    -- Equal : (a : Expr ip) -> (b : Expr ip') ->  Expr (manageIp ip ip')
+  -- -- TODO: Make Expr on schema, so that I can directly return a Expr
+  -- -- at Guard level and don't avec to lift it with ExprRA.
+  data Expr : Loc ip U -> Type where
+    -- (==)    : Eq (el u) => {u : U} -> Expr (u@ip) -> Expr (u@ip') -> Expr (u@(manageIp ip ip'))
+    ExpAttr : {a : Attribute} -> (type a) -> (ip : Ip) -> Expr ((getU a)@ip)
+    ExpU    : {u : U} -> el u -> (ip : Ip) -> Expr (u @ ip)
+    ExpF1   : {u1,u2 : U} -> (f : el u1 -> el u2) ->
+              Expr (u1 @ ip) -> Expr (u2 @ ip)
+    ExpF2   : {u1,u2,u3 : U} -> (f : el u1 -> el u2 -> el u3) ->
+              Expr (u1 @ ip1) -> Expr (u2 @ ip2) -> Expr (u3 @ (manageIp ip1 ip2))
+    ExpRA   : RA ([a]@ip) -> Expr ((getU a)@ip)
+    ExpNat  : (n : Nat) -> Expr (NAT @ "app")
+    ExpStr  : (s : String) -> Expr ((TEXT (length s))@"app")
+    ExpDbl  : (d : Double) -> Expr (REAL@"app")
+    ExpBool : (b : Bool) -> Expr (BOOL@"app")
+    ExpAES  : {u : U} -> (a : AES (el u)) -> Expr ((CRYPT u)@"app")
 
   -- A query expression (Relation Algebra)
   --
@@ -54,7 +54,7 @@ mutual
                    RA sIp -> RA sIp
     Select   : (a : Attribute) -> (type a -> Bool) ->
                {auto elem : Elem a (getVal sIp)} -> RA sIp -> RA sIp
-    Select'  : (a : Attribute) -> (Expr (a@ip) -> Expr (a@ip')) ->
+    Select'  : (a : Attribute) -> (Expr ((getU a)@ip) -> Expr ((getU a)@ip')) ->
                {auto elem : Elem a s} -> RA (s @ ip) -> RA (s @ (manageIp ip ip'))
     -- -- TODO: Join take an element to do the join
     Drop     : (sproj : Schema) -> RA (s @ ip) -> RA (map (flip (\\) sproj) (s @ ip))

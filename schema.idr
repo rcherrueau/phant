@@ -148,6 +148,10 @@ isEncrypted _            = False
 name : Attribute -> String
 name = fst
 
+getU : Attribute -> U
+getU = snd
+
+
 type : Attribute -> Type
 type = el . snd
 

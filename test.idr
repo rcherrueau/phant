@@ -45,22 +45,22 @@ places' = do
   frag "fl" "fr" [D]
   -- FIXME: The selection should be available on RA
   ids <- queryL (Project [Id] . Select' D (id))
-  q <- queryR (Select' Id (\i => i == (ExpRA ids)))
+  q <- queryR (Select' Id (\i => ExpF2 (==) i (ExpRA ids) {u3=BOOL}))
   pure q
 
-meetings' : Eff (RA ([D, Id] @ "local")) [GUARD $ FragV LeftFragTy RightFragTy]
-meetings' = do
-  let contact = the (AES String) $ encrypt "mykey" "Bob" -- force this
-                                                         -- to be the
-                                                         -- "app"
-                                                         -- label and
-                                                         -- also
-                                                         -- directly
-                                                         -- lift into
-                                                         -- an expr
-  ql <- queryL (id)
-  qr <- queryR (Project [Id] . Select' Nc (\n => n == (ExpAttr contact "app")))
-  pure $ Product ql qr
+-- meetings' : Eff (RA ([D, Id] @ "local")) [GUARD $ FragV LeftFragTy RightFragTy]
+-- meetings' = do
+--   let contact = the (AES String) $ encrypt "mykey" "Bob" -- force this
+--                                                          -- to be the
+--                                                          -- "app"
+--                                                          -- label and
+--                                                          -- also
+--                                                          -- directly
+--                                                          -- lift into
+--                                                          -- an expr
+--   ql <- queryL (id)
+--   qr <- queryR (Project [Id] . Select' Nc (\n => n == (ExpAttr contact "app")))
+--   pure $ Product ql qr
 
 main : IO ()
 -- main = do let PCs =  [[N],[D,A]]
