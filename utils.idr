@@ -148,7 +148,9 @@ namespace location
   -- Unfortunately, this requires PC and schema, two information that
   -- are not available as it.
   manageIp : Ip -> Ip -> Ip
-  manageIp x y = if x == y then x
+  manageIp x y = if x == "local" || y == "local" then x
+                 else if x == "app" then y
+                 else if y == "app" then x
                  else "local"
 
 namespace other

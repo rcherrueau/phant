@@ -13,6 +13,8 @@ import Data.List
 %default total
 %access public
 
+data Truc : List Type -> Type
+
 -- Universe for Database allowed types (both `U` and `el`)
 --
 -- Every data constructor of U corresponds to a type.
@@ -22,15 +24,17 @@ namespace universe
          | REAL
          | BOOL
          | CRYPT U
+         | PAIR U U
          -- | HOME U
 
   -- Decoding function
   el : U -> Type
-  el NAT       = Nat
-  el (TEXT n)  = String
-  el REAL      = Double
-  el BOOL      = Bool
-  el (CRYPT U) = (AES (el U))
+  el NAT          = Nat
+  el (TEXT n)     = String
+  el REAL         = Double
+  el BOOL         = Bool
+  el (CRYPT U)    = (AES (el U))
+  el (PAIR U1 U2) = (Pair (el U1) (el U2))
   -- el (HOME U)  = el U
 
   -- Returns the inner u if any
@@ -151,7 +155,6 @@ name = fst
 getU : Attribute -> U
 getU = snd
 
-
 type : Attribute -> Type
 type = el . snd
 
@@ -160,3 +163,6 @@ names = fst . unzip
 
 types : Schema -> List Type
 types = map type
+
+getUs : Schema -> List U
+getUs = snd . unzip

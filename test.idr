@@ -23,44 +23,38 @@ LeftFragTy = [D, Id] @ "fl"
 RightFragTy : Loc "fr" Schema
 RightFragTy = [Nc, A, Id] @ "fr"
 
--- places : Eff (RA ([A] @ "EC2")) [GUARD $ Plain $ [D, N,  A] @ "EC2"]
---                                 [GUARD $ Plain $ [D, Nc, A] @ "EC2"]
--- places = do
---   encrypt "mykey" N
---   query (Project [A] . Select D (const True))
+places : Eff (Expr ((liftSchU [A]) @ "EC2")) [GUARD $ Plain $ [D, N,  A] @ "EC2"]
+                                             [GUARD $ Plain $ [D, Nc, A] @ "EC2"]
+places = do
+  encrypt "mykey" N
+  query (Project [A] . Select' D (ra.const (ExpBool True)))
 
--- meetings : Eff (RA ([Nc] @ "EC2")) [GUARD $ Plain $ [D, Nc, A] @ "EC2"]
--- meetings = do
---   let contact = the (AES String) $ encrypt "mykey" "Bob" -- app tag
---   encrypt "mykey" N
---   query (Project [Nc] . Select Nc ((==) contact))
+meetings : Eff (Expr ((liftSchU [Nc]) @ "EC2")) [GUARD $ Plain $ [D, Nc, A] @ "EC2"]
+meetings = do
+  let contact = the (AES String) $ encrypt "mykey" "Bob" -- app tag
+  encrypt "mykey" N
+  query (Project [Nc] . Select Nc ((==) contact))
 
 
 -- left-first strategy
 -- FIXME: this should not be local but "fr". Fix the `manageIP`.
-places' : Eff (RA ([Nc,A,Id] @ "local")) [GUARD $ Plain $ [D, N, A] @ "EC2"]
-                                         [GUARD $ FragV LeftFragTy RightFragTy]
+places' : Eff (Expr ((liftSchU [Nc,A,Id]) @ "local"))
+              [GUARD $ Plain $ [D, N, A] @ "EC2"]
+              [GUARD $ FragV LeftFragTy RightFragTy]
 places' = do
   encrypt "mykey" N
   frag "fl" "fr" [D]
-  -- FIXME: The selection should be available on RA
-  ids <- queryL (Project [Id] . Select' D (const (ExpBool True)))
-  q <- queryR (Select' Id (\i => ExpF2 (==) i (ExpRA ids)))
+  ids <- queryL (Project [Id] . Select' D (ra.const (ExpBool True)))
+  q   <- queryR (Select' Id (\i => liftExpr2 (==) i ids))
   pure q
 
--- meetings' : Eff (RA ([D, Id] @ "local")) [GUARD $ FragV LeftFragTy RightFragTy]
--- meetings' = do
---   let contact = the (AES String) $ encrypt "mykey" "Bob" -- force this
---                                                          -- to be the
---                                                          -- "app"
---                                                          -- label and
---                                                          -- also
---                                                          -- directly
---                                                          -- lift into
---                                                          -- an expr
---   ql <- queryL (id)
---   qr <- queryR (Project [Id] . Select' Nc (\n => n == (ExpAttr contact "app")))
---   pure $ Product ql qr
+meetings' : Eff (Expr ((liftSchU [D,Id]) @ ?local))
+            [GUARD $ FragV LeftFragTy RightFragTy]
+meetings' = do
+  let contact = the (AES String) $ encrypt "mykey" "Bob"
+  ql <- queryL (id)
+  qr <- queryR (Project [Id] . Select' Nc (liftExpr2 (==) (ExpAES contact {u=(TEXT 255)})))
+  pure $ liftExpr2 (*) ql qr
 
 main : IO ()
 -- main = do let PCs =  [[N],[D,A]]
