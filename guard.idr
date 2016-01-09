@@ -11,6 +11,9 @@ import Data.List
 %default total
 %access public
 
+DB : Type -> Type
+DB = List
+
 fragWIp : (sproj : Schema) -> (s : Schema) ->
           (ipl: String) -> (ipr : String) -> (Loc ipl Schema, Loc ipr Schema)
 fragWIp sproj s ipl ipr = let (fl, fr) = frag sproj s
@@ -39,17 +42,17 @@ data Guard : Effect where
                   (\_ => CEnv $ (uncurry FragV) (fragWIp sproj s ipl ipr))
   Query   : (q : RA (s@ip) -> RA (s'@ip')) ->
             {auto ok : NonEmpty s'} ->
-            Guard (Expr ((liftSchU s')@ip'))
+            Guard (Loc ip' (DB $ liftSch s'))
                   (CEnv $ Plain $ s@ip)
                   (\_ => CEnv $ Plain $ s@ip)
   QueryL  : (q : RA (sl@ipl) -> RA (sl'@ipl')) ->
             {auto ok : NonEmpty sl'} ->
-            Guard (Expr ((liftSchU sl') @ ipl'))
+            Guard (Loc ipl' (DB $ liftSch sl'))
                   (CEnv $ FragV (sl@ipl) (sr@ipr))
                   (\_ => CEnv $ FragV (sl@ipl) (sr@ipr))
   QueryR  : (q : RA (sr@ipr) -> RA (sr'@ipr')) ->
             {auto ok : NonEmpty sr'} ->
-            Guard (Expr ((liftSchU sr')@ipr'))
+            Guard (Loc ipr' (DB $ liftSch sr'))
                   (CEnv $ FragV (sl@ipl) (sr@ipr))
                   (\_ => CEnv $ FragV (sl@ipl) (sr@ipr))
 
@@ -68,17 +71,17 @@ frag ipl ipr sproj = call (Frag ipl ipr sproj)
 
 query : (RA (s@ip) -> RA (s'@ip')) ->
         {auto ok : NonEmpty s'} ->
-        Eff (Expr ((liftSchU s')@ip')) [GUARD $ Plain $ s@ip]
+        Eff (Loc ip' (DB $ liftSch s')) [GUARD $ Plain $ s@ip]
 query q = call (Query q)
 
 queryL : (RA (sl@ipl) -> RA (sl'@ipl')) ->
          {auto ok : NonEmpty sl'} ->
-          Eff (Expr ((liftSchU sl')@ipl')) [GUARD $ FragV (sl@ipl) (sr@ipr)]
+          Eff (Loc ipl' (DB $ liftSch sl')) [GUARD $ FragV (sl@ipl) (sr@ipr)]
 queryL q = call (QueryL q)
 
 queryR : (RA (sr@ipr) -> RA (sr'@ipr')) ->
          {auto ok : NonEmpty sr'} ->
-         Eff (Expr ((liftSchU sr')@ipr')) [GUARD $ FragV (sl@ipl) (sr@ipr)]
+         Eff (Loc ipr' (DB $ liftSch sr')) [GUARD $ FragV (sl@ipl) (sr@ipr)]
 queryR q = call (QueryR q)
 
 -- Local Variables:

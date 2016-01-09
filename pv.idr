@@ -301,12 +301,6 @@ genRA (Project s' x)   ts k = do
   putStrLn $ "proj(" ++ attrs ++ ","
   genRA x ts k
   putStrLn ")"
-genRA (UnsafeSelect q x) {s} ts k = do
-  -- FIXME: mkTuple should use something around `q`
-  let attrs = mkTuple s
-  putStrLn $ "select(" ++ attrs ++ ","
-  genRA x ts k
-  putStrLn ")"
 genRA (Select a q x) {s} ts k = do
   -- FIXME: mkTuple should use something around `q`
   let attrs = mkTuple [a]
@@ -339,17 +333,19 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
       lift $ genRA q' ts skey
       lift $ putStrLn "  in"
       lift $ putStrLn $ "out (to, res)."
-      k q' (MkPEnv s ip)
+      -- Note: operational will return a filled list. Here we don't
+      -- care.
+      k ([] @ (getIp q')) (MkPEnv s ip)
     handle (MkFEnv ipl ipr sproj {s}) (QueryL q) k      = do
       let fl = fst (frag sproj s)
       lift $ putStrLn "QueryL"
-      let qRes = q (Unit (fl @ ipl))
-      k qRes (MkFEnv ipl ipr sproj)
+      let q' = q (Unit (fl @ ipl))
+      k ([] @ (getIp q')) (MkFEnv ipl ipr sproj)
     handle (MkFEnv ipl ipr sproj {s}) (QueryR q) k = do
       let fr = snd (frag sproj s)
       lift $ putStrLn "QueryR"
       let q' = q (Unit (fr @ ipr))
-      k q' (MkFEnv ipl ipr sproj)
+      k ([] @ (getIp q')) (MkFEnv ipl ipr sproj)
 
 -- Can I get the list of attribute, the state of the cloud and the
 -- list of pc, from a Guard effect ? Yes for the list of attribute and
