@@ -17,39 +17,37 @@ Nc = ("Name", CRYPT (TEXT 255))
 A : Attribute
 A = ("Addr", TEXT 255)
 
-LeftFragTy : Loc "fl" Schema
-LeftFragTy = [D, Id] @ "fl"
+LeftFragTy : Schema
+LeftFragTy = [D, Id]
 
-RightFragTy : Loc "fr" Schema
-RightFragTy = [Nc, A, Id] @ "fr"
+RightFragTy : Schema
+RightFragTy = [Nc, A, Id]
 
-places : Eff (Loc "EC2" (DB $ liftSch [A]))
-             [GUARD $ Plain $ [D, N,  A] @ "EC2"]
-             [GUARD $ Plain $ [D, Nc, A] @ "EC2"]
+places : Eff (DB $ liftSch [A]) [GUARD $ Plain [D, N,  A]]
+                                [GUARD $ Plain [D, Nc, A]]
 places = do
   encrypt "mykey" N
-  query (Project [A] . Select D (liftLoc2 const (True @ "app")))
+  query (Project [A] . Select D (const True))
 
-meetings : Eff (Loc "EC2" (DB $ liftSch [Nc]))
-               [GUARD $ Plain $ [D, Nc, A] @ "EC2"]
+meetings : Eff (DB $ liftSch [Nc]) [GUARD $ Plain [D, Nc, A]]
 meetings = do
   let contact = the (AES String) $ encrypt "mykey" "Bob" -- app tag
   encrypt "mykey" N
-  query (Project [Nc] . Select Nc (liftLoc2 (==) (contact @ "app")))
+  query (Project [Nc] . Select Nc ((==) contact))
 
 -- left-first strategy
 -- FIXME: this should not be local but "fr". Fix the `manageIP`.
-places' : Eff (Loc "local" (DB $ liftSch [Nc,A,Id]))
-              [GUARD $ Plain $ [D, N, A] @ "EC2"]
+places' : Eff (DB $ liftSch [Nc,A,Id])
+              [GUARD $ Plain [D, N, A]]
               [GUARD $ FragV LeftFragTy RightFragTy]
 places' = do
   encrypt "mykey" N
-  frag "fl" "fr" [D]
-  ids <- queryL (Project [Id] . Select D (liftLoc2 const (True @ "app")))
-  q   <- queryR (Select Id (\i => liftLoc2 (elem) i ids))
+  frag [D]
+  ids <- queryL (Project [Id] . Select D (const True))
+  q   <- queryR (Select Id (\i => elem i ids))
   pure q
 
-meetings' : Eff (Loc "fr" (DB $ liftSch [Id]))
+meetings' : Eff (DB $ liftSch [Id])
                 [GUARD $ FragV LeftFragTy RightFragTy]
 meetings' = do
   let contact = the (AES String) $ encrypt "mykey" "Bob"
@@ -57,7 +55,7 @@ meetings' = do
   qr <- queryR (Project [Id] .
                 -- Select Nc (liftLoc2 (==) ("Bob" @ "app")))
                 -- Select Nc (liftLoc2 (>=) (contact @ "app")))
-                Select Nc (liftLoc2 (==) (contact @ "app")))
+                Select Nc ((==) contact))
   pure qr
 
 main : IO ()

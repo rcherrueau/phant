@@ -280,7 +280,7 @@ preamble s pcs = do
 mkTuple : Schema -> String
 mkTuple s = "(" ++ concat (intersperse "," (map mkAttrId s)) ++ ")"
 
-genRA : RA (s @ ip) -> Schema -> Maybe Key -> IO ()
+genRA : RA s -> Schema -> Maybe Key -> IO ()
 genRA (Union x y)      ts k = do
   putStrLn "union("
   genRA x ts k
@@ -312,40 +312,40 @@ genRA (Drop s' x)      ts k = do
   putStrLn $ "drop(" ++ attrs ++ ","
   genRA x ts k
   putStrLn ")"
-genRA (Unit ((@) s ip))ts k = genSchema ts s k
+genRA (Unit s ) ts k = genSchema ts s k
 
 instance Handler Guard (StateT (Schema, Maybe Key) IO) where
-    handle (MkPEnv s ip) (Encrypt x a) k            = do
+    handle (MkPEnv s) (Encrypt x a) k            = do
       let skey = x ++ "_sk"
       (ts, _) <- get
       put ((encrypt a ts), Just skey)
       lift $ putStrLn $ "const " ++ skey ++ ": skey [private]."
       lift $ putStrLn ""
-      k () (MkPEnv (encrypt a s) ip)
-    handle (MkPEnv s ip) (Frag ipl ipr s') k    = do
-      k () (MkFEnv ipl ipr s')
-    handle (MkPEnv s ip) (Query q) k                = do
+      k () (MkPEnv (encrypt a s))
+    handle (MkPEnv s) (Frag s') k    = do
+      k () (MkFEnv s')
+    handle (MkPEnv s) (Query q) k                = do
       (ts, skey) <- get
-      lift $ putStrLn $ "let " ++ ip ++ "(request: channel) ="
+      lift $ putStrLn $ "let " ++ "lala" ++ "(request: channel) ="
       lift $ putStrLn "  in (request, to: channel);"
       lift $ putStrLn "  let res = "
-      let q' = q (Unit (s @ ip))
+      let q' = q (Unit s)
       lift $ genRA q' ts skey
       lift $ putStrLn "  in"
       lift $ putStrLn $ "out (to, res)."
       -- Note: operational will return a filled list. Here we don't
       -- care.
-      k ([] @ (getIp q')) (MkPEnv s ip)
-    handle (MkFEnv ipl ipr sproj {s}) (QueryL q) k      = do
+      k [] (MkPEnv s)
+    handle (MkFEnv sproj {s}) (QueryL q) k      = do
       let fl = fst (frag sproj s)
       lift $ putStrLn "QueryL"
-      let q' = q (Unit (fl @ ipl))
-      k ([] @ (getIp q')) (MkFEnv ipl ipr sproj)
-    handle (MkFEnv ipl ipr sproj {s}) (QueryR q) k = do
+      let q' = q (Unit fl)
+      k [] (MkFEnv sproj)
+    handle (MkFEnv sproj {s}) (QueryR q) k = do
       let fr = snd (frag sproj s)
       lift $ putStrLn "QueryR"
-      let q' = q (Unit (fr @ ipr))
-      k ([] @ (getIp q')) (MkFEnv ipl ipr sproj)
+      let q' = q (Unit fr)
+      k [] (MkFEnv sproj)
 
 -- Can I get the list of attribute, the state of the cloud and the
 -- list of pc, from a Guard effect ? Yes for the list of attribute and
@@ -360,13 +360,13 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
 --
 --
 -- The preamble of a pv file should look like something like this
-genPV : List PC -> Eff a [GUARD $ Plain (s @ ip)] [GUARD cstate] -> IO ()
+genPV : List PC -> Eff a [GUARD $ Plain s] [GUARD cstate] -> IO ()
 -- genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = preamble s pcs
-genPV pcs eff {s} {ip} {a} {- cstate = (Plain (s' @@ ip)) -} = do
+genPV pcs eff {s} {a} {- cstate = (Plain (s' @@ ip)) -} = do
   preamble s pcs
   -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
   -- scId <- schema s'
-  let body = the (StateT (Schema, Maybe Key) IO a) $ runInit [MkPEnv s ip] eff
+  let body = the (StateT (Schema, Maybe Key) IO a) $ runInit [MkPEnv s] eff
   runStateT body (s, Nothing)
   return ()
 

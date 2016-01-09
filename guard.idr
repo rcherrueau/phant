@@ -14,74 +14,56 @@ import Data.List
 DB : Type -> Type
 DB = List
 
-fragWIp : (sproj : Schema) -> (s : Schema) ->
-          (ipl: String) -> (ipr : String) -> (Loc ipl Schema, Loc ipr Schema)
-fragWIp sproj s ipl ipr = let (fl, fr) = frag sproj s
-                          in (fl @ ipl, fr @ ipr)
-
 -- Cloud state : plain or frag
 data CState : Type where
-  Plain : Loc ip Schema -> CState
-  FragV  : Loc ipl Schema -> Loc ipr Schema -> CState
+  Plain  : Schema -> CState
+  FragV  : Schema -> Schema -> CState
 
 data CEnv : CState -> Type where
-  MkPEnv : (s : Schema) -> (ip : String) ->
-           CEnv (Plain $ s @ ip)
-  MkFEnv : (ipl : String) -> (ipr : String) ->
-           (sproj : Schema) ->
-           CEnv $ (uncurry FragV) (fragWIp sproj s ipl ipr)
+  MkPEnv : (s : Schema) -> CEnv (Plain s)
+  MkFEnv : (sproj : Schema) -> CEnv $ (uncurry FragV) (frag sproj s)
 
 data Guard : Effect where
   Encrypt : (k : String) -> (a : Attribute) ->
             Guard ()
-                  (CEnv $ Plain $ s@ip)
-                  (\_ => CEnv $ Plain $ (encrypt a s)@ip)
-  Frag    : (ipl : String) -> (ipr : String) -> (sproj : Schema) ->
+                  (CEnv $ Plain s)
+                  (\_ => CEnv $ Plain (encrypt a s))
+  Frag    : (sproj : Schema) ->
             Guard ()
-                  (CEnv $ Plain $ s'@ip)
-                  (\_ => CEnv $ (uncurry FragV) (fragWIp sproj s ipl ipr))
-  Query   : (q : RA (s@ip) -> RA (s'@ip')) ->
-            {auto ok : NonEmpty s'} ->
-            Guard (Loc ip' (DB $ liftSch s'))
-                  (CEnv $ Plain $ s@ip)
-                  (\_ => CEnv $ Plain $ s@ip)
-  QueryL  : (q : RA (sl@ipl) -> RA (sl'@ipl')) ->
-            {auto ok : NonEmpty sl'} ->
-            Guard (Loc ipl' (DB $ liftSch sl'))
-                  (CEnv $ FragV (sl@ipl) (sr@ipr))
-                  (\_ => CEnv $ FragV (sl@ipl) (sr@ipr))
-  QueryR  : (q : RA (sr@ipr) -> RA (sr'@ipr')) ->
-            {auto ok : NonEmpty sr'} ->
-            Guard (Loc ipr' (DB $ liftSch sr'))
-                  (CEnv $ FragV (sl@ipl) (sr@ipr))
-                  (\_ => CEnv $ FragV (sl@ipl) (sr@ipr))
+                  (CEnv $ Plain s')
+                  (\_ => CEnv $ (uncurry FragV) (frag sproj s))
+  Query   : (q : RA s -> RA s') ->
+            Guard (DB $ liftSch s')
+                  (CEnv $ Plain s)
+                  (\_ => CEnv $ Plain s)
+  QueryL  : (q : RA sl -> RA sl') ->
+            Guard (DB $ liftSch sl')
+                  (CEnv $ FragV sl sr)
+                  (\_ => CEnv $ FragV sl sr)
+  QueryR  : (q : RA sr -> RA sr') ->
+            Guard (DB $ liftSch sr')
+                  (CEnv $ FragV sl sr)
+                  (\_ => CEnv $ FragV sl sr)
 
 GUARD : CState -> EFFECT
 GUARD x = MkEff (CEnv x) Guard
 
-encrypt : String -> (a : Attribute) ->
-          Eff () [GUARD $ Plain $ s@ip]
-                 [GUARD $ Plain $ (encrypt a s)@ip]
+encrypt : String -> (a : Attribute) -> Eff () [GUARD $ Plain s]
+                                              [GUARD $ Plain (encrypt a s)]
 encrypt k a = call (Encrypt k a)
 
-frag : (ipl : String) -> (ipr : String) -> (sproj : Schema) ->
-       Eff () [GUARD $ Plain (s@ip)]
-              [GUARD $ (uncurry FragV) (fragWIp sproj s ipl ipr)]
-frag ipl ipr sproj = call (Frag ipl ipr sproj)
+frag : (sproj : Schema) -> Eff () [GUARD $ Plain s]
+                                  [GUARD $ (uncurry FragV) (frag sproj s)]
+frag sproj = call (Frag sproj)
 
-query : (RA (s@ip) -> RA (s'@ip')) ->
-        {auto ok : NonEmpty s'} ->
-        Eff (Loc ip' (DB $ liftSch s')) [GUARD $ Plain $ s@ip]
+query : (RA s -> RA s') -> Eff (DB $ liftSch s') [GUARD $ Plain s]
 query q = call (Query q)
 
-queryL : (RA (sl@ipl) -> RA (sl'@ipl')) ->
-         {auto ok : NonEmpty sl'} ->
-          Eff (Loc ipl' (DB $ liftSch sl')) [GUARD $ FragV (sl@ipl) (sr@ipr)]
+queryL : (RA sl -> RA sl') -> Eff (DB $ liftSch sl') [GUARD $ FragV sl sr]
 queryL q = call (QueryL q)
 
-queryR : (RA (sr@ipr) -> RA (sr'@ipr')) ->
-         {auto ok : NonEmpty sr'} ->
-         Eff (Loc ipr' (DB $ liftSch sr')) [GUARD $ FragV (sl@ipl) (sr@ipr)]
+queryR : (RA sr -> RA sr') ->
+         Eff (DB $ liftSch sr') [GUARD $ FragV sl sr]
 queryR q = call (QueryR q)
 
 -- Local Variables:

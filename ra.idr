@@ -10,13 +10,10 @@ import Debug.Trace
 %default total
 %access public
 
-liftSch : (s : Schema) -> {auto ok : NonEmpty s} -> Type
-liftSch []                     {ok} = absurd ok
-liftSch [(n,u)]                {ok} = el u
-liftSch ((_,u) :: s@(a :: as)) {ok} = Pair (el u) (liftSch s)
-
-liftLoc2 : (f : a -> b -> c) -> Loc ip1 a -> Loc ip2 b -> Loc (manageIp ip1 ip2) c
-liftLoc2 f ((@) a ip1) ((@) b ip2) = (f a b) @ (manageIp ip1 ip2)
+liftSch : (s : Schema) -> Type
+liftSch []                     = ()
+liftSch [(n,u)]                = el u
+liftSch ((_,u) :: s@(a :: as)) = Pair (el u) (liftSch s)
 
 -- A query expression (Relation Algebra)
 --
@@ -31,23 +28,17 @@ liftLoc2 f ((@) a ip1) ((@) b ip2) = (f a b) @ (manageIp ip1 ip2)
 --
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
-data RA : Loc ip Schema -> Type where
+data RA : Schema -> Type where
   -- Set operators
-  Union    : RA (s @ ip1) -> RA (s @ ip2) -> RA (s @ (manageIp ip1 ip2))
-  Diff     : RA (s @ ip1) -> RA (s' @ ip2) -> RA (s @ (manageIp ip1 ip2))
-  Product  : RA (s @ ip1) -> RA (s' @ ip2) -> RA ((s * s') @ (manageIp ip1 ip2))
+  Union    : RA s -> RA s -> RA s
+  Diff     : RA s -> RA s' -> RA s
+  Product  : RA s -> RA s' -> RA (s * s')
   -- Others
-  Project  : (sproj : Schema) -> RA (s @ ip) -> RA (map (intersect sproj) (s @ ip))
+  Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
   -- -- TODO: Select on an element with specific operation
-  Select  : (a : Attribute) -> (Loc ip (type a) -> Loc ip' Bool) ->
-            {auto elem : Elem a s} -> RA (s @ ip) -> RA (s @ ip')
+  Select  : (a : Attribute) -> (type a -> Bool) ->
+            {auto elem : Elem a s} -> RA s -> RA s
   -- -- TODO: Join take an element to do the join
-  Drop     : (sproj : Schema) -> RA (s @ ip) -> RA (map (flip (\\) sproj) (s @ ip))
+  Drop     : (sproj : Schema) -> RA s -> RA (s \\ sproj)
   -- -- Introduce
-  Unit     : (sIp : Loc ip Schema) -> RA sIp
-
-getIp : RA (s @ ip) -> Ip
-getIp _ {ip} = ip
-
-getSchema : RA (s @ ip) -> Schema
-getSchema _ {s} = s
+  Unit     : (s : Schema) -> RA s
