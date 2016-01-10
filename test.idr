@@ -26,38 +26,34 @@ places : Eff (Expr $ SCH [Nc]) [GUARD $ Plain [D, N,  A]]
                                [GUARD $ Plain [D, Nc, A]]
 places = do
   encrypt "mykey" N
-  query (Project [Nc] . Select D (\d => d == Z))
+  query (π [Nc] . σ D (\d => d == Z))
 
--- meetings : Eff (DB $ liftSch [Nc]) [GUARD $ PCs [[N]]] [GUARD $ Plain [D, Nc, A]]
 meetings : Eff (Expr $ SCH [Nc]) [GUARD $ Plain [D, Nc, A]]
 meetings = do
-  -- protect [D,N,A] [[N]]
   encrypt "mykey" N
-  query (Project [Nc] .
-         Select Nc ((==) (encrypt "mykey" "Bob")))
+  query (π [Nc] . σ Nc ((==) (encrypt "mykey" "Bob")))
 
--- -- -- left-first strategy
--- -- -- FIXME: this should not be local but "fr". Fix the `manageIP`.
+-- left-first strategy
 places' : Eff (Expr $ SCH [Nc,A,Id]) [GUARD $ Plain [D, N, A]]
-                                                 [GUARD $ FragV LeftFragTy RightFragTy]
+                                     [GUARD $ FragV LeftFragTy RightFragTy]
 places' = do
   encrypt "mykey" N
   frag [D]
-  ids  <- queryL (Project [Id] . Select D ((==) (S Z)))
-  let q = queryR (Select Id (\i => elem i ids))
+  ids  <- queryL (π [Id] . σ D ((==) (S Z)))
+  let q = queryR (σ Id (flip elem ids))
   qRes <- q
   pure qRes
 
 meetings' : Eff (Expr $ SCH [D,Id])
                 [GUARD $ FragV LeftFragTy RightFragTy]
 meetings' = do
-  let contact = ra.encrypt "mykey" "Bob"
+  let contact = expr.encrypt "mykey" "Bob"
   ql <- queryL (id)
-  qr <- queryR (Project [Id] .
-                -- Select Nc (ra.(==) "Bob"))
-                -- Select Nc (ra.(>=) contact))
-                Select Nc ((==) contact))
-  pure $ ExprProduct ql qr
+  qr <- queryR (π [Id] .
+                -- ra.σ Nc (expr.(==) "Bob"))
+                -- ra.σ Nc (expr.(>=) contact))
+                σ Nc ((==) contact))
+  pure (ql * qr)
 
 main : IO ()
 -- main = do let PCs =  [[N],[D,A]]

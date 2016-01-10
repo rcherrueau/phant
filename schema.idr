@@ -41,12 +41,12 @@ namespace universe
   -- el (LIST U)     = List (el U)
   -- el (HOME U)  = el U
 
-  -- Returns the inner u if any
-  private
-  getU : U -> U
-  getU (CRYPT u) = u
-  -- getU (HOME  u) = u
-  getU u         = u
+  -- -- Returns the inner u if any
+  -- private
+  -- getU : U -> U
+  -- getU (CRYPT u) = u
+  -- -- getU (HOME  u) = u
+  -- getU u         = u
 
   data InUfamily : Type -> Type where
     IsUNIT  : InUfamily Unit
@@ -174,11 +174,15 @@ encrypt a (x :: xs) with (a == x)
   encrypt a     (x :: xs) | False = x :: (encrypt a xs)
   encrypt (n,u) (x :: xs) | True  = (n, CRYPT u) :: xs
 
+getU : Attribute -> U
+getU = snd
+
 decrypt : Attribute -> Schema -> Schema
-decrypt a []        = []
-decrypt a (x :: xs) with (a == x)
-  decrypt a     (x :: xs) | False = x :: (decrypt a xs)
-  decrypt (n,u) (x :: xs) | True  = (n, getU u) :: xs
+decrypt (n, (CRYPT u')) [] = []
+decrypt (n, (CRYPT u')) (x :: xs) with ((n, (CRYPT u')) == x)
+  decrypt (n, (CRYPT u')) (x :: xs) | False = x :: (decrypt (n, (CRYPT u')) xs)
+  decrypt (n, (CRYPT u')) (x :: xs) | True = (n, u') :: xs
+decrypt _ s = s
 
 isEncrypted : Attribute -> Bool
 isEncrypted (_, CRYPT _) = True
@@ -186,9 +190,6 @@ isEncrypted _            = False
 
 name : Attribute -> String
 name = fst
-
-getU : Attribute -> U
-getU = snd
 
 type : Attribute -> Type
 type = el . snd
@@ -201,3 +202,13 @@ types = map type
 
 getUs : Schema -> List U
 getUs = snd . unzip
+
+liftSch : (s : Schema) -> Type
+liftSch []                     = ()
+liftSch [(n,u)]                = el u
+liftSch ((_,u) :: s@(a :: as)) = Pair (el u) (liftSch s)
+
+-- liftSchU : (s : Schema) -> U
+-- liftSchU []                     = UNIT
+-- liftSchU [(n,u)]                = u
+-- liftSchU ((_,u) :: s@(a :: as)) = PAIR u (liftSchU s)

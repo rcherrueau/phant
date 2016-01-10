@@ -10,96 +10,106 @@ import Debug.Trace
 %default total
 %access public
 
-liftSch : (s : Schema) -> Type
-liftSch []                     = ()
-liftSch [(n,u)]                = el u
-liftSch ((_,u) :: s@(a :: as)) = Pair (el u) (liftSch s)
+namespace expr
+  data Expr : U -> Type where
+    -- ExprElU : {u : U} -> (v : a) -> Expr u
+    -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
+    -- Type
+    ExprU     : (u : U) -> Expr u
+    ExprUNIT  : Expr UNIT
+    ExprNAT   : Nat -> Expr NAT
+    ExprTEXT  : (s : String) -> Expr (TEXT (length s))
+    ExprREAL  : Double -> Expr REAL
+    ExprBOOL  : Bool -> Expr BOOL
+    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u)
+    -- Operation
+    ExprEq    : Eq (el a) => Expr a -> Expr a -> Expr BOOL
+    ExprGtEq  : Ord (el a) => Expr a -> Expr a -> Expr BOOL
+    ExprElem  : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
+    ExprNot   : Expr BOOL -> Expr BOOL
+    -- Schema
+    ExprSCH     : (s : Schema) -> Expr (SCH s)
+    ExprUnion   : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
+    ExprDiff    : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
+    ExprProduct : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
+    ExprProject : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
+    ExprSelect  : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+                  {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
+    ExprDrop     : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
 
--- liftSchU : (s : Schema) -> U
--- liftSchU []                     = UNIT
--- liftSchU [(n,u)]                = u
--- liftSchU ((_,u) :: s@(a :: as)) = PAIR u (liftSchU s)
+  -- Operation
+  (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
+  (==) = ExprEq
 
-data Expr : U -> Type where
-  -- ExprElU : {u : U} -> (v : a) -> Expr u
-  ExprU     : (u : U) -> Expr u
-  ExprUNIT  : Expr UNIT
-  ExprNAT   : Nat -> Expr NAT
-  ExprTEXT  : (s : String) -> Expr (TEXT (length s))
-  ExprREAL  : Double -> Expr REAL
-  ExprBOOL  : Bool -> Expr BOOL
-  ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u)
-  -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
-  -- (==) x y = ExprBOOL $ (evalExpr x) == (evalExpr y)
-  ExprEq    : Eq (el a) => Expr a -> Expr a -> Expr BOOL
-  ExprGtEq  : Ord (el a) => Expr a -> Expr a -> Expr BOOL
-  -- elem x (ExprLIST xs) = ExprBOOL $ elem (evalExpr x) xs
-  ExprElem  : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
-  -- not (ExprBOOL x) = ExprBOOL $ not x
-  ExprNot   : Expr BOOL -> Expr BOOL
-  -- Schema
-  ExprSCH     : (s : Schema) -> Expr (SCH s)
-  ExprUnion   : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
-  ExprDiff    : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
-  ExprProduct : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
-  ExprProject : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
+  (>=) : Ord (el a) => Expr a -> Expr a -> Expr BOOL
+  (>=) = ExprGtEq
 
-implicit unitUNIT : () -> Expr UNIT
-unitUNIT _ = ExprUNIT
+  elem : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
+  elem = ExprElem
 
-implicit natNAT : Nat -> Expr NAT
-natNAT = ExprNAT
+  not : Expr BOOL -> Expr BOOL
+  not = ExprNot
 
-implicit stringTEXT : (s : String) -> Expr (TEXT (length s))
-stringTEXT = ExprTEXT
+  encrypt : Crypt (el u) (AES (el u)) => Key -> (el u) -> Expr (CRYPT u)
+  encrypt k x = ExprCRYPT (encrypt k x)
 
-implicit doubleREAL : Double -> Expr REAL
-doubleREAL = ExprREAL
+  union : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
+  union = ExprUnion
 
-implicit boolBOOL : Bool -> Expr BOOL
-boolBOOL = ExprBOOL
+  diff : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
+  diff = ExprDiff
 
-implicit aesCRYPT : AES (el u) -> Expr (CRYPT u)
-aesCRYPT = ExprCRYPT
+  (*) : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
+  (*) = ExprProduct
 
--- implicit listLIST : List (el u) -> Expr (LIST u)
--- listLIST = ExprLIST
+  π : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
+  π = ExprProject
 
--- -- λΠ> the (Expr (PAIR NAT (PAIR NAT UNIT))) (1,1,())
--- implicit pairPAIR : (Pair (el x) (el y)) -> Expr (PAIR x y)
--- pairPAIR = ExprPAIR
+  σ : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+                  {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
+  σ = assert_total ExprSelect
 
-(==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
-(==) = ExprEq
+  drop : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
+  drop = ExprDrop
 
-(>=) : Ord (el a) => Expr a -> Expr a -> Expr BOOL
-(>=) = ExprGtEq
+  -- Implicit conversion for dsl
+  -- -- λΠ> the (Expr (PAIR NAT (PAIR NAT UNIT))) (1,1,())
+  -- implicit pairPAIR : (Pair (el x) (el y)) -> Expr (PAIR x y)
+  -- pairPAIR = ExprPAIR
 
-elem : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
-elem = ExprElem
+  implicit unitUNIT : () -> Expr UNIT
+  unitUNIT _ = ExprUNIT
 
-not : Expr BOOL -> Expr BOOL
-not = ExprNot
+  implicit natNAT : Nat -> Expr NAT
+  natNAT = ExprNAT
 
-encrypt : Crypt (el u) (AES (el u)) => Key -> (el u) -> Expr (CRYPT u)
-encrypt k x = ExprCRYPT (encrypt k x)
+  implicit stringTEXT : (s : String) -> Expr (TEXT (length s))
+  stringTEXT = ExprTEXT
 
--- evalExpr : Expr u -> (el u)
--- evalExpr (ExprPAIR p) = p
--- evalExpr ExprUNIT = ()
--- evalExpr (ExprNAT k) = k
--- evalExpr (ExprTEXT s) = s
--- evalExpr (ExprREAL x) = x
--- evalExpr (ExprBOOL x) = x
--- evalExpr (ExprCRYPT x) = x
--- evalExpr (ExprLIST xs) = xs
--- evalExpr (x == y) = (evalExpr x) == (evalExpr y)
--- evalExpr (isIn x (ExprLIST xs)) = ?mlj -- elem x xs
--- evalExpr (not x) = not (evalExpr x)
+  implicit doubleREAL : Double -> Expr REAL
+  doubleREAL = ExprREAL
 
+  implicit boolBOOL : Bool -> Expr BOOL
+  boolBOOL = ExprBOOL
 
--- liftExpr2 : (el a -> el b -> el c) -> Expr a -> Expr b -> Expr c
--- liftExpr2 f x y = ?liftExpr2_rhs
+  implicit aesCRYPT : AES (el u) -> Expr (CRYPT u)
+  aesCRYPT = ExprCRYPT
+
+  implicit schemaSCH : (l : Schema) -> Expr (SCH l)
+  schemaSCH = ExprSCH
+
+  -- evalExpr : Expr u -> (el u)
+  -- evalExpr (ExprPAIR p) = p
+  -- evalExpr ExprUNIT = ()
+  -- evalExpr (ExprNAT k) = k
+  -- evalExpr (ExprTEXT s) = s
+  -- evalExpr (ExprREAL x) = x
+  -- evalExpr (ExprBOOL x) = x
+  -- evalExpr (ExprCRYPT x) = x
+  -- evalExpr (ExprLIST xs) = xs
+  -- evalExpr (x == y) = (evalExpr x) == (evalExpr y)
+  -- evalExpr (isIn x (ExprLIST xs)) = ?mlj -- elem x xs
+  -- evalExpr (not x) = not (evalExpr x)
 
 -- A query expression (Relation Algebra)
 --
@@ -128,6 +138,26 @@ data RA : Schema -> Type where
   Drop     : (sproj : Schema) -> RA s -> RA (s \\ sproj)
   -- -- Introduce
   Unit     : (s : Schema) -> RA s
+
+
+union : RA s -> RA s -> RA s
+union = Union
+
+diff: RA s -> RA s' -> RA s
+diff = Diff
+
+(*) : RA s -> RA s' -> RA (s * s')
+(*) = Product
+
+π : (sproj : Schema) -> RA s -> RA (intersect sproj s)
+π = Project
+
+σ : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+    {auto elem : Elem a s} -> RA s -> RA s
+σ = Select
+
+drop : (sproj : Schema) -> RA s -> RA (s \\ sproj)
+drop = Drop
 
 getSchema : RA s -> Schema
 getSchema _ {s} = s
