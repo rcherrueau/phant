@@ -1,9 +1,8 @@
 module Main
 
-import crypt
 import pv
+import crypt
 import guard
-import Effects
 
 D : Attribute
 D = ("Date", NAT)
@@ -23,42 +22,42 @@ LeftFragTy = [D, Id]
 RightFragTy : Schema
 RightFragTy = [Nc, A, Id]
 
-places : Eff (DB $ liftSch [A]) [GUARD $ Plain [D, N,  A]]
-                                [GUARD $ Plain [D, Nc, A]]
+places : Eff (Expr $ SCH [Nc]) [GUARD $ Plain [D, N,  A]]
+                               [GUARD $ Plain [D, Nc, A]]
 places = do
   encrypt "mykey" N
-  query (Project [A] . Select D (const True))
+  query (Project [Nc] . Select D (\d => d == Z))
 
 -- meetings : Eff (DB $ liftSch [Nc]) [GUARD $ PCs [[N]]] [GUARD $ Plain [D, Nc, A]]
-meetings : Eff (DB $ liftSch [Nc]) [GUARD $ Plain [D, Nc, A]]
+meetings : Eff (Expr $ SCH [Nc]) [GUARD $ Plain [D, Nc, A]]
 meetings = do
   -- protect [D,N,A] [[N]]
   encrypt "mykey" N
-  let contact = the (AES String) $ encrypt "mykey" "Bob" -- app tag
-  query (Project [Nc] . Select Nc ((==) contact))
+  query (Project [Nc] .
+         Select Nc ((==) (encrypt "mykey" "Bob")))
 
--- left-first strategy
--- FIXME: this should not be local but "fr". Fix the `manageIP`.
-places' : Eff (DB $ liftSch [Nc,A,Id]) [GUARD $ Plain [D, N, A]]
-                                       [GUARD $ FragV LeftFragTy RightFragTy]
+-- -- -- left-first strategy
+-- -- -- FIXME: this should not be local but "fr". Fix the `manageIP`.
+places' : Eff (Expr $ SCH [Nc,A,Id]) [GUARD $ Plain [D, N, A]]
+                                                 [GUARD $ FragV LeftFragTy RightFragTy]
 places' = do
   encrypt "mykey" N
   frag [D]
-  ids  <- queryL (Project [Id] . Select D (const True))
+  ids  <- queryL (Project [Id] . Select D ((==) (S Z)))
   let q = queryR (Select Id (\i => elem i ids))
   qRes <- q
   pure qRes
 
-meetings' : Eff (DB $ liftSch [Id])
+meetings' : Eff (Expr $ SCH [D,Id])
                 [GUARD $ FragV LeftFragTy RightFragTy]
 meetings' = do
-  let contact = the (AES String) $ encrypt "mykey" "Bob"
+  let contact = ra.encrypt "mykey" "Bob"
   ql <- queryL (id)
   qr <- queryR (Project [Id] .
-                -- Select Nc (liftLoc2 (==) ("Bob" @ "app")))
-                -- Select Nc (liftLoc2 (>=) (contact @ "app")))
+                -- Select Nc (ra.(==) "Bob"))
+                -- Select Nc (ra.(>=) contact))
                 Select Nc ((==) contact))
-  pure qr
+  pure $ ExprProduct ql qr
 
 main : IO ()
 -- main = do let PCs =  [[N],[D,A]]

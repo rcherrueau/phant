@@ -2,10 +2,11 @@ module phant.guard
 
 import public utils
 import public schema
-import public table
 import public ra
 
-import Effects
+import public crypt
+
+import public Effects
 import Data.List
 
 %default total
@@ -46,15 +47,15 @@ data Guard : Effect where
                   (CEnv $ Plain s')
                   (\_ => CEnv $ (uncurry FragV) (frag sproj s))
   Query   : (q : RA s -> RA s') ->
-            Guard (DB $ liftSch s')
+            Guard (Expr $ SCH s')
                   (CEnv $ Plain s)
                   (\_ => CEnv $ Plain s)
   QueryL  : (q : RA sl -> RA sl') ->
-            Guard (DB $ liftSch sl')
+            Guard (Expr $ SCH sl')
                   (CEnv $ FragV sl sr)
                   (\_ => CEnv $ FragV sl sr)
   QueryR  : (q : RA sr -> RA sr') ->
-            Guard (DB $ liftSch sr')
+            Guard (Expr $ SCH sr')
                   (CEnv $ FragV sl sr)
                   (\_ => CEnv $ FragV sl sr)
 
@@ -74,14 +75,14 @@ frag : (sproj : Schema) -> Eff () [GUARD $ Plain s]
                                   [GUARD $ (uncurry FragV) (frag sproj s)]
 frag sproj = call (Frag sproj)
 
-query : (RA s -> RA s') -> Eff (DB $ liftSch s') [GUARD $ Plain s]
+query : (RA s -> RA s') -> Eff (Expr $ SCH s') [GUARD $ Plain s]
 query q = call (Query q)
 
-queryL : (RA sl -> RA sl') -> Eff (DB $ liftSch sl') [GUARD $ FragV sl sr]
+queryL : (RA sl -> RA sl') -> Eff (Expr $ SCH sl') [GUARD $ FragV sl sr]
 queryL q = call (QueryL q)
 
 queryR : (RA sr -> RA sr') ->
-         Eff (DB $ liftSch sr') [GUARD $ FragV sl sr]
+         Eff (Expr $ SCH sr') [GUARD $ FragV sl sr]
 queryR q = call (QueryR q)
 
 -- Local Variables:

@@ -285,17 +285,17 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
       lift $ putStrLn $ "out (to, res)."
       -- Note: operational will return a filled list. Here we don't
       -- care.
-      k [] (MkPEnv s)
+      k (ExprSCH (getSchema q')) (MkPEnv s)
     handle (MkFEnv sproj {s}) (QueryL q) k      = do
       let fl = fst (frag sproj s)
       lift $ putStrLn "QueryL"
       let q' = q (Unit fl)
-      k [] (MkFEnv sproj)
+      k (ExprSCH (getSchema q')) (MkFEnv sproj)
     handle (MkFEnv sproj {s}) (QueryR q) k = do
       let fr = snd (frag sproj s)
       lift $ putStrLn "QueryR"
       let q' = q (Unit fr)
-      k [] (MkFEnv sproj)
+      k (ExprSCH (getSchema q')) (MkFEnv sproj)
 
 
 -- Can I get the list of attribute, the state of the cloud and the

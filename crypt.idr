@@ -1,10 +1,11 @@
 module phant.crypt
 
 %default total
-%access public
+
+%access abstract
 
 
-Key : Type
+public Key : Type
 Key = String
 
 -- Symmetric encryption

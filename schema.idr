@@ -5,7 +5,7 @@
 ||| in a Schema, but restrict ourself to the Univers (U, el)
 module phant.schema
 
-import public crypt
+import crypt
 import utils
 
 import Data.List
@@ -23,8 +23,9 @@ namespace universe
          | REAL
          | BOOL
          | CRYPT U
-         | PAIR U U
-         | LIST U
+         | SCH (List (String, U))
+         -- | PAIR U U
+         -- | LIST U
          -- | HOME U
 
   -- Decoding function
@@ -35,17 +36,40 @@ namespace universe
   el REAL         = Double
   el BOOL         = Bool
   el (CRYPT U)    = (AES (el U))
-  el (PAIR U1 U2) = (Pair (el U1) (el U2))
-  el (LIST U)     = List (el U)
+  el (SCH l)      = List (String, U)
+  -- el (PAIR U1 U2) = (Pair (el U1) (el U2))
+  -- el (LIST U)     = List (el U)
   -- el (HOME U)  = el U
 
   -- Returns the inner u if any
   private
   getU : U -> U
   getU (CRYPT u) = u
-  getU (LIST u)  = u
   -- getU (HOME  u) = u
   getU u         = u
+
+  data InUfamily : Type -> Type where
+    IsUNIT  : InUfamily Unit
+    IsNAT   : InUfamily Nat
+    IsTEXT  : InUfamily String
+    IsREAL  : InUfamily Double
+    IsBOOL  : InUfamily Bool
+    IsCRYPT : {auto p: InUfamily u} -> InUfamily (AES u)
+    IsSCH   : InUfamily (List (String, U))
+    -- IsPAIR  : {auto p1 : InUfamily u1} -> {auto p2 : InUfamily u2} ->
+    --           InUfamily (Pair u1 u2)
+    -- IsLIST  : {auto p: InUfamily u} -> InUfamily (List u)
+
+  le : (t : Type) -> {auto p: InUfamily t} -> U
+  le _ {p = IsUNIT} = UNIT
+  le _ {p = IsNAT}  = NAT
+  le _ {p = IsTEXT} = TEXT Z
+  le _ {p = IsREAL} = REAL
+  le _ {p = IsBOOL} = BOOL
+  le _ {p = IsCRYPT {p} {u}} = CRYPT (le u {p})
+  le _ {p = IsSCH}  = SCH []
+  -- le _ {p = IsPAIR {p1} {p2} {u1} {u2}} = PAIR (le u1 {p=p1}) (le u2 {p=p2})
+  -- le _ {p = IsLIST {p} {u}} = LIST (le u {p})
 
   instance Eq U where
     UNIT == UNIT             = True
@@ -54,8 +78,10 @@ namespace universe
     REAL == REAL             = True
     BOOL == BOOL             = True
     (CRYPT x) == (CRYPT y)   = x == y
-    (LIST x) == (LIST y)     = x == y
-    (PAIR w x) == (PAIR y z) = w == y && x == y
+    -- FIXME: why not total?
+    -- (SCH x) == (SCH y)       = assert_total x == y
+    -- (LIST x) == (LIST y)     = x == y
+    -- (PAIR w x) == (PAIR y z) = w == y && x == y
     -- (HOME x) == (HOME y) = x == y
     _ == _                   = False
 
