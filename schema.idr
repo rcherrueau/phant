@@ -13,76 +13,85 @@ import Data.List
 %default total
 %access public
 
-data Truc : List Type -> Type
-
 -- Universe for Database allowed types (both `U` and `el`)
 --
 -- Every data constructor of U corresponds to a type.
 namespace universe
-  data U = NAT
+  data U = UNIT
+         | NAT
          | TEXT Nat
          | REAL
          | BOOL
          | CRYPT U
          | PAIR U U
+         | LIST U
          -- | HOME U
 
   -- Decoding function
   el : U -> Type
+  el UNIT         = ()
   el NAT          = Nat
   el (TEXT n)     = String
   el REAL         = Double
   el BOOL         = Bool
   el (CRYPT U)    = (AES (el U))
   el (PAIR U1 U2) = (Pair (el U1) (el U2))
+  el (LIST U)     = List (el U)
   -- el (HOME U)  = el U
 
   -- Returns the inner u if any
   private
   getU : U -> U
   getU (CRYPT u) = u
+  getU (LIST u)  = u
   -- getU (HOME  u) = u
   getU u         = u
 
   instance Eq U where
-    NAT == NAT           = True
-    (TEXT x) == (TEXT y) = x == y
-    REAL == REAL         = True
-    BOOL == BOOL         = True
+    UNIT == UNIT             = True
+    NAT == NAT               = True
+    (TEXT x) == (TEXT y)     = x == y
+    REAL == REAL             = True
+    BOOL == BOOL             = True
+    (CRYPT x) == (CRYPT y)   = x == y
+    (LIST x) == (LIST y)     = x == y
+    (PAIR w x) == (PAIR y z) = w == y && x == y
     -- (HOME x) == (HOME y) = x == y
-    (CRYPT x) == (CRYPT y)  = x == y
-    _ == _               = False
+    _ == _                   = False
 
-  instance DecEq U where
-    decEq NAT       NAT       = Yes Refl
-    decEq (TEXT x)  (TEXT y)  with (decEq x y)
-      decEq (TEXT x)  (TEXT x)  | (Yes Refl)
-                              = Yes Refl
-      decEq (TEXT x)  (TEXT y)  | (No contra)
-                              = No (\txIsTy =>
-                                      contra $ cong txIsTy {f = getNat})
-        where
-        getNat : U -> Nat
-        getNat (TEXT x) = x
-        getNat _        = Z
-    decEq REAL      REAL      = Yes Refl
-    decEq BOOL      BOOL      = Yes Refl
-    -- decEq (HOME x)  (HOME y)  with (decEq x y)
-    --   decEq (HOME x)  (HOME x)  | (Yes Refl)
-    --                           = Yes Refl
-    --   decEq (HOME x)  (HOME y)  | (No contra)
-    --                           = No (\hxIsHy =>
-    --                                   contra $ cong hxIsHy {f = getU})
-    decEq (CRYPT x) (CRYPT y) with (decEq x y)
-      decEq (CRYPT x) (CRYPT x) | (Yes Refl)
-                                = Yes Refl
-      decEq (CRYPT x) (CRYPT y) | (No contra)
-                                = No (\cxIsCy => contra $ cong cxIsCy {f = getU})
-    -- For other case, I should go like D. Christiansen
-    -- https://github.com/david-christiansen/IdrisSqlite/blob/master/type-provider-demo/SQLiteTypes.idr
-    decEq x         y         = No believemeNotEq
-        where
-        postulate believemeNotEq : x = y -> Void
+  -- instance DecEq U where
+  --   decEq UNIT UNIT           = Yes Refl
+  --   decEq NAT NAT             = Yes Refl
+  --   decEq (TEXT x)  (TEXT y)  with (decEq x y)
+  --     decEq (TEXT x)  (TEXT x)  | (Yes Refl)
+  --                             = Yes Refl
+  --     decEq (TEXT x)  (TEXT y)  | (No contra)
+  --                             = No (\txIsTy =>
+  --                                     contra $ cong txIsTy {f = getNat})
+  --       where
+  --       getNat : U -> Nat
+  --       getNat (TEXT x) = x
+  --       getNat _        = Z
+  --   decEq REAL      REAL      = Yes Refl
+  --   decEq BOOL      BOOL      = Yes Refl
+  --   decEq (CRYPT x) (CRYPT y) with (decEq x y)
+  --     decEq (CRYPT x) (CRYPT x) | (Yes Refl)
+  --                               = Yes Refl
+  --     decEq (CRYPT x) (CRYPT y) | (No contra)
+  --                               = No (\cxIsCy => contra $ cong cxIsCy {f = getU})
+  --   decEq (LIST x) (LIST y) = ?TODO1
+  --   decEq (PAIR w x) (PAIR y z) = ?TODO2
+  --   -- decEq (HOME x)  (HOME y)  with (decEq x y)
+  --   --   decEq (HOME x)  (HOME x)  | (Yes Refl)
+  --   --                           = Yes Refl
+  --   --   decEq (HOME x)  (HOME y)  | (No contra)
+  --   --                           = No (\hxIsHy =>
+  --   --                                   contra $ cong hxIsHy {f = getU})
+  --   -- For other case, I should go like D. Christiansen
+  --   -- https://github.com/david-christiansen/IdrisSqlite/blob/master/type-provider-demo/SQLiteTypes.idr
+  --   decEq x         y         = No believemeNotEq
+  --       where
+  --       postulate believemeNotEq : x = y -> Void
 
 
 -- An attribute of the database is a paire of a name and a type

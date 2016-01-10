@@ -18,14 +18,6 @@ powerset = filterM (const [True, False])
                            ys <- filterM p xs
                            return (if flg then x :: ys else ys)
 
-||| Type for a Privay Constraint.
-|||
-||| ````idris example
-||| the PC [("Date", NAT), ("Addr", NAT)]
-||| ````
-PC : Type
-PC = List Attribute
-
 ||| Returns the list of privacy constraints that match on a specific
 ||| schema.
 getInnerPCs : Schema -> List PC -> List PC
@@ -224,48 +216,6 @@ preamble s pcs = do
     sequence deducPCs
     putStrLn ""
 
--- instance Handler Guard IO where
---   handle (MkPEnv s ip) (Encrypt x a) k = do
---     putStrLn "Encrypt"
---     k () (MkPEnv (encrypt a s) ip)
---   handle (MkPEnv s' ip) (Frag ipl ipr s) k = do
---     putStrLn "Frag"
---     k () (MkFEnv ipl ipr s)
---   handle (MkPEnv s ip) (Query q) k = do
---     putStrLn "Query"
---     let q' = q (Unit s)
---     k (q' @@ ip) (MkPEnv s ip)
---   handle (MkFEnv ipl ipr s) (QueryL q) k = do
---     putStrLn "QueryL"
---     let q' = q (Unit (indexing s))
---     k (q' @@ ipl) (MkFEnv ipl ipr s)
---   handle (MkFEnv ipl ipr s {s'}) (QueryR q) k = do
---     putStrLn "QueryR"
---     let q' = q (Unit (indexing (s' \\ s)))
---     k (q' @@ ipr) (MkFEnv ipl ipr s)
-
--- instance Handler Guard (StateT Integer IO) where
---     handle (MkPEnv s ip) (Encrypt x a) k            = do
---       put 1
---       lift $ putStrLn $ "const " ++ ": skey [private]."
---       k () (MkPEnv (encrypt a s) ip)
---     handle (MkPEnv s ip) (Frag ipl ipr s') k    = do
---       skey <- get
---       put skey
---       k () (MkFEnv ipl ipr s')
---     handle (MkPEnv s ip) (Query q) k                = do
---       lift $ putStrLn "Query"
---       let q' = q (Unit s)
---       k (q' @@ ip) (MkPEnv s ip)
---     handle (MkFEnv ipl ipr s) (QueryL q) k      = do
---       lift $ putStrLn "QueryL"
---       let q' = q (Unit (indexing s))
---       k (q' @@ ipl) (MkFEnv ipl ipr s)
---     handle (MkFEnv ipl ipr s {s'}) (QueryR q) k = do
---       lift $ putStrLn "QueryR"
---       let q' = q (Unit (indexing (s' \\ s)))
---       k (q' @@ ipr) (MkFEnv ipl ipr s)
-
 -- -- Good! Now, let's generate the code from this information
 -- genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
 -- genPV pcs eff {s} {ip} {a} {- cstate = (Plain (s' @@ ip)) -} = do
@@ -346,6 +296,7 @@ instance Handler Guard (StateT (Schema, Maybe Key) IO) where
       lift $ putStrLn "QueryR"
       let q' = q (Unit fr)
       k [] (MkFEnv sproj)
+
 
 -- Can I get the list of attribute, the state of the cloud and the
 -- list of pc, from a Guard effect ? Yes for the list of attribute and

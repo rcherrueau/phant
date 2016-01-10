@@ -15,6 +15,16 @@ liftSch []                     = ()
 liftSch [(n,u)]                = el u
 liftSch ((_,u) :: s@(a :: as)) = Pair (el u) (liftSch s)
 
+-- data Expr : U -> Type where
+--   ExprNat : Nat -> Expr NAT
+--   ExprStr : (s : String) -> Expr (TEXT (length s))
+--   ExprReal : Double -> Expr REAL
+--   ExprBool : Bool -> Expr BOOL
+--   ExprCrypt : {u : U} -> AES (el u) -> Expr (CRYPT u)
+
+-- liftExpr2 : (el a -> el b -> el c) -> Expr a -> Expr b -> Expr c
+-- liftExpr2 f x y = ?liftExpr2_rhs
+
 -- A query expression (Relation Algebra)
 --
 -- An expression of `RA s` corresponds to a query that will return a

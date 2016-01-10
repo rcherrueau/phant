@@ -14,6 +14,14 @@ import Data.List
 DB : Type -> Type
 DB = List
 
+||| Type for a Privay Constraint.
+|||
+||| ````idris example
+||| the PC [("Date", NAT), ("Addr", NAT)]
+||| ````
+PC : Type
+PC = List Attribute
+
 -- Cloud state : plain or frag
 data CState : Type where
   Plain  : Schema -> CState
@@ -24,6 +32,11 @@ data CEnv : CState -> Type where
   MkFEnv : (sproj : Schema) -> CEnv $ (uncurry FragV) (frag sproj s)
 
 data Guard : Effect where
+  -- Protect : (s : Schema) -> (pcs : List PC) ->
+  -- Protect : (pcs : List PC) ->
+  --           Guard ()
+  --                 (r)
+  --                 (\_ => r)
   Encrypt : (k : String) -> (a : Attribute) ->
             Guard ()
                   (CEnv $ Plain s)
@@ -47,6 +60,11 @@ data Guard : Effect where
 
 GUARD : CState -> EFFECT
 GUARD x = MkEff (CEnv x) Guard
+
+-- protect : (s : Schema) -> (pcs : List PC) -> Eff () [GUARD $ PCs pcs] [GUARD $ Plain s]
+-- protect s pcs = call (Protect s pcs)
+-- protect : (pcs : List PC) -> Eff () [GUARD $ Plain s]
+-- protect pcs = call (Protect pcs)
 
 encrypt : String -> (a : Attribute) -> Eff () [GUARD $ Plain s]
                                               [GUARD $ Plain (encrypt a s)]
