@@ -19,7 +19,7 @@ import Data.List
 namespace universe
   data U = UNIT
          | NAT
-         | TEXT Nat
+         | TEXT
          | REAL
          | BOOL
          | CRYPT U
@@ -32,7 +32,7 @@ namespace universe
   el : U -> Type
   el UNIT         = ()
   el NAT          = Nat
-  el (TEXT n)     = String
+  el TEXT         = String
   el REAL         = Double
   el BOOL         = Bool
   el (CRYPT U)    = (AES (el U))
@@ -63,7 +63,7 @@ namespace universe
   le : (t : Type) -> {auto p: InUfamily t} -> U
   le _ {p = IsUNIT} = UNIT
   le _ {p = IsNAT}  = NAT
-  le _ {p = IsTEXT} = TEXT Z
+  le _ {p = IsTEXT} = TEXT
   le _ {p = IsREAL} = REAL
   le _ {p = IsBOOL} = BOOL
   le _ {p = IsCRYPT {p} {u}} = CRYPT (le u {p})
@@ -74,7 +74,7 @@ namespace universe
   instance Eq U where
     UNIT == UNIT             = True
     NAT == NAT               = True
-    (TEXT x) == (TEXT y)     = x == y
+    TEXT == TEXT             = True
     REAL == REAL             = True
     BOOL == BOOL             = True
     (CRYPT x) == (CRYPT y)   = x == y
@@ -128,6 +128,10 @@ Attribute = (String, U)
 Id : Attribute
 Id = ("Id", NAT)
 
+-- A specific attribute for counting
+Count : Attribute
+Count = ("Count", NAT)
+
 -- Schema that describes the type of the database
 Schema : Type
 Schema = List Attribute
@@ -154,6 +158,10 @@ fragWP sproj s = let sl = intersect sproj s
 
 frag : (sproj : Schema) -> (s : Schema) -> (Schema, Schema)
 frag sproj = (map getWitness) . (fragWP sproj)
+
+count : (scount : Schema) -> (s : Schema) ->
+        {auto inc : Include scount s} -> Schema
+count scount s = scount ++ [Count]
 
 -- FIXME: false implementation: product then delete of Id. This is a
 -- false implementation regarding to what should be done at

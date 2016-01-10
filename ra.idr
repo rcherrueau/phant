@@ -18,7 +18,7 @@ namespace expr
     ExprU     : (u : U) -> Expr u
     ExprUNIT  : Expr UNIT
     ExprNAT   : Nat -> Expr NAT
-    ExprTEXT  : (s : String) -> Expr (TEXT (length s))
+    ExprTEXT  : String -> Expr TEXT
     ExprREAL  : Double -> Expr REAL
     ExprBOOL  : Bool -> Expr BOOL
     ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u)
@@ -83,7 +83,7 @@ namespace expr
   implicit natNAT : Nat -> Expr NAT
   natNAT = ExprNAT
 
-  implicit stringTEXT : (s : String) -> Expr (TEXT (length s))
+  implicit stringTEXT : String -> Expr TEXT
   stringTEXT = ExprTEXT
 
   implicit doubleREAL : Double -> Expr REAL
@@ -136,6 +136,11 @@ data RA : Schema -> Type where
             {auto elem : Elem a s} -> RA s -> RA s
   -- -- TODO: Join take an element to do the join
   Drop     : (sproj : Schema) -> RA s -> RA (s \\ sproj)
+  -- FIXME: Do a better tatic, Something that work on each schema
+  -- rather than schema singleton
+  Count    : (scount : Schema) ->
+             {default (includeSingleton Here) inc : Include scount s} ->
+             RA s -> RA (count scount s {inc})
   -- -- Introduce
   Unit     : (s : Schema) -> RA s
 
@@ -158,6 +163,11 @@ diff = Diff
 
 drop : (sproj : Schema) -> RA s -> RA (s \\ sproj)
 drop = Drop
+
+count : (scount : Schema) ->
+        {default (includeSingleton Here) inc : Include scount s} ->
+        RA s -> RA (count scount s {inc})
+count = Count
 
 getSchema : RA s -> Schema
 getSchema _ {s} = s

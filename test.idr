@@ -8,13 +8,13 @@ D : Attribute
 D = ("Date", NAT)
 
 N : Attribute
-N = ("Name", TEXT 255)
+N = ("Name", TEXT)
 
 Nc : Attribute
-Nc = ("Name", CRYPT (TEXT 255))
+Nc = ("Name", CRYPT TEXT)
 
 A : Attribute
-A = ("Addr", TEXT 255)
+A = ("Addr", TEXT)
 
 LeftFragTy : Schema
 LeftFragTy = [D, Id]
@@ -22,26 +22,27 @@ LeftFragTy = [D, Id]
 RightFragTy : Schema
 RightFragTy = [Nc, A, Id]
 
-places : Eff (Expr $ SCH [Nc]) [GUARD $ Plain [D, N,  A]]
-                               [GUARD $ Plain [D, Nc, A]]
-places = do
-  encrypt "mykey" N
-  query (π [Nc] . σ D (\d => d == Z))
+nextWeek : Expr (getU D) -> Expr BOOL
+nextWeek d = ExprBOOL True
 
-meetings : Eff (Expr $ SCH [Nc]) [GUARD $ Plain [D, Nc, A]]
+-- Places for meetgins of the next week
+places : Eff (Expr $ SCH [A]) [GUARD $ Plain [D, N, A]]
+places = do
+  query (π [A] . σ D nextWeek)
+
+meetings : Eff (Expr $ SCH [D, Count]) [GUARD $ Plain [D, N, A]]
 meetings = do
-  encrypt "mykey" N
-  query (π [Nc] . σ Nc ((==) (encrypt "mykey" "Bob")))
+  query (count [D] . σ N ((==) "Bob"))
 
 -- left-first strategy
-places' : Eff (Expr $ SCH [Nc,A,Id]) [GUARD $ Plain [D, N, A]]
-                                     [GUARD $ FragV LeftFragTy RightFragTy]
+places' : Eff (Expr $ SCH [A]) [GUARD $ Plain [D, N, A]]
+                               [GUARD $ FragV LeftFragTy RightFragTy]
 places' = do
   encrypt "mykey" N
   frag [D]
-  ids  <- queryL (π [Id] . σ D ((==) (S Z)))
-  let q = queryR (σ Id (flip elem ids))
-  qRes <- q
+  ids  <- queryL (π [Id] . σ D nextWeek)
+  let ra = queryR (π [A] . σ Id (flip elem ids))
+  qRes <- ra
   pure qRes
 
 meetings' : Eff (Expr $ SCH [D,Id])
@@ -53,6 +54,7 @@ meetings' = do
                 -- ra.σ Nc (expr.(==) "Bob"))
                 -- ra.σ Nc (expr.(>=) contact))
                 σ Nc ((==) contact))
+  -- TODO: pure (count [D] . ql * qr)
   pure (ql * qr)
 
 main : IO ()
