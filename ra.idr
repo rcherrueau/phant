@@ -33,8 +33,8 @@ namespace expr
     ExprDiff    : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
     ExprProduct : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
     ExprProject : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
-    -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
-    --               {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
+    ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+                  {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
     ExprDrop    : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
     ExprCount   : (scount : Schema) ->
                   {default (includeSingleton Here) inc : Include scount s} ->
@@ -65,12 +65,12 @@ namespace expr
   (*) : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
   (*) = ExprProduct
 
-  π : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
-  π = ExprProject
+  project : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
+  project = ExprProject
 
-  -- σ : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
-  --        {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
-  -- σ = assert_total ExprSelect
+  select : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+         {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
+  select = assert_total ExprSelect
 
   drop : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
   drop = ExprDrop
@@ -161,12 +161,12 @@ diff = Diff
 (*) : RA s -> RA s' -> RA (s * s')
 (*) = Product
 
-π : (sproj : Schema) -> RA s -> RA (intersect sproj s)
-π = Project
+project : (sproj : Schema) -> RA s -> RA (intersect sproj s)
+project = Project
 
-σ : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
-    {auto elem : Elem a s} -> RA s -> RA s
-σ = Select
+select : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+         {auto elem : Elem a s} -> RA s -> RA s
+select = Select
 
 drop : (sproj : Schema) -> RA s -> RA (s \\ sproj)
 drop = Drop
