@@ -33,9 +33,12 @@ namespace expr
     ExprDiff    : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
     ExprProduct : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
     ExprProject : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
-    ExprSelect  : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
-                  {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
-    ExprDrop     : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
+    -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+    --               {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
+    ExprDrop    : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
+    ExprCount   : (scount : Schema) ->
+                  {default (includeSingleton Here) inc : Include scount s} ->
+                  Expr $ SCH s -> Expr $ SCH (count scount s {inc})
 
   -- Operation
   (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
@@ -65,13 +68,17 @@ namespace expr
   π : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
   π = ExprProject
 
-  σ : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
-                  {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
-  σ = assert_total ExprSelect
+  -- σ : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+  --        {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
+  -- σ = assert_total ExprSelect
 
   drop : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
   drop = ExprDrop
 
+  count : (scount : Schema) ->
+          {default (includeSingleton Here) inc : Include scount s} ->
+          Expr $ SCH s -> Expr $ SCH (count scount s {inc})
+  count = ExprCount
   -- Implicit conversion for dsl
   -- -- λΠ> the (Expr (PAIR NAT (PAIR NAT UNIT))) (1,1,())
   -- implicit pairPAIR : (Pair (el x) (el y)) -> Expr (PAIR x y)
@@ -172,11 +179,3 @@ count = Count
 getSchema : RA s -> Schema
 getSchema _ {s} = s
 
----------- Proofs ----------
-
--- phant.ra.mlj = proof
---   intros
---   let v = (evalExpr x)
---   let elemV = (elem v)
---   refine elemV
---   exact xs

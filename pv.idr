@@ -6,6 +6,7 @@ import Effects
 import Control.Monad.State
 
 %access public
+%default total
 
 ||| Powerset of a list
 -- http://evan-tech.livejournal.com/220036.html
@@ -228,7 +229,8 @@ preamble s pcs = do
 --   return ()
 
 mkTuple : Schema -> String
-mkTuple s = "(" ++ concat (intersperse "," (map mkAttrId s)) ++ ")"
+mkTuple s = let s' = delete Count (delete Id s)
+            in "(" ++ concat (intersperse "," (map mkAttrId s')) ++ ")"
 
 genRA : RA s -> Schema -> Maybe Key -> IO ()
 genRA (Union x y)      ts k = do
@@ -260,6 +262,11 @@ genRA (Select a q x) {s} ts k = do
 genRA (Drop s' x)      ts k = do
   let attrs = mkTuple s'
   putStrLn $ "drop(" ++ attrs ++ ","
+  genRA x ts k
+  putStrLn ")"
+genRA (Count scount x) ts k = do
+  let attrs = mkTuple scount
+  putStrLn $ "count(" ++ attrs ++ ","
   genRA x ts k
   putStrLn ")"
 genRA (Unit s ) ts k = genSchema ts s k

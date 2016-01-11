@@ -45,7 +45,7 @@ places' = do
   qRes <- ra
   pure qRes
 
-meetings' : Eff (Expr $ SCH [D,Id])
+meetings' : Eff (Expr $ SCH [D,Count])
                 [GUARD $ FragV LeftFragTy RightFragTy]
 meetings' = do
   let contact = expr.encrypt "mykey" "Bob"
@@ -54,18 +54,17 @@ meetings' = do
                 -- ra.σ Nc (expr.(==) "Bob"))
                 -- ra.σ Nc (expr.(>=) contact))
                 σ Nc ((==) contact))
-  -- TODO: pure (count [D] . ql * qr)
-  pure (ql * qr)
+  pure (count [D] $ (ql * qr))
 
 main : IO ()
--- main = do let PCs =  [[N],[D,A]]
---           genPV PCs (do
---             places
---             meetings)
---           genPV PCs (do
---             places'
---             meetings')
-main = putStrLn "lala"
+main = do let PCs =  [[N],[D,A]]
+          genPV PCs (do
+            places
+            meetings)
+          genPV PCs (do
+            places'
+            meetings')
+-- main = putStrLn "lala"
 
 -- λΠ> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "EC2" ] lFirstStrat
 
