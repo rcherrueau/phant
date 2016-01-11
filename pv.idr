@@ -19,15 +19,6 @@ powerset = filterM (const [True, False])
                            ys <- filterM p xs
                            return (if flg then x :: ys else ys)
 
-||| Returns the list of privacy constraints that match on a specific
-||| schema.
-getInnerPCs : Schema -> List PC -> List PC
-getInnerPCs s = filter (flip included s)
-  where
-  ||| Tests if the first list is included in the second.
-  included : Eq a => List a -> List a -> Bool
-  included xs ys = all (flip elem ys) xs
-
 ||| Makes an identifier from an attribute.
 mkAttrId : Attribute -> String
 mkAttrId = name

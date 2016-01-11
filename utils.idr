@@ -5,9 +5,7 @@ import public Data.List
 %default total
 %access public
 
-infix 5 @
 infix 5 @@
-
 
 -- List Inclusion.
 namespace inclusion
@@ -16,7 +14,7 @@ namespace inclusion
   -- Asserts that the elements of the first list are elements of the
   -- second list.
   -- Axiom of power set:
-  -- https://en.wikipedia.org/wiki/Axiom_of_power_set
+  -- https://en.wiktagedia.org/wiki/Axiom_of_power_set
   Include : List a -> List a -> Type
   Include xs ys = (z : _) -> Elem z xs -> Elem z ys
 
@@ -115,43 +113,28 @@ namespace inclusion
   --   let zsIncXs = \z,zInZs => fst $ elemInter xs ys z zInZs in
   --   let zsIncYs = \z,zInZs => snd $ elemInter xs ys z zInZs in
   --   (zsIncXs, zsIncYs)
-namespace location
-  Ip : Type
-  Ip = String
+namespace tag
+  Tag : Type
+  Tag = String
 
   -- abstract -- to keep constructor private
-  -- TODO: rename @ as Loc. @@ as @. Make it instance of Functor
-  data Loc : (ip : Ip) -> (a : Type) -> Type where
-    (@) : (v : a) -> (ip : Ip) -> Loc ip a
+  -- TODO: rename @ as Tagged. @@ as @. Make it instance of Functor
+  data Tagged : (tag : Tag) -> (a : Type) -> Type where
+    (@@) : (v : a) -> (tag : Tag) -> Tagged tag a
 
-  getVal : Loc ip a -> a
-  getVal ((@) v ip) = v
+  getVal : Tagged tag a -> a
+  getVal (v @@ tag) = v
 
-  getIp : Loc ip a -> Ip
-  getIp _ {ip} = ip
+  getTag : Tagged tag a -> Tag
+  getTag _ {tag} = tag
 
-  instance Functor (Loc ip) where
+  instance Functor (Tagged tag) where
       map m x = let v  = getVal x
-                    ip = getIp x
-                in (m v) @ ip
+                    tag = getTag x
+                in (m v) @@ tag
 
-  -- The algorithm is more complicated than this. The idea is the
-  -- following.
-  --
-  -- > Are the two ip equals?
-  -- > Yes => Keep the ip
-  -- > No => Is the computation involve attributes that are inside
-  -- >       the PCs?
-  -- >       Yes => Set ip to local
-  -- >       No  => Set ip to application
-  --
-  -- Unfortunately, this requires PC and schema, two information that
-  -- are not available as it.
-  manageIp : Ip -> Ip -> Ip
-  manageIp x y = if x == "local" || y == "local" then x
-                 else if x == "app" then y
-                 else if y == "app" then x
-                 else "local"
+  setTag : (tag' : Tag) -> Tagged tag t -> Tagged tag' t
+  setTag tag' (v @@ tag) = v @@ tag'
 
 namespace other
   map : (a -> b) -> (a, a) -> (b, b)

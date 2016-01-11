@@ -220,3 +220,66 @@ liftSch ((_,u) :: s@(a :: as)) = Pair (el u) (liftSch s)
 -- liftSchU []                     = UNIT
 -- liftSchU [(n,u)]                = u
 -- liftSchU ((_,u) :: s@(a :: as)) = PAIR u (liftSchU s)
+
+||| Type for a Privay Constraint.
+|||
+||| ````idris example
+||| the PC [("Date", NAT), ("Addr", NAT)]
+||| ````
+PC : Type
+PC = List Attribute
+
+||| Returns the list of privacy constraints that match on a specific
+||| schema.
+getInnerPCs : Schema -> List PC -> List PC
+getInnerPCs s = filter (flip included s)
+  where
+  ||| Tests if the first list is included in the second.
+  included : Eq a => List a -> List a -> Bool
+  included xs ys = all (flip elem ys) xs
+
+namespace location
+  App : Tag
+  App = "idris"
+
+  Local : Tag
+  Local = "local"
+
+  ||| Compute the new ip.
+  ||| @ t1 my ip
+  ||| @ t2 the other ip
+  mip : (s1 : Schema) -> (t1 : Tag) -> (s2 : Schema) -> (t2 : Tag) -> List PC -> Tag
+  mip s1 t1 s2 t2 pcs with (t2 == Local)
+    mip s1 t1 s2 t2 pcs | True  = Local
+    mip s1 t1 s2 t2 pcs | False with (t2 == App)
+      mip s1 t1 s2 t2 pcs | False | True = t1
+      -- t2 is the other fragment (or t1 itself)
+      mip s1 t1 s2 t2 pcs | False | False with (isCons (getInnerPCs (s1 * s2) pcs))
+        mip s1 t1 s2 t2 pcs | False | False | True = Local
+        mip s1 t1 s2 t2 pcs | False | False | False = t1
+
+  mip2 : (t1 : Tag) -> (t2 : Tag) -> Tag
+  mip2 t1 t2 with (t2 == Local)
+    mip2 t1 t2 | True  = Local
+    mip2 t1 t2 | False with (t2 == App)
+      mip2 t1 t2 | False | True = t1
+      -- t2 is somewhere else in the cloud
+      mip2 t1 t2 | False | False = t1
+
+  -- The algorithm is more complicated than this. The idea is the
+  -- following.
+  --
+  -- > Are the two tag equals?
+  -- > Yes => Keep the tag
+  -- > No => Is the computation involve attributes that are inside
+  -- >       the PCs?
+  -- >       Yes => Set tag to local
+  -- >       No  => Set tag to application
+  --
+  -- Unfortunately, this requires PC and schema, two information that
+  -- are not available as it.
+  -- manageTag : Tag -> Tag -> Tag
+  -- manageTag x y = if x == "local" || y == "local" then x
+  --                else if x == "app" then y
+  --                else if y == "app" then x
+  --                else "local"
