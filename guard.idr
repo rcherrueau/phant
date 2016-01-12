@@ -8,6 +8,7 @@ import public crypt
 
 import public Effects
 import Data.List
+import public Data.Vect
 
 %default total
 %access public
@@ -26,11 +27,11 @@ PC = List Attribute
 -- Cloud state : plain or frag
 data CState : Type where
   Plain  : Schema -> CState
-  FragV  : Schema -> Schema -> CState
+  FragV  : Vect n Schema -> CState
 
 data CEnv : CState -> Type where
   MkPEnv : (s : Schema) -> CEnv (Plain s)
-  MkFEnv : (sproj : Schema) -> CEnv $ (uncurry FragV) (frag sproj s)
+  MkFEnv : (sprojs : List Schema) -> CEnv $ FragV (frag sproj s)
 
 data Guard : Effect where
   -- Protect : (s : Schema) -> (pcs : List PC) ->
@@ -42,47 +43,53 @@ data Guard : Effect where
             Guard ()
                   (CEnv $ Plain s)
                   (\_ => CEnv $ Plain (encrypt a s))
-  Frag    : (sproj : Schema) ->
+  EncryptF: (fId : Fin n) -> (k : String) -> (a : Attribute) ->
+            Guard ()
+                  (CEnv $ FragV ss)
+                  (\_ => CEnv $ FragV (encryptF a fId ss))
+  Frag    : (sprojs : List Schema) ->
             Guard ()
                   (CEnv $ Plain s')
-                  (\_ => CEnv $ (uncurry FragV) (frag sproj s))
-  Query   : (q : RA s s -> RA s' x) ->
-            Guard (Expr (SCH s') x)
+                  (\_ => CEnv $ FragV (frag sprojs s))
+  Query   : (q : RA s s -> RA s' ctx) ->
+            Guard (Expr (SCH s') {ctx})
                   (CEnv $ Plain s)
                   (\_ => CEnv $ Plain s)
-  QueryL  : (q : RA sl sl -> RA sl' x) ->
-            Guard (Expr (SCH sl') x)
-                  (CEnv $ FragV sl sr)
-                  (\_ => CEnv $ FragV sl sr)
-  QueryR  : (q : RA sr sr -> RA sr' x) ->
-            Guard (Expr (SCH sr') x)
-                  (CEnv $ FragV sl sr)
-                  (\_ => CEnv $ FragV sl sr)
+  QueryF  : (fId : Fin n) -> (RA (getSchema fId ss) (getSchema fId ss) -> RA s' ctx) ->
+            Guard (Expr (SCH s') {ctx})
+                  (CEnv $ FragV ss)
+                  (\_ => CEnv $ FragV ss)
 
 GUARD : CState -> EFFECT
 GUARD x = MkEff (CEnv x) Guard
 
--- protect : (s : Schema) -> (pcs : List PC) -> Eff () [GUARD $ PCs pcs] [GUARD $ Plain s]
--- protect s pcs = call (Protect s pcs)
--- protect : (pcs : List PC) -> Eff () [GUARD $ Plain s]
--- protect pcs = call (Protect pcs)
+-- -- protect : (s : Schema) -> (pcs : List PC) -> Eff () [GUARD $ PCs pcs] [GUARD $ Plain s]
+-- -- protect s pcs = call (Protect s pcs)
+-- -- protect : (pcs : List PC) -> Eff () [GUARD $ Plain s]
+-- -- protect pcs = call (Protect pcs)
 
-encrypt : String -> (a : Attribute) -> Eff () [GUARD $ Plain s]
-                                              [GUARD $ Plain (encrypt a s)]
-encrypt k a = call (Encrypt k a)
+namespace plain
+  encrypt : String -> (a : Attribute) -> Eff () [GUARD $ Plain s]
+                                                [GUARD $ Plain (encrypt a s)]
+  encrypt k a = call (Encrypt k a)
 
-frag : (sproj : Schema) -> Eff () [GUARD $ Plain s]
-                                  [GUARD $ (uncurry FragV) (frag sproj s)]
-frag sproj = call (Frag sproj)
+  frag : (sprojs : List Schema) -> Eff () [GUARD $ Plain s]
+                                          [GUARD $ FragV (frag sprojs s)]
+  frag sprojs = call (Frag sprojs)
 
-query : (RA s s -> RA s' x) -> Eff (Expr (SCH s') x) [GUARD $ Plain s]
-query q = call (Query q)
+  query : (RA s s -> RA s' ctx) -> Eff (Expr (SCH s') {ctx}) [GUARD $ Plain s]
+  query q = call (Query q)
 
-queryL : (RA sl sl -> RA sl' x) -> Eff (Expr (SCH sl') x) [GUARD $ FragV sl sr]
-queryL q = call (QueryL q)
+namespace frag
+  encrypt : (fId : Fin n) -> String -> (a : Attribute) ->
+            Eff () [GUARD $ FragV ss]
+                   [GUARD $ FragV (encryptF a fId ss)]
+  encrypt fId k a = call (EncryptF fId k a)
 
-queryR : (RA sr sr -> RA sr' x) -> Eff (Expr (SCH sr') x) [GUARD $ FragV sl sr]
-queryR q = call (QueryR q)
+  query : (fId : Fin n) ->
+          (RA (getSchema fId ss) (getSchema fId ss) -> RA s' ctx) ->
+          Eff (Expr (SCH s') {ctx}) [GUARD $ FragV ss]
+  query fId q = call (QueryF fId q)
 
 -- Local Variables:
 -- idris-load-packages: ("effects")

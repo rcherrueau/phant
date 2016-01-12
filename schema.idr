@@ -9,6 +9,7 @@ import crypt
 import utils
 
 import Data.List
+import Data.Vect
 
 %default total
 %access public
@@ -156,8 +157,12 @@ fragWP sproj s = let sl = intersect sproj s
                      sr = s \\ sproj
                  in (indexingWP sl, indexingWP sr)
 
-frag : (sproj : Schema) -> (s : Schema) -> (Schema, Schema)
-frag sproj = (map getWitness) . (fragWP sproj)
+-- frag : (sproj : Schema) -> (s : Schema) -> (Schema, Schema)
+-- frag sproj = (map getWitness) . (fragWP sproj)
+
+frag : (sprojs : List Schema) -> (s : Schema) -> Vect (S (length sprojs)) Schema
+frag [] s        = [indexing s]
+frag (x :: xs) s = (indexing $ intersect x s) :: (frag xs (s \\ x))
 
 count : (scount : Schema) -> (s : Schema) ->
         {auto inc : Include scount s} -> Schema
@@ -181,6 +186,10 @@ encrypt a []        = []
 encrypt a (x :: xs) with (a == x)
   encrypt a     (x :: xs) | False = x :: (encrypt a xs)
   encrypt (n,u) (x :: xs) | True  = (n, CRYPT u) :: xs
+
+encryptF : Attribute -> (fId : Fin n) -> Vect n Schema -> Vect n Schema
+encryptF a FZ     (x :: xs) = (encrypt a x) :: xs
+encryptF a (FS k) (x :: xs) = x :: (encryptF a k xs)
 
 getU : Attribute -> U
 getU = snd
@@ -215,6 +224,11 @@ liftSch : (s : Schema) -> Type
 liftSch []                     = ()
 liftSch [(n,u)]                = el u
 liftSch ((_,u) :: s@(a :: as)) = Pair (el u) (liftSch s)
+
+getSchema : (fId : Fin n) -> Vect n Schema -> Schema
+getSchema FZ     (x :: xs) = x
+getSchema (FS k) (x :: xs) = getSchema k xs
+
 
 -- liftSchU : (s : Schema) -> U
 -- liftSchU []                     = UNIT
