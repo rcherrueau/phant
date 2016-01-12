@@ -12,37 +12,37 @@ import Debug.Trace
 
 namespace expr
   mutual
-    data Expr : U -> {ctx : Schema} -> Type where
+    data Expr : U -> Type where
     --   -- ExprElU : {u : U} -> (v : a) -> Expr u
     --   -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     --   -- Type
     --   ExprU     : (u : U) -> Expr u
     --   ExprUNIT  : Expr UNIT
     --   ExprNAT   : Nat -> Expr NAT
-      ExprTEXT  : String -> Expr TEXT {ctx=[]}
+      ExprTEXT  : String -> Expr TEXT
     --   ExprREAL  : Double -> Expr REAL
-      ExprBOOL  : Bool -> Expr BOOL {ctx=[]}
-      ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) {ctx=[]}
+      ExprBOOL  : Bool -> Expr BOOL
+      ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u)
     --   ExprSCH     : (s : Schema) -> Expr (SCH s)
     --   -- Operation
-      ExprEq    : Eq (el a) => Expr a {ctx=x} -> Expr a {ctx=y} -> Expr BOOL {ctx=(x * y)}
-      ExprGtEq  : Ord (el a) => Expr a {ctx=x} -> Expr a {ctx=y} -> Expr BOOL {ctx=(x * y)}
-      ExprElem  : Eq (el a) => Expr a {ctx=x} -> Expr (SCH s) {ctx=y} -> Expr BOOL {ctx=(x * y)}
+      ExprEq    : Eq (el a) => Expr a  -> Expr a  -> Expr BOOL
+      ExprGtEq  : Ord (el a) => Expr a  -> Expr a  -> Expr BOOL
+      ExprElem  : Eq (el a) => Expr a  -> Expr (SCH s)  -> Expr BOOL
     --   ExprNot   : Expr BOOL -> Expr BOOL
     --   -- Schema
     --   ExprUnion   : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
     --   ExprDiff    : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
-      ExprProduct : Expr (SCH s) {ctx=x} -> Expr (SCH s') {ctx=y} ->
-                    Expr (SCH (s * s')) {ctx=x * y}
-      ExprProject : (sproj : Schema) -> Expr (SCH s) {ctx=x} -> Expr (SCH (intersect sproj s))
-                                                                     {ctx=x}
+      ExprProduct : Expr (SCH s)  -> Expr (SCH s')  ->
+                    Expr (SCH (s * s'))
+      ExprProject : (sproj : Schema) -> Expr (SCH s)  -> Expr (SCH (intersect sproj s))
+
     --   ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
     --                 {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
     --   ExprDrop    : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
       ExprCount   : (scount : Schema) ->
                     {default (includeSingleton Here) inc : Include scount s} ->
-                    Expr (SCH s) {ctx=x} -> Expr (SCH (count scount s {inc}))
-                                                 {ctx=(scount ++ (x \\ s))}
+                    Expr (SCH s)  -> Expr (SCH (count scount s {inc}))
+
 
     -- Operation
     -- (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
@@ -57,10 +57,10 @@ namespace expr
     -- not : Expr BOOL -> Expr BOOL
     -- not = ExprNot
 
-    const : Expr a {ctx=x} -> Expr b -> Expr a {ctx=x}
+    const : Expr a  -> Expr b -> Expr a
     const a b = a
 
-    encrypt : Crypt (el u) (AES (el u)) => Key -> (el u) -> Expr (CRYPT u) {ctx=[]}
+    encrypt : Crypt (el u) (AES (el u)) => Key -> (el u) -> Expr (CRYPT u)
     encrypt k x = ExprCRYPT (encrypt k x)
 
     -- union : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
@@ -112,9 +112,6 @@ namespace expr
     -- implicit schemaSCH : (l : Schema) -> Expr (SCH l)
     -- schemaSCH = ExprSCH
 
-    getCtx : Expr s {ctx} -> Schema
-    getCtx _ {ctx} = ctx
-
     -- evalExpr : Expr u -> (el u)
     -- evalExpr (ExprPAIR p) = p
     -- evalExpr ExprUNIT = ()
@@ -141,28 +138,27 @@ namespace expr
 --
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
-data RA : Schema -> (ctx : Schema) -> Type where
+data RA : Schema -> Type where
   -- Set operators
-  -- Union    : RA s {ctx} -> RA s {ctx=ctx'} -> RA s {ctx=ctx * ctx'}
-  -- Diff     : RA s {ctx} -> RA s'{ctx=ctx'} -> RA s {ctx=ctx * ctx'}
-  -- Product  : RA s {ctx} -> RA s'{ctx=ctx'} -> RA (s * s') {ctx=ctx * ctx'}
+  -- Union    : RA s  -> RA s  -> RA s
+  -- Diff     : RA s  -> RA s' -> RA s
+  -- Product  : RA s  -> RA s' -> RA (s * s')
   -- Others
-  -- Project  : (sproj : Schema) -> RA s ctx -> RA (intersect sproj s) (ctx * (intersect sproj s))
+  -- Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
   -- Dans mon context, j'enleve le s puis je remet le
-  Project  : (sproj : Schema) -> RA s ctx -> RA (intersect sproj s)
-                                                (((++) sproj . flip (\\) s) ctx)
+  Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
   -- TODO: Select on an element with specific operation
-  Select  : (a : Attribute) -> (Expr (getU a) {ctx=[a]} -> Expr BOOL {ctx=x}) ->
-            {auto elem : Elem a s} -> RA s ctx -> RA s (ctx * x)
+  Select  : (a : Attribute) -> (Expr (getU a)  -> Expr BOOL ) ->
+            {auto elem : Elem a s} -> RA s -> RA s
   -- -- TODO: Join take an element to do the join
-  -- Drop     : (sproj : Schema) -> RA s {ctx} -> RA (s \\ sproj) {ctx=ctx}
+  -- Drop     : (sproj : Schema) -> RA s  -> RA (s \\ sproj)
   -- -- FIXME: Do a better tatic, Something that work on each schema
   -- -- rather than schema singleton
   Count    : (scount : Schema) ->
              {default (includeSingleton Here) inc : Include scount s} ->
-             RA s x -> RA (count scount s {inc}) ((\x => scount ++ (x \\ s)) x)
+             RA s -> RA (count scount s {inc})
   -- -- -- Introduce
-  Unit     : (s : Schema) -> RA s s
+  Unit     : (s : Schema) -> RA s
 
 -- union : RA s -> RA s -> RA s
 -- union = Union
@@ -188,8 +184,6 @@ data RA : Schema -> (ctx : Schema) -> Type where
 --         RA s -> RA (count scount s {inc})
 -- count = Count
 
-getSchema : RA s ctx -> Schema
+getSchema : RA s -> Schema
 getSchema _ {s} = s
 
-getCtx : RA s ctx -> Schema
-getCtx _ {ctx} = ctx

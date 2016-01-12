@@ -51,12 +51,12 @@ data Guard : Effect where
             Guard ()
                   (CEnv $ Plain s')
                   (\_ => CEnv $ FragV (frag sprojs s))
-  Query   : (q : RA s s -> RA s' ctx) ->
-            Guard (Expr (SCH s') {ctx})
+  Query   : (q : RA s -> RA s') ->
+            Guard (Expr (SCH s'))
                   (CEnv $ Plain s)
                   (\_ => CEnv $ Plain s)
-  QueryF  : (fId : Fin n) -> (RA (getSchema fId ss) (getSchema fId ss) -> RA s' ctx) ->
-            Guard (Expr (SCH s') {ctx})
+  QueryF  : (fId : Fin n) -> (RA (getSchema fId ss) -> RA s') ->
+            Guard (Expr (SCH s'))
                   (CEnv $ FragV ss)
                   (\_ => CEnv $ FragV ss)
 
@@ -77,7 +77,7 @@ namespace plain
                                           [GUARD $ FragV (frag sprojs s)]
   frag sprojs = call (Frag sprojs)
 
-  query : (RA s s -> RA s' ctx) -> Eff (Expr (SCH s') {ctx}) [GUARD $ Plain s]
+  query : (RA s -> RA s') -> Eff (Expr (SCH s')) [GUARD $ Plain s]
   query q = call (Query q)
 
 namespace frag
@@ -87,8 +87,8 @@ namespace frag
   encrypt fId k a = call (EncryptF fId k a)
 
   query : (fId : Fin n) ->
-          (RA (getSchema fId ss) (getSchema fId ss) -> RA s' ctx) ->
-          Eff (Expr (SCH s') {ctx}) [GUARD $ FragV ss]
+          (RA (getSchema fId ss) -> RA s') ->
+          Eff (Expr (SCH s')) [GUARD $ FragV ss]
   query fId q = call (QueryF fId q)
 
 -- Local Variables:
