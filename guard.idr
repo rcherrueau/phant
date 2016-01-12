@@ -46,16 +46,16 @@ data Guard : Effect where
             Guard ()
                   (CEnv $ Plain s')
                   (\_ => CEnv $ (uncurry FragV) (frag sproj s))
-  Query   : (q : RA s -> RA s') ->
-            Guard (Expr $ SCH s')
+  Query   : (q : RA s s -> RA s' x) ->
+            Guard (Expr (SCH s') x)
                   (CEnv $ Plain s)
                   (\_ => CEnv $ Plain s)
-  QueryL  : (q : RA sl -> RA sl') ->
-            Guard (Expr $ SCH sl')
+  QueryL  : (q : RA sl sl -> RA sl' x) ->
+            Guard (Expr (SCH sl') x)
                   (CEnv $ FragV sl sr)
                   (\_ => CEnv $ FragV sl sr)
-  QueryR  : (q : RA sr -> RA sr') ->
-            Guard (Expr $ SCH sr')
+  QueryR  : (q : RA sr sr -> RA sr' x) ->
+            Guard (Expr (SCH sr') x)
                   (CEnv $ FragV sl sr)
                   (\_ => CEnv $ FragV sl sr)
 
@@ -75,14 +75,13 @@ frag : (sproj : Schema) -> Eff () [GUARD $ Plain s]
                                   [GUARD $ (uncurry FragV) (frag sproj s)]
 frag sproj = call (Frag sproj)
 
-query : (RA s -> RA s') -> Eff (Expr $ SCH s') [GUARD $ Plain s]
+query : (RA s s -> RA s' x) -> Eff (Expr (SCH s') x) [GUARD $ Plain s]
 query q = call (Query q)
 
-queryL : (RA sl -> RA sl') -> Eff (Expr $ SCH sl') [GUARD $ FragV sl sr]
+queryL : (RA sl sl -> RA sl' x) -> Eff (Expr (SCH sl') x) [GUARD $ FragV sl sr]
 queryL q = call (QueryL q)
 
-queryR : (RA sr -> RA sr') ->
-         Eff (Expr $ SCH sr') [GUARD $ FragV sl sr]
+queryR : (RA sr sr -> RA sr' x) -> Eff (Expr (SCH sr') x) [GUARD $ FragV sl sr]
 queryR q = call (QueryR q)
 
 -- Local Variables:
