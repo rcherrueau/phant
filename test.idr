@@ -24,57 +24,59 @@ syntax "sch" [sch] from [guard] = Eff (Expr (SCH sch)) guard
 nextWeek : Expr (getU D) p -> Expr BOOL AppP
 nextWeek _ = ExprBOOL True
 
--- -- Places for meetgins from the next week
--- -- 1
--- places : Eff (Expr (SCH [A])) [GUARD $ Plain [D,N,A]]    -- 0 App.Alice   (2)
--- -- places : sch [A] from db[D,N,A]
--- places = do
---   query (Project [A] . Select D nextWeek)                -- App App.DB    (1)
+-- Places for meetgins from the next week
+-- 1
+-- Note: Pour la valeur retournée il faut que je me pose la question, quid si je combine?
+places : Eff (Expr (SCH [A]) (App,App,DB)) [GUARD $ Plain [D,N,A]]
+-- places : sch [A] from db[D,N,A]                          -- 0 App.Alice   (2)
+places = do
+  query (Project [A] . Select D nextWeek)                   -- App App.DB    (1)
 
 -- -- 2
--- meetings : Eff (Expr (SCH [D,Count])) [GUARD $ Plain [D,N,A]]
--- -- meetings : sch[D, Count] from db[D,N,A]                  -- 0   App.Alice (2)
--- meetings = do
---   query (Count [D] . Select N (ExprEq (ExprTEXT "Bob"))) -- App App.DB    (1)
+meetings : Eff (Expr (SCH [D,Count]) (App,App,DB)) [GUARD $ Plain [D,N,A]]
+-- meetings : sch[D, Count] from db[D,N,A]                  -- 0   App.Alice (2)
+meetings = do
+  query (Count [D] . Select N (ExprEq (ExprTEXT "Bob")))    -- App App.DB    (1)
 
--- -- left-first strategy
--- -- 3
--- places' : Eff (Expr (SCH [A])) [GUARD $ Plain [D,N,A]]
---                                [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
--- -- places' : sch[A] from (frags[[D, Id],[Nc,A,Id]] of db[D, N, A])
--- places' = do
---   encrypt "mykey" N
---   frag [[D]]
---   ids  <- queryL (Project [Id] . Select D nextWeek)               -- App App.L     (1)
---   qRes <- queryR (Project [A] . Select Id (flip ExprElem ids))    -- App App.R     (2)
---   pure qRes                                                       -- 0   App.Alice (3)
+-- left-first strategy
+-- 3
+places' : Eff (Expr (SCH [A])(App,App,(Frag $ the (Fin 2) 1))) [GUARD $ Plain [D,N,A]]
+                               [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
+-- places' : sch[A] from (frags[[D, Id],[Nc,A,Id]] of db[D, N, A])
+places' = do
+  encrypt "mykey" N
+  frag [[D]]
+  ids  <- queryL (Project [Id] . Select D nextWeek)               -- App App.L     (1)
+  qRes <- queryR (Project [A] . Select Id (flip ExprElem ids))    -- App App.R     (2)
+  pure qRes                                                       -- 0   App.Alice (3)
 
 -- -- 4
--- places'' : Eff (Expr (SCH [D,A])) [GUARD $ Plain [D,N,A]]
---                                   [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
--- -- places'' : sch[D,A] from (frags[[D, Id],[Nc,A,Id]] of db[D, N, A])
--- places'' = do
---   frag [[D]]
---   encrypt 1 "mykey" N
---   dIds <- queryL (Project [D, Id])                                 -- App   App.L   (1)
---   let ids = ExprProject [Id] dIds
---   qRes <- queryR (Project [A, Id] . Select Id (flip ExprElem ids)) -- Alice App.R   (2)
---   pure (ExprProject [D,A] $ ExprProduct dIds qRes)                 -- 0 App.Alice / 0 Alice.0 (3)
+places'' : Eff (Expr (SCH [D,A]) (App,App,Void))
+               [GUARD $ Plain [D,N,A]]
+               [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
+-- places'' : sch[D,A] from (frags[[D, Id],[Nc,A,Id]] of db[D, N, A])
+places'' = do
+  frag [[D]]
+  encrypt 1 "mykey" N
+  dIds <- queryL (Project [D, Id])                                 -- App   App.L   (1)
+  let ids = ExprProject [Id] dIds
+  qRes <- queryR (Project [A, Id] . Select Id (flip ExprElem ids)) -- Alice App.R   (2)
+  pure (ExprProject [D,A] $ ExprProduct dIds qRes)                 -- 0 App.Alice / 0 Alice.0 (3)
 
--- -- 5
--- meetings' : AES String -> Eff (Expr (SCH [D,Id]))
---                               [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
--- -- meetings' : AES String -> sch[D,Id] from frags[[D, Id], [Nc, A, Id]]
--- meetings' contact = do
---   ql <- queryL (Project [D, Id])                                   -- App   App.L (1a)
---   qr <- queryR (Project [Id] .                                     -- App   App.R (1b)
---                  -- ra.Select Nc (ExprEq "Bob"))
---                  -- ra.Select Nc (ExprGtEq contact))
---                  Select Nc (ExprEq (ExprCRYPT contact)))
---   pure (ExprProduct ql qr)                                         -- 0     App.Alice (2)
+-- 5
+meetings' : AES String -> Eff (Expr (SCH [D,Id])(App,App,Void))
+                              [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
+-- meetings' : AES String -> sch[D,Id] from frags[[D, Id], [Nc, A, Id]]
+meetings' contact = do
+  ql <- queryL (Project [D, Id])                                   -- App   App.L (1a)
+  qr <- queryR (Project [Id] .                                     -- App   App.R (1b)
+                 -- ra.Select Nc (ExprEq "Bob"))
+                 -- ra.Select Nc (ExprGtEq contact))
+                 Select Nc (ExprEq (ExprCRYPT contact)))
+  pure (ExprProduct ql qr)                                         -- 0     App.Alice (2)
 
 -- 6
-meetings'' : Eff (Expr (SCH [D,A]) (Alice,App,App))
+meetings'' : Eff (Expr (SCH [D,A]) (Alice,Alice,Void))
                   [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
 -- meetings'' : sch[D,A] from frags[[D, Id], [Nc, A, Id]]
 meetings'' = do

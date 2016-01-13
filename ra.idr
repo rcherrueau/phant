@@ -15,6 +15,7 @@ data Place : Type where
      Alice : Place
      App   : Place
      DB    : Place
+     Void  : Place
      Frag  : Fin n -> Place
 
 instance Eq Place where
@@ -22,6 +23,7 @@ instance Eq Place where
   App == App       = True
   DB  == DB        = True
   (Frag j) == (Frag k) = finToNat j == finToNat k
+  Void == _        = False
   _ == _           = False
 
 caller : (Place,Place,Place) -> Place
@@ -40,10 +42,18 @@ AppP : (Place, Place, Place)
 AppP = (App, App, App)
 
 wiresp : (Place,Place,Place) -> (Place,Place,Place) -> (Place,Place,Place)
-wiresp (resp1, _, _) (resp2, _, _) = if resp1 == Alice || resp2 == Alice
-                                     then (Alice,App,App)
-                                     else AppP
-
+wiresp (resp1, _, _) (resp2, _, _) = let resp =
+                                           -- If on should be returned
+                                           -- back to Alice, return
+                                           -- all to Alice else return
+                                           -- to app since there is no
+                                           -- return to db
+                                           if resp1 == Alice || resp2 == Alice
+                                           then Alice else App
+                                         cr = if resp1 == Alice || resp2 == Alice
+                                              then Alice else App
+                                         ce = Void
+                                      in (resp,cr,ce)
 
 namespace expr
   mutual
