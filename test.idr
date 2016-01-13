@@ -23,7 +23,7 @@ A = ("Addr", TEXT)
 -- syntax from [db1] [next] = [next] db1
 -- syntax from [db] = db
 syntax [sch] "{"[x]"}" [guard1] "before" [guard2] = Eff (Expr (SCH sch) {ctx=x}) guard2 guard1
-syntax [sch] "{"[x]"}" [guard] = Eff (Expr (SCH sch) {ctx=x}) guard
+syntax [sch] "{"[x]"}" [guard] = Eff (Expr (SCH sch) {ctx= ?ctx}) guard
 
 syntax "frags" [fs] = [GUARD $ FragV fs]
 -- syntax "frags" [fs] [next] = next [GUARD $ FragV fs]
@@ -39,12 +39,15 @@ syntax "db" [db] = [GUARD $ Plain db]
 nextWeek : Expr (getU D) {ctx=[D]} -> Expr BOOL {ctx=[]}
 nextWeek _ = ExprBOOL True
 
+-- tricks: https://groups.google.com/d/msg/idris-lang/iEni2_jqMpI/sR_aN4ogDQAJ
 -- Places for meetgins from the next week
 places : [A] {[A]} db[D,N,A]
+ctx = %runElab search
 places = do
   query (Project [A] . Select D nextWeek)
 
 meetings : [D, Count] {[D]} db[D,N,A]
+ctx1 = %runElab search
 meetings = do
   query (Count [D] . Select N (ExprEq (ExprTEXT "Bob")))
 
@@ -58,6 +61,7 @@ places' = do
   qRes <- query 1 (Project [A] . Select Id (flip ExprElem ids))
   pure qRes
 
+
 places'' : Eff (Expr (SCH [A]) {ctx=[A,D]}) [GUARD $ Plain [D, N, A]]
                                             [GUARD $ FragV [[D, Id],[Nc, A, Id]]]
 places'' = do
@@ -69,6 +73,7 @@ places'' = do
   pure qRes
 
 meetings' : [D,Id] {[D,Id]} frags[[D, Id], [Nc, A, Id]]
+ctx2 = %runElab search
 meetings' = do
   ql <- query 0 (Project [D, Id])
   let contact = expr.encrypt "mykey" "Bob"
