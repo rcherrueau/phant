@@ -51,12 +51,13 @@ data Guard : Effect where
             Guard ()
                   (CEnv $ Plain s')
                   (\_ => CEnv $ FragV (frag sprojs s))
-  Query   : (q : RA s -> RA s') ->
-            Guard (Expr (SCH s'))
+  Query   : (q : RA s p -> RA s' p) ->
+            Guard (Expr (SCH s') p)
                   (CEnv $ Plain s)
                   (\_ => CEnv $ Plain s)
-  QueryF  : (fId : Fin n) -> (RA (getSchema fId ss) -> RA s') ->
-            Guard (Expr (SCH s'))
+  QueryF  : (fId : Fin n) ->
+            (RA (getSchema fId ss) p -> RA s' p) ->
+            Guard (Expr (SCH s') p)
                   (CEnv $ FragV ss)
                   (\_ => CEnv $ FragV ss)
 
@@ -68,6 +69,10 @@ GUARD x = MkEff (CEnv x) Guard
 -- -- protect : (pcs : List PC) -> Eff () [GUARD $ Plain s]
 -- -- protect pcs = call (Protect pcs)
 
+backTo : Place -> Eff (Expr (SCH s) p) [GUARD a] -> Eff (Expr (SCH s) (setResp Alice p)) [GUARD a]
+backTo p y = do expr <- y
+                pure (setResp Alice expr)
+
 namespace plain
   encrypt : String -> (a : Attribute) -> Eff () [GUARD $ Plain s]
                                                 [GUARD $ Plain (encrypt a s)]
@@ -77,8 +82,10 @@ namespace plain
                                           [GUARD $ FragV (frag sprojs s)]
   frag sprojs = call (Frag sprojs)
 
-  query : (RA s -> RA s') -> Eff (Expr (SCH s')) [GUARD $ Plain s]
+  query : (RA s (App, App, DB) -> RA s' (App, App, DB)) ->
+          Eff (Expr (SCH s') (App,App,DB)) [GUARD $ Plain s]
   query q = call (Query q)
+
 
 namespace frag
   encrypt : (fId : Fin n) -> String -> (a : Attribute) ->
@@ -87,18 +94,27 @@ namespace frag
   encrypt fId k a = call (EncryptF fId k a)
 
   query : (fId : Fin n) ->
-          (RA (getSchema fId ss) -> RA s') ->
-          Eff (Expr (SCH s')) [GUARD $ FragV ss]
+          (RA (getSchema fId ss) (App, App, Frag fId) ->
+           RA s'                 (App, App, Frag fId)) ->
+          Eff (Expr (SCH s') (App,App,Frag fId)) [GUARD $ FragV ss]
   query fId q = call (QueryF fId q)
 
-  queryL : (RA (getSchema (the (Fin 2) FZ) ss) -> RA s') ->
-           Eff (Expr (SCH s')) [GUARD $ FragV ss]
+  queryL : (RA (getSchema (the (Fin 2) FZ) ss)
+               (App, App, Frag (the (Fin 2) FZ)) ->
+            RA s'
+               (App, App, Frag (the (Fin 2) FZ))) ->
+            Eff (Expr (SCH s')
+                (App, App, Frag (the (Fin 2) FZ))) [GUARD $ FragV ss]
   queryL q = call (QueryF FZ q)
 
-  queryR : (RA (getSchema (the (Fin 2) (FS FZ)) ss) -> RA s') ->
-           Eff (Expr (SCH s')) [GUARD $ FragV ss]
+  queryR : (RA (getSchema (the (Fin 2) (FS FZ)) ss)
+               (App, App, Frag (the (Fin 2) (FS FZ))) ->
+            RA s'
+               (App, App, Frag (the (Fin 2) (FS FZ)))) ->
+            Eff (Expr (SCH s')
+                (App, App, Frag (the (Fin 2) (FS FZ)))) [GUARD $ FragV ss]
   queryR q = call (QueryF (FS FZ) q)
 
--- Local Variables:
--- idris-load-packages: ("effects")
--- End:
+-- -- Local Variables:
+-- -- idris-load-packages: ("effects")
+-- -- End:
