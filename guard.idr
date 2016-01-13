@@ -91,6 +91,14 @@ namespace frag
           Eff (Expr (SCH s')) [GUARD $ FragV ss]
   query fId q = call (QueryF fId q)
 
+  queryL : (RA (getSchema (the (Fin 2) FZ) ss) -> RA s') ->
+           Eff (Expr (SCH s')) [GUARD $ FragV ss]
+  queryL q = call (QueryF FZ q)
+
+  queryR : (RA (getSchema (the (Fin 2) (FS FZ)) ss) -> RA s') ->
+           Eff (Expr (SCH s')) [GUARD $ FragV ss]
+  queryR q = call (QueryF (FS FZ) q)
+
 -- Local Variables:
 -- idris-load-packages: ("effects")
 -- End:
