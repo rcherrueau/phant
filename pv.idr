@@ -1,6 +1,7 @@
 module phant.pv
 
 import guard
+import pi
 
 import Effects
 import Control.Monad.State
@@ -44,178 +45,381 @@ mkAttrVId = (++) "a" . mkAttrId
 mkRawAttId : Attribute -> String
 mkRawAttId a = "raw(" ++ (mkAttrId a) ++ ")"
 
-||| Generates a forall term.
+||| Makes a tuple from a schema.
 |||
-||| <forall> := forall <attrVId>: attribute, ...;
-|||
-||| This generates the forall term for a list of attributes. The
-||| generation uses the original schema and produce a varialble for
-||| each missing attribute. If the original schema and the list of
-||| attributes are equivalent, then no forall term is produced.
-|||
-||| @ s  The original schema.
-||| @ as The list of attributes targeting the forall.
-genForAll : (s : Schema) -> (as : List Attribute) -> IO ()
-genForAll s as with (s \\ as)
-  genForAll s as | []  = putStr "" -- no forall
-  genForAll s as | out = do        -- forall
-    let attrVIds = map (flip (++) ": attribute" . mkAttrVId) out
-    putStr "forall "
-    putStr $ concat (intersperse ", " attrVIds)
-    putStr ";"
+||| Each element of the tuple is transform as an attribute identifier.
+||| The Id and Count attribute are removed.
+mkTuple : Schema -> String
+mkTuple s = let s' = delete Count (delete Id s)
+            in "(" ++ concat (intersperse "," (map mkAttrId s')) ++ ")"
 
-genSchema : (s : Schema) -> (us : List Attribute) -> (k : Maybe Key) -> IO ()
-genSchema s us k = do
-    let attrs = map (\a => case elem a us of
-                             True  => case isEncrypted a of
-                                        True  => mkAttId a k
-                                        False => mkAttId a Nothing
-                             False => "unit") s
-    putStr $ "(" ++ concat (intersperse ", " attrs) ++ ")"
-  where
-  mkAttId : Attribute -> Maybe Key -> String
-  mkAttId a Nothing  = mkRawAttId a
-  mkAttId a (Just k) = "senc(" ++ mkAttrId a ++ ", " ++ k ++ ")"
+-- ||| Generates a forall term.
+-- |||
+-- ||| <forall> := forall <attrVId>: attribute, ...;
+-- |||
+-- ||| This generates the forall term for a list of attributes. The
+-- ||| generation uses the original schema and produce a varialble for
+-- ||| each missing attribute. If the original schema and the list of
+-- ||| attributes are equivalent, then no forall term is produced.
+-- |||
+-- ||| @ s  The original schema.
+-- ||| @ as The list of attributes targeting the forall.
+-- genForAll : (s : Schema) -> (as : List Attribute) -> IO ()
+-- genForAll s as with (s \\ as)
+--   genForAll s as | []  = putStr "" -- no forall
+--   genForAll s as | out = do        -- forall
+--     let attrVIds = map (flip (++) ": attribute" . mkAttrVId) out
+--     putStr "forall "
+--     putStr $ concat (intersperse ", " attrVIds)
+--     putStr ";"
 
-||| Generate an underlying schema.
-|||
-||| Generate an underlying schema based on the original one. If an
-||| attribute of `s` is in `us` then it produces a readable attribute
-||| (raw). Otherwise it produces a variable attribute.
-|||
-||| <uschema> := (<attr>, ...)
-||| <attr>    := <rawAttrId> | <attrVId>
-|||
-||| @ s  the original schema
-||| @ us the underlying schema
-genUSchema : (s : Schema) -> (us : List Attribute) -> IO ()
-genUSchema s us = do
-  let attrs = map (\a => case elem a us of
-                           True  => mkRawAttId a
-                           False => mkAttrVId a) s
-  putStr $ "(" ++ (concat (intersperse ", " attrs)) ++ ")"
+-- genSchema : (s : Schema) -> (us : List Attribute) -> (k : Maybe Key) -> IO ()
+-- genSchema s us k = do
+--     let attrs = map (\a => case elem a us of
+--                              True  => case isEncrypted a of
+--                                         True  => mkAttId a k
+--                                         False => mkAttId a Nothing
+--                              False => "unit") s
+--     putStr $ "(" ++ concat (intersperse ", " attrs) ++ ")"
+--   where
+--   mkAttId : Attribute -> Maybe Key -> String
+--   mkAttId a Nothing  = mkRawAttId a
+--   mkAttId a (Just k) = "senc(" ++ mkAttrId a ++ ", " ++ k ++ ")"
 
-||| Generates the preamble of a ProVerif file.
-|||
-||| @ s   The list of attributes considered in this system.
-||| @ pcs The list of privacy constraints.
-preamble : (s : Schema) -> (pcs : List PC) -> IO ()
-preamble s pcs = do
-    genDefault
-    putStrLn "(* ----------------------------------------------- DB attribute and PC *)"
-    putStrLn "(* Database attributes *)"
-    genDbAttrs s
-    putStrLn "(* Privacy constraints -- Attacker *)"
-    genAttacker pcs
-    putStrLn "(* Instruction for an attacker: what is a PC *)"
-    genDeducsPC s pcs
-    putStrLn "(* ----------------------------------------------------- DB Operations *)"
-    putStrLn "(* Projections *)"
-    putStrLn "(* Selections *)"
-    putStrLn "(* Grouping *)"
-    putStrLn "(* Aggregation *)"
-    putStrLn "(* -------------------------------------------------------------- Main *)"
+-- ||| Generate an underlying schema.
+-- |||
+-- ||| Generate an underlying schema based on the original one. If an
+-- ||| attribute of `s` is in `us` then it produces a readable attribute
+-- ||| (raw). Otherwise it produces a variable attribute.
+-- |||
+-- ||| <uschema> := (<attr>, ...)
+-- ||| <attr>    := <rawAttrId> | <attrVId>
+-- |||
+-- ||| @ s  the original schema
+-- ||| @ us the underlying schema
+-- genUSchema : (s : Schema) -> (us : List Attribute) -> IO ()
+-- genUSchema s us = do
+--   let attrs = map (\a => case elem a us of
+--                            True  => mkRawAttId a
+--                            False => mkAttrVId a) s
+--   putStr $ "(" ++ (concat (intersperse ", " attrs)) ++ ")"
 
-  where
-  genDefault : IO ()
-  genDefault = putStrLn $
-    unlines [
-      "set ignoreTypes = false.",
-      "(* set traceDisplay = long. *)",
-      "",
-      "(* Debug: test if reduction rules applied correctly *)",
-      "event NO_RULE.",
-      "query event(NO_RULE).",
-      "",
-      "(* Attribute of the database *)",
-      "type attribute.",
-      "const unit: attribute.  (* unit: attribute without information *)",
-      "fun raw(bitstring): attribute [data]. (* raw: constructor for attribute  *)",
-      "(* A raw is labelised by its position in the schema *)",
-      "",
-      "(* ------------------------------------------------ Privacy Operations *)",
-      "(* Defragmentation *)",
-      "reduc forall vd: attribute, vn: attribute, va: attribute;",
-      "defrag((vd,unit,unit), (unit,vn,va)) = (vd,vn,va).",
-      "",
-      "(* Symmetric Encryption *)",
-      "type skey.",
-      "fun senc(bitstring, skey): attribute.",
-      "reduc forall m: bitstring, sk: skey; sdec(senc(m, sk), sk) = raw(m).",
-      "",
-      "(* Homomorphic Encryption *)",
-      "type pkey.",
-      "fun pk(skey): pkey.",
-      "fun henc(bitstring, pkey): attribute.",
-      "reduc forall m: bitstring, sk: skey; hdec(henc(m, pk(sk)), sk) = raw(m).",
-      ""]
+-- ||| Generates the preamble of a ProVerif file.
+-- |||
+-- ||| @ s   The list of attributes considered in this system.
+-- ||| @ pcs The list of privacy constraints.
+-- preamble : (s : Schema) -> (pcs : List PC) -> IO ()
+-- preamble s pcs = do
+--     genDefault
+--     putStrLn "(* ----------------------------------------------- DB attribute and PC *)"
+--     putStrLn "(* Database attributes *)"
+--     genDbAttrs s
+--     putStrLn "(* Privacy constraints -- Attacker *)"
+--     genAttacker pcs
+--     putStrLn "(* Instruction for an attacker: what is a PC *)"
+--     genDeducsPC s pcs
+--     putStrLn "(* ----------------------------------------------------- DB Operations *)"
+--     putStrLn "(* Projections *)"
+--     putStrLn "(* Selections *)"
+--     putStrLn "(* Grouping *)"
+--     putStrLn "(* Aggregation *)"
+--     putStrLn "(* -------------------------------------------------------------- Main *)"
 
-  ||| Generate the database attributes.
-  ||| <dbAttr> := const <attrId>: bitstring [private]. ...
-  genDbAttrs : List Attribute -> IO ()
-  genDbAttrs as = do
-    let dbAttrs = map (\a => "const "
-                             ++ (mkAttrId a)
-                             ++ ": bitstring [private].") as
-    sequence (map putStrLn dbAttrs)
-    putStrLn ""
+--   where
+--   genDefault : IO ()
+--   genDefault = putStrLn $
+--     unlines [
+--       "set ignoreTypes = false.",
+--       "(* set traceDisplay = long. *)",
+--       "",
+--       "(* Debug: test if reduction rules applied correctly *)",
+--       "event NO_RULE.",
+--       "query event(NO_RULE).",
+--       "",
+--       "(* Attribute of the database *)",
+--       "type attribute.",
+--       "const unit: attribute.  (* unit: attribute without information *)",
+--       "fun raw(bitstring): attribute [data]. (* raw: constructor for attribute  *)",
+--       "(* A raw is labelised by its position in the schema *)",
+--       "",
+--       "(* ------------------------------------------------ Privacy Operations *)",
+--       "(* Defragmentation *)",
+--       "reduc forall vd: attribute, vn: attribute, va: attribute;",
+--       "defrag((vd,unit,unit), (unit,vn,va)) = (vd,vn,va).",
+--       "",
+--       "(* Symmetric Encryption *)",
+--       "type skey.",
+--       "fun senc(bitstring, skey): attribute.",
+--       "reduc forall m: bitstring, sk: skey; sdec(senc(m, sk), sk) = raw(m).",
+--       "",
+--       "(* Homomorphic Encryption *)",
+--       "type pkey.",
+--       "fun pk(skey): pkey.",
+--       "fun henc(bitstring, pkey): attribute.",
+--       "reduc forall m: bitstring, sk: skey; hdec(henc(m, pk(sk)), sk) = raw(m).",
+--       ""]
 
-  ||| Generate the attacker model.
-  ||| <attack> := <const> ...
-  |||             <query> ...
-  ||| <const>  := const pc_<attrsId>: bistring [private].
-  ||| <query>  := query attacker(pc_<attrsId>).
-  genAttacker : List PC -> IO ()
-  genAttacker pcs = do
-    let pcAttrsIds = map  ((++) "pc_" . mkAttrsId) pcs
-    let consts = map (\id => "const " ++ id ++ ": bitstring [private].")
-                     pcAttrsIds
-    let querys = map (\id => "query attackers(" ++ id ++ ").")
-                     pcAttrsIds
-    sequence (map putStrLn consts)
-    putStrLn ""
-    sequence (map putStrLn querys)
-    putStrLn ""
+--   ||| Generate the database attributes.
+--   ||| <dbAttr> := const <attrId>: bitstring [private]. ...
+--   genDbAttrs : List Attribute -> IO ()
+--   genDbAttrs as = do
+--     let dbAttrs = map (\a => "const "
+--                              ++ (mkAttrId a)
+--                              ++ ": bitstring [private].") as
+--     sequence (map putStrLn dbAttrs)
+--     putStrLn ""
+
+--   ||| Generate the attacker model.
+--   ||| <attack> := <const> ...
+--   |||             <query> ...
+--   ||| <const>  := const pc_<attrsId>: bistring [private].
+--   ||| <query>  := query attacker(pc_<attrsId>).
+--   genAttacker : List PC -> IO ()
+--   genAttacker pcs = do
+--     let pcAttrsIds = map  ((++) "pc_" . mkAttrsId) pcs
+--     let consts = map (\id => "const " ++ id ++ ": bitstring [private].")
+--                      pcAttrsIds
+--     let querys = map (\id => "query attackers(" ++ id ++ ").")
+--                      pcAttrsIds
+--     sequence (map putStrLn consts)
+--     putStrLn ""
+--     sequence (map putStrLn querys)
+--     putStrLn ""
 
 
-  ||| Generates the deduction rules that produces PCs
-  |||
-  ||| <deducPC> := reduc <forall>
-  |||              confidential_<attrsId>(<uschema>) = <inpcs>.
-  ||| <inpcs>   := (pc_<attrsId>, ...)
-  genDeducPC : Schema -> List Attribute -> List PC -> IO ()
-  genDeducPC s as []  = putStr ""
-  genDeducPC s as pcs = do
-    let attrsId = (mkAttrsId as)
-    let pcAttrsIds = map ((++) "pc_" . mkAttrsId) pcs
-    let inpcs = "(" ++ concat (intersperse ", " pcAttrsIds) ++ ")"
-    putStr "reduc "
-    genForAll s as
-    putStrLn  ""
-    putStr ("confidential_" ++ attrsId ++ "(")
-    genUSchema s as
-    putStr ") = "
-    putStr inpcs
-    putStrLn  "."
+--   ||| Generates the deduction rules that produces PCs
+--   |||
+--   ||| <deducPC> := reduc <forall>
+--   |||              confidential_<attrsId>(<uschema>) = <inpcs>.
+--   ||| <inpcs>   := (pc_<attrsId>, ...)
+--   genDeducPC : Schema -> List Attribute -> List PC -> IO ()
+--   genDeducPC s as []  = putStr ""
+--   genDeducPC s as pcs = do
+--     let attrsId = (mkAttrsId as)
+--     let pcAttrsIds = map ((++) "pc_" . mkAttrsId) pcs
+--     let inpcs = "(" ++ concat (intersperse ", " pcAttrsIds) ++ ")"
+--     putStr "reduc "
+--     genForAll s as
+--     putStrLn  ""
+--     putStr ("confidential_" ++ attrsId ++ "(")
+--     genUSchema s as
+--     putStr ") = "
+--     putStr inpcs
+--     putStrLn  "."
 
-  ||| Generates the deduction rules that produces PCs
-  |||
-  ||| Generates rules that permit to deduce PCs from a schema. Their
-  ||| should have as many rules as combination of underlying schemas
-  ||| (ie, each attribute is either readable `raw` or a variable).
-  ||| This produces 2^(length schema) deduction rules, but only rules that
-  ||| violate a privacy constraint must be defines.
-  |||
-  ||| <deducPCs> := <deducPC> ...
-  genDeducsPC : Schema -> List PC -> IO ()
-  genDeducsPC s pcs = do
-    -- Get all pcs deduced by an underlying schema
-    let usWithPCs = map (\us => (us, getInnerPCs us pcs)) (powerset s)
-    -- Keep only underlying schemas that produce PCs
-    let uschemas  = filter (isCons . snd) usWithPCs
-    let deducPCs  = map (uncurry (genDeducPC s)) uschemas
-    sequence deducPCs
-    putStrLn ""
+--   ||| Generates the deduction rules that produces PCs
+--   |||
+--   ||| Generates rules that permit to deduce PCs from a schema. Their
+--   ||| should have as many rules as combination of underlying schemas
+--   ||| (ie, each attribute is either readable `raw` or a variable).
+--   ||| This produces 2^(length schema) deduction rules, but only rules that
+--   ||| violate a privacy constraint must be defines.
+--   |||
+--   ||| <deducPCs> := <deducPC> ...
+--   genDeducsPC : Schema -> List PC -> IO ()
+--   genDeducsPC s pcs = do
+--     -- Get all pcs deduced by an underlying schema
+--     let usWithPCs = map (\us => (us, getInnerPCs us pcs)) (powerset s)
+--     -- Keep only underlying schemas that produce PCs
+--     let uschemas  = filter (isCons . snd) usWithPCs
+--     let deducPCs  = map (uncurry (genDeducPC s)) uschemas
+--     sequence deducPCs
+--     putStrLn ""
+
+record PiProcs (fragsNumber : Nat) where
+  constructor MkPiProcs
+  appPi   : PiProc
+  alicePi : PiProc
+  dbPi    : PiProc
+  fragPi  : Vect fragsNumber PiProc
+
+fragsNumber : PiProcs n -> Nat
+fragsNumber _ {n} = n
+
+-- setPiOfPlace : Place -> PiProc -> PiProcs n -> PiProc
+-- setPiOfPlace Alice      pips     =
+--             record { alicePi pips
+-- setPiOfPlace App        pips     = appPi   pips
+-- setPiOfPlace DB         pips     = dbPi    pips
+-- setPiOfPlace (Frag fId {n=n1}) pips {n=n2} =
+--             let frags = fragPi pips
+--                 fId'  = prim__believe_me (Fin n1) (Fin n2) fId
+--             in index fId' frags
+
+piProcFromExpr : Expr u p -> PiProcs n -> PiProcs n
+piProcFromExpr x {p} pips = ?piProcFromExpr_rhs
+
+piProcFromRA : RA s p -> PiProcs n -> PiProcs n
+piProcFromRA (Project sproj ra)  pips = piProcFromRA ra pips
+piProcFromRA (Select a q ra {p}) pips = let expr = q (Expr [a] p)
+                                        in piProcFromExpr expr pips
+piProcFromRA (Count scount ra)   pips = piProcFromRA ra pips
+piProcFromRA (Unit s p)          pips = case p of (_, cr, ce)
+                                        => ?mlkj
+
+instance MonadState (Schema,
+                     List (Attribute, Key),
+                     PiProcs pipFNums) m => Handler Guard m where
+    handle (MkPEnv s) (Encrypt x a) k                               = do
+      -- Note: Encrypt are stackable, so I should use a stack to
+      -- manage key per attribute in the `ks`. General algorithm is
+      -- stack a key on encrypt and unstack key on decrypt. But, for
+      -- now, I don't have decrypt combinator. So erasing previous key
+      -- with `update` is OK.
+      (os, ks, pips) <- get
+      let skey = x ++ "_skey"
+      put ((encrypt a os), update (a, skey) ks, pips)
+      -- continuation
+      k () (MkPEnv (encrypt a s))
+    handle (MkFEnv ss {n}) (EncryptF fId x a) k                     = do
+      (os, ks, pips) <- get
+      let skey = x ++ "_skey"
+      put ((encrypt a os), update (a, skey)  ks, pips)
+      -- continuation
+      k () (MkFEnv (encryptF a fId ss))
+    handle (MkPEnv s) (Frag sprojs) k                               = do
+      -- continuation
+      k () (MkFEnv (frag sprojs s))
+    handle (MkPEnv s) (Query q {p}) k                               = do
+      (os, ks, pips) <- get
+      let q' = q (Unit s p)
+      -- pips of pi expr
+      let pips' = piProcFromRA q' pips
+      put (os, ks, pips')
+      -- continuation
+      k (ExprSCH (getSchema q') p) (MkPEnv s)
+    handle (MkFEnv ss {n=fragNums}) (QueryF fId q {p}) k {pipFNums} = do
+      (os, ks, pips) <- get
+      let s = (getSchema fId ss)
+      let q' = q (Unit s p)
+      -- FIXME: give the proof that fragNums == pipFNums. Note: I'm
+      -- sure about that since the Frag combinator is applicable only
+      -- once in the computation. And my function that construct the
+      -- pips is based on that combinator.
+      -- let frags = fragPi pips
+      -- let fId' = prim__believe_me (Fin fragNums) (Fin pipFNums) fId
+      -- let f = index fId' frags
+      -- construction of pi expr
+      let pips' = piProcFromRA q' pips
+      put (os, ks, pips')
+      -- continuation
+      k (ExprSCH (getSchema q') p) (MkFEnv ss)
+
+genPV : Eff a [GUARD $ Plain s] [GUARD cstate] -> IO ()
+genPV eff {s} {a} {cstate = Plain s'} = do
+  let body = the (State (Schema, List (Attribute, Key), PiProcs Z) a) $
+             runInit [MkPEnv s] eff
+  let initPiProcs = (MkPiProcs PiEnd PiEnd PiEnd Nil {fragsNumber=Z})
+  let (a,s) = runState body (s, [], initPiProcs)
+  return ()
+genPV eff {s} {a} {cstate = FragV frags} = do
+  -- preamble s pcs
+  -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
+  -- scId <- schema s'
+  -- let body = the (StateT (Schema, Maybe Key) IO a) $ runInit [MkPEnv s] eff
+  let body = the (State (Schema, List (Attribute, Key), PiProcs (length frags)) a) $
+             runInit [MkPEnv s] eff
+  let initPiProcs =(MkPiProcs PiEnd PiEnd PiEnd
+                    (replicate (length frags) PiEnd))
+  let (a,s) = runState body (s, [], initPiProcs)
+  return ()
+
+-- genRA : RA s -> Schema -> Maybe Key -> IO ()
+-- genRA (Union x y)      ts k = do
+--   putStrLn "union("
+--   genRA x ts k
+--   genRA y ts k
+--   putStrLn ")"
+-- genRA (Diff x y)       ts k = do
+--   putStrLn "diff("
+--   genRA x ts k
+--   genRA y ts k
+--   putStrLn ")"
+-- genRA (Product x y)    ts k = do
+--   putStrLn "product("
+--   genRA x ts k
+--   genRA y ts k
+--   putStrLn ")"
+-- genRA (Project s' x)   ts k = do
+--   let attrs = mkTuple s'
+--   putStrLn $ "proj(" ++ attrs ++ ","
+--   genRA x ts k
+--   putStrLn ")"
+-- genRA (Select a q x) {s} ts k = do
+--   -- FIXME: mkTuple should use something around `q`
+--   let attrs = mkTuple [a]
+--   putStrLn $ "select(" ++ attrs ++ ","
+--   genRA x ts k
+--   putStrLn ")"
+-- genRA (Drop s' x)      ts k = do
+--   let attrs = mkTuple s'
+--   putStrLn $ "drop(" ++ attrs ++ ","
+--   genRA x ts k
+--   putStrLn ")"
+-- genRA (Count scount x) ts k = do
+--   let attrs = mkTuple scount
+--   putStrLn $ "count(" ++ attrs ++ ","
+--   genRA x ts k
+--   putStrLn ")"
+-- genRA (Unit s ) ts k = genSchema ts s k
+
+-- instance Handler Guard (StateT (Schema, Maybe Key) IO) where
+--     handle (MkPEnv s) (Encrypt x a) k            = do
+--       let skey = x ++ "_sk"
+--       (ts, _) <- get
+--       put ((encrypt a ts), Just skey)
+--       lift $ putStrLn $ "const " ++ skey ++ ": skey [private]."
+--       lift $ putStrLn ""
+--       k () (MkPEnv (encrypt a s))
+--     handle (MkPEnv s) (Frag s') k    = do
+--       k () (MkFEnv s')
+--     handle (MkPEnv s) (Query q) k                = do
+--       (ts, skey) <- get
+--       lift $ putStrLn $ "let " ++ "lala" ++ "(request: channel) ="
+--       lift $ putStrLn "  in (request, to: channel);"
+--       lift $ putStrLn "  let res = "
+--       let q' = q (Unit s)
+--       lift $ genRA q' ts skey
+--       lift $ putStrLn "  in"
+--       lift $ putStrLn $ "out (to, res)."
+--       -- Note: operational will return a filled list. Here we don't
+--       -- care.
+--       k (ExprSCH (getSchema q')) (MkPEnv s)
+--     handle (MkFEnv sproj {s}) (QueryL q) k      = do
+--       let fl = fst (frag sproj s)
+--       lift $ putStrLn "QueryL"
+--       let q' = q (Unit fl)
+--       k (ExprSCH (getSchema q')) (MkFEnv sproj)
+--     handle (MkFEnv sproj {s}) (QueryR q) k = do
+--       let fr = snd (frag sproj s)
+--       lift $ putStrLn "QueryR"
+--       let q' = q (Unit fr)
+--       k (ExprSCH (getSchema q')) (MkFEnv sproj)
+
+
+-- -- Can I get the list of attribute, the state of the cloud and the
+-- -- list of pc, from a Guard effect ? Yes for the list of attribute and
+-- -- the cloud state :
+-- --
+-- -- > testPV : Eff r [GUARD $ Plain $ s@@ip] [GUARD $ FragV (sl@@ipl) (sr@@ipr)] -> (Schema, CState, List Schema)
+-- -- > testPV x {s} {sl} {ipl} {sr} {ipr} = (s, FragV (sl @@ ipl) (sr @@ ipr), [])
+-- --
+-- -- If I take the list of attribute in arguments, then I can generate
+-- -- all the first part of the file. Let's do this, but first define
+-- -- what is a list of pc:
+-- --
+-- --
+-- -- The preamble of a pv file should look like something like this
+-- genPV : List PC -> Eff a [GUARD $ Plain s] [GUARD cstate] -> IO ()
+-- -- genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = preamble s pcs
+-- genPV pcs eff {s} {a} {- cstate = (Plain (s' @@ ip)) -} = do
+--   preamble s pcs
+--   -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
+--   -- scId <- schema s'
+--   let body = the (StateT (Schema, Maybe Key) IO a) $ runInit [MkPEnv s] eff
+--   runStateT body (s, Nothing)
+--   return ()
+
 
 -- -- Good! Now, let's generate the code from this information
 -- genPV : List PC -> Eff a [GUARD $ Plain (s @@ ip)] [GUARD cstate] -> IO ()
@@ -227,106 +431,6 @@ preamble s pcs = do
 --   let val' = runStateT val 1
 --   val'
 --   return ()
-
-mkTuple : Schema -> String
-mkTuple s = let s' = delete Count (delete Id s)
-            in "(" ++ concat (intersperse "," (map mkAttrId s')) ++ ")"
-
-genRA : RA s -> Schema -> Maybe Key -> IO ()
-genRA (Union x y)      ts k = do
-  putStrLn "union("
-  genRA x ts k
-  genRA y ts k
-  putStrLn ")"
-genRA (Diff x y)       ts k = do
-  putStrLn "diff("
-  genRA x ts k
-  genRA y ts k
-  putStrLn ")"
-genRA (Product x y)    ts k = do
-  putStrLn "product("
-  genRA x ts k
-  genRA y ts k
-  putStrLn ")"
-genRA (Project s' x)   ts k = do
-  let attrs = mkTuple s'
-  putStrLn $ "proj(" ++ attrs ++ ","
-  genRA x ts k
-  putStrLn ")"
-genRA (Select a q x) {s} ts k = do
-  -- FIXME: mkTuple should use something around `q`
-  let attrs = mkTuple [a]
-  putStrLn $ "select(" ++ attrs ++ ","
-  genRA x ts k
-  putStrLn ")"
-genRA (Drop s' x)      ts k = do
-  let attrs = mkTuple s'
-  putStrLn $ "drop(" ++ attrs ++ ","
-  genRA x ts k
-  putStrLn ")"
-genRA (Count scount x) ts k = do
-  let attrs = mkTuple scount
-  putStrLn $ "count(" ++ attrs ++ ","
-  genRA x ts k
-  putStrLn ")"
-genRA (Unit s ) ts k = genSchema ts s k
-
-instance Handler Guard (StateT (Schema, Maybe Key) IO) where
-    handle (MkPEnv s) (Encrypt x a) k            = do
-      let skey = x ++ "_sk"
-      (ts, _) <- get
-      put ((encrypt a ts), Just skey)
-      lift $ putStrLn $ "const " ++ skey ++ ": skey [private]."
-      lift $ putStrLn ""
-      k () (MkPEnv (encrypt a s))
-    handle (MkPEnv s) (Frag s') k    = do
-      k () (MkFEnv s')
-    handle (MkPEnv s) (Query q) k                = do
-      (ts, skey) <- get
-      lift $ putStrLn $ "let " ++ "lala" ++ "(request: channel) ="
-      lift $ putStrLn "  in (request, to: channel);"
-      lift $ putStrLn "  let res = "
-      let q' = q (Unit s)
-      lift $ genRA q' ts skey
-      lift $ putStrLn "  in"
-      lift $ putStrLn $ "out (to, res)."
-      -- Note: operational will return a filled list. Here we don't
-      -- care.
-      k (ExprSCH (getSchema q')) (MkPEnv s)
-    handle (MkFEnv sproj {s}) (QueryL q) k      = do
-      let fl = fst (frag sproj s)
-      lift $ putStrLn "QueryL"
-      let q' = q (Unit fl)
-      k (ExprSCH (getSchema q')) (MkFEnv sproj)
-    handle (MkFEnv sproj {s}) (QueryR q) k = do
-      let fr = snd (frag sproj s)
-      lift $ putStrLn "QueryR"
-      let q' = q (Unit fr)
-      k (ExprSCH (getSchema q')) (MkFEnv sproj)
-
-
--- Can I get the list of attribute, the state of the cloud and the
--- list of pc, from a Guard effect ? Yes for the list of attribute and
--- the cloud state :
---
--- > testPV : Eff r [GUARD $ Plain $ s@@ip] [GUARD $ FragV (sl@@ipl) (sr@@ipr)] -> (Schema, CState, List Schema)
--- > testPV x {s} {sl} {ipl} {sr} {ipr} = (s, FragV (sl @@ ipl) (sr @@ ipr), [])
---
--- If I take the list of attribute in arguments, then I can generate
--- all the first part of the file. Let's do this, but first define
--- what is a list of pc:
---
---
--- The preamble of a pv file should look like something like this
-genPV : List PC -> Eff a [GUARD $ Plain s] [GUARD cstate] -> IO ()
--- genPV pcs eff {s} {cstate = (FragV (sl @@ ipl) (sr @@ ipr))} = preamble s pcs
-genPV pcs eff {s} {a} {- cstate = (Plain (s' @@ ip)) -} = do
-  preamble s pcs
-  -- the (StateT Integer IO a) $ runInit [MkPEnv s ip] eff
-  -- scId <- schema s'
-  let body = the (StateT (Schema, Maybe Key) IO a) $ runInit [MkPEnv s] eff
-  runStateT body (s, Nothing)
-  return ()
 
 -- Local Variables:
 -- idris-load-packages: ("effects")

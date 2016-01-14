@@ -31,7 +31,7 @@ data CState : Type where
 
 data CEnv : CState -> Type where
   MkPEnv : (s : Schema) -> CEnv (Plain s)
-  MkFEnv : (sprojs : List Schema) -> CEnv $ FragV (frag sproj s)
+  MkFEnv : (ss : Vect n Schema) -> CEnv $ FragV ss
 
 data Guard : Effect where
   -- Protect : (s : Schema) -> (pcs : List PC) ->
@@ -49,7 +49,7 @@ data Guard : Effect where
                   (\_ => CEnv $ FragV (encryptF a fId ss))
   Frag    : (sprojs : List Schema) ->
             Guard ()
-                  (CEnv $ Plain s')
+                  (CEnv $ Plain s)
                   (\_ => CEnv $ FragV (frag sprojs s))
   Query   : (q : RA s p -> RA s' p) ->
             Guard (Expr (SCH s') p)

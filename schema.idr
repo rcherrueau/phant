@@ -10,6 +10,7 @@ import utils
 
 import Data.List
 import Data.Vect
+import Effect.Default
 
 %default total
 %access public
@@ -41,6 +42,19 @@ namespace universe
   -- el (PAIR U1 U2) = (Pair (el U1) (el U2))
   -- el (LIST U)     = List (el U)
   -- el (HOME U)  = el U
+
+  instance Default (AES (el UNIT)) where
+  instance Default (AES (el NAT)) where
+  instance Default (AES (el TEXT)) where
+  instance Default (AES (el REAL)) where
+  instance Default (AES (el BOOL)) where
+  instance Default (el u) => Default (AES (el (CRYPT u))) where
+  instance Default (AES (el (SCH l))) where
+  -- instance Default (el u) where
+  --     default {u} = ?Default_rhs_1
+
+  -- instance Default (el u) => Default (AES (el u)) where
+  --     default = ?Default_rhs_1
 
   -- -- Returns the inner u if any
   -- private

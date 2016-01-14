@@ -162,3 +162,8 @@ namespace other
 
   liftSigma : {m : Type -> Type} -> (f : a -> m a) -> (v : a ** p) -> (v : m a ** p)
   liftSigma f (x ** pf) = (f x ** pf)
+
+  update : (Eq a, Eq b) => (a,b) -> List (a,b) -> List (a,b)
+  update (a, b) xs = case lookup a xs of
+                       Just _  => (a, b) :: (delete (a, b) xs)
+                       Nothing => xs

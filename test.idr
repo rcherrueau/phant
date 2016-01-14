@@ -1,6 +1,6 @@
 module Main
 
--- import pv
+import pv
 import crypt
 import guard
 
@@ -16,10 +16,10 @@ Nc = ("Name", CRYPT TEXT)
 A : Attribute
 A = ("Addr", TEXT)
 
-syntax "frags" [fs] = [GUARD $ FragV fs]
-syntax "db" [db] = [GUARD $ Plain db]
-syntax "sch" [sch] from "(" [guard] "of" [g2] ")" = Eff (Expr (SCH sch)) g2 guard
-syntax "sch" [sch] from [guard] = Eff (Expr (SCH sch)) guard
+-- syntax "frags" [fs] = [GUARD $ FragV fs]
+-- syntax "db" [db] = [GUARD $ Plain db]
+-- syntax "sch" [sch] from "(" [guard] "of" [g2] ")" = Eff (Expr (SCH sch)) g2 guard
+-- syntax "sch" [sch] from [guard] = Eff (Expr (SCH sch)) guard
 
 nextWeek : Expr (getU D) p -> Expr BOOL AppP
 nextWeek _ = ExprBOOL True
@@ -100,17 +100,17 @@ meetings'' = do                                                  -- Alice Alice.
   let contact = expr.encrypt "mykey" "Bob"
   ql <- privy $ queryL (Project [D, Id])                         -- Alice App.L       (1)
   qr <- privy $ queryR (Project [A, Id] .
-                        Select Nc (ExprEq contact))              -- Alice App.R       (2)
+                        Select Nc (\n => n >= contact))              -- Alice App.R       (2)
   pure (ExprProject [D,A] $ ExprProduct ql qr)                   -- Alice Alice.Alice (3)
 
--- -- main : IO ()
--- -- -- main = do let PCs =  [[N],[D,A]]
--- -- --           genPV PCs (do
--- -- --             places
--- -- --             meetings)
--- -- --           genPV PCs (do
--- -- --             places'
--- -- --             meetings')
+main : IO ()
+main = -- do let PCs =  [[N],[D,A]]
+          -- genPV PCs (do
+          --   places
+          --   meetings)
+          genPV (do
+            places'
+            meetings'')
 -- -- main = putStrLn "lala"
 
 -- -- λPROJECT> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "EC2" ] lFirstStrat

@@ -7,6 +7,7 @@ import crypt
 import Data.List
 import Debug.Trace
 import Data.Vect
+import Effect.Default
 
 %default total
 %access public
@@ -56,14 +57,15 @@ namespace expr
     --   -- ExprElU : {u : U} -> (v : a) -> Expr u
     --   -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     --   -- Type
-    --   ExprU     : (u : U) -> Expr u
-    --   ExprUNIT  : Expr UNIT
-    --   ExprNAT   : Nat -> Expr NAT
+      -- ExprU     :  (u : U) -> (p : (Place,Place,Place)) -> Expr u p
+      ExprUNIT  : Expr UNIT AppP
+      ExprNAT   : Nat -> Expr NAT AppP
       ExprTEXT  : String -> Expr TEXT AppP
-    --   ExprREAL  : Double -> Expr REAL
+      ExprREAL  : Double -> Expr REAL AppP
       ExprBOOL  : Bool -> Expr BOOL AppP
       ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) AppP
-    --   ExprSCH     : (s : Schema) -> Expr (SCH s)
+      ExprSCH     : (s : Schema) -> (p : (Place,Place,Place)) ->
+                     Expr (SCH s) p
     --   -- Operation
       ExprEq    : Eq (el a) => Expr a p1  -> Expr a p2 -> Expr BOOL (findRecipient p1 p2)
       ExprGtEq  : Ord (el a) => Expr a p1 -> Expr a p2  -> Expr BOOL (findRecipient p1 p2)
@@ -88,6 +90,17 @@ namespace expr
     setRecipient : (p : Place) -> Expr a ppp -> Expr a (setRecipient p ppp)
     setRecipient p expr {ppp} = let ppp' = setRecipient p ppp
                                 in ExprPutP ppp' expr
+
+    givemeExpr : Default (el u) => (u : U) -> (p : (Place,Place,Place)) -> Expr u p
+    givemeExpr UNIT      p = ExprPutP p $ ExprUNIT
+    givemeExpr NAT       p = ExprPutP p $ ExprNAT Z
+    givemeExpr TEXT      p = ExprPutP p $ ExprTEXT ""
+    givemeExpr REAL      p = ExprPutP p $ ExprREAL 0.0
+    givemeExpr BOOL      p = ExprPutP p $ ExprBOOL True
+    givemeExpr (CRYPT x) p = let e = the (el u)
+                             ExprPutP p $ ExprCRYPT ?mlkj
+    givemeExpr (SCH s)   p = ExprSCH s p
+
     -- Operation
     -- (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
     -- (==) = ExprEq
@@ -202,7 +215,7 @@ data RA : Schema -> (Place,Place,Place) -> Type where
              {default (includeSingleton Here) inc : Include scount s} ->
              RA s p -> RA (count scount s {inc}) p
   -- -- -- Introduce
-  Unit     : (s : Schema) -> (p : (Place,Place,Place))-> RA s p
+  Unit     : (s : Schema) -> (p : (Place,Place,Place)) -> RA s p
 
 -- union : RA s -> RA s -> RA s
 -- union = Union
