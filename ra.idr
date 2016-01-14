@@ -15,16 +15,14 @@ data Place : Type where
      Alice : Place
      App   : Place
      DB    : Place
-     Void  : Place
      Frag  : Fin n -> Place
 
 instance Eq Place where
-  Alice == Alice   = True
-  App == App       = True
-  DB  == DB        = True
+  Alice    == Alice    = True
+  App      == App      = True
+  DB       == DB       = True
   (Frag j) == (Frag k) = finToNat j == finToNat k
-  Void == _        = False
-  _ == _           = False
+  _        == _        = False
 
 caller : (Place,Place,Place) -> Place
 caller = fst . snd
@@ -32,28 +30,25 @@ caller = fst . snd
 callee : (Place,Place,Place) -> Place
 callee = snd . snd
 
-resp : (Place,Place,Place) -> Place
-resp = fst
+recipient : (Place,Place,Place) -> Place
+recipient = fst
 
-setResp : Place -> (Place,Place,Place) -> (Place,Place,Place)
-setResp r (a, (b, c)) = (r , b, c)
+setRecipient : Place -> (Place,Place,Place) -> (Place,Place,Place)
+setRecipient r (a, b, c) = (r , b, c)
 
 AppP : (Place, Place, Place)
 AppP = (App, App, App)
 
-wiresp : (Place,Place,Place) -> (Place,Place,Place) -> (Place,Place,Place)
-wiresp (resp1, _, _) (resp2, _, _) = let resp =
-                                           -- If on should be returned
-                                           -- back to Alice, return
-                                           -- all to Alice else return
-                                           -- to app since there is no
-                                           -- return to db
-                                           if resp1 == Alice || resp2 == Alice
-                                           then Alice else App
-                                         cr = if resp1 == Alice || resp2 == Alice
-                                              then Alice else App
-                                         ce = Void
-                                      in (resp,cr,ce)
+AliceP : (Place, Place, Place)
+AliceP = (Alice, Alice, Alice)
+
+findRecipient : (Place,Place,Place) -> (Place,Place,Place) -> (Place,Place,Place)
+findRecipient (recip1, _, _) (recip2, _, _) =
+  if recip1 == Alice || recip2 == Alice
+  -- It should not be something different since I cannot do Exp*
+  -- computation on other place rather than Alice and App.
+  then (Alice,Alice,Alice) else (App,App,App)
+
 
 namespace expr
   mutual
@@ -70,15 +65,15 @@ namespace expr
       ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) AppP
     --   ExprSCH     : (s : Schema) -> Expr (SCH s)
     --   -- Operation
-      ExprEq    : Eq (el a) => Expr a p1  -> Expr a p2 -> Expr BOOL (wiresp p1 p2)
-      ExprGtEq  : Ord (el a) => Expr a p1 -> Expr a p2  -> Expr BOOL (wiresp p1 p2)
-      ExprElem  : Eq (el a) => Expr a p1 -> Expr (SCH s) p2 -> Expr BOOL (wiresp p1 p2)
+      ExprEq    : Eq (el a) => Expr a p1  -> Expr a p2 -> Expr BOOL (findRecipient p1 p2)
+      ExprGtEq  : Ord (el a) => Expr a p1 -> Expr a p2  -> Expr BOOL (findRecipient p1 p2)
+      ExprElem  : Eq (el a) => Expr a p1 -> Expr (SCH s) p2 -> Expr BOOL (findRecipient p1 p2)
     --   ExprNot   : Expr BOOL -> Expr BOOL
     --   -- Schema
     --   ExprUnion   : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
     --   ExprDiff    : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
       ExprProduct : Expr (SCH s) p1 -> Expr (SCH s') p2  ->
-                    Expr (SCH (s * s')) (wiresp p1 p2)
+                    Expr (SCH (s * s')) (findRecipient p1 p2)
       ExprProject : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (intersect sproj s)) p
 
     --   ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
@@ -90,9 +85,9 @@ namespace expr
       ExprPutP    : (p : (Place,Place,Place)) -> Expr a p' -> Expr a p
 
 
-    setResp : (p : Place) -> Expr a ppp -> Expr a (setResp p ppp)
-    setResp p expr {ppp} = let ppp' = setResp p ppp
-                           in ExprPutP ppp' expr
+    setRecipient : (p : Place) -> Expr a ppp -> Expr a (setRecipient p ppp)
+    setRecipient p expr {ppp} = let ppp' = setRecipient p ppp
+                                in ExprPutP ppp' expr
     -- Operation
     -- (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
     -- (==) = ExprEq
@@ -176,7 +171,7 @@ namespace expr
 
   -- A query expression (Relation Algebra)
 --
--- An expression of `RA s` corresponds to a query that will return a
+-- An expression of `RA s` correcipientonds to a query that will return a
 -- table with schema `s`. Operations are those ones of relational
 -- algebra.
 --

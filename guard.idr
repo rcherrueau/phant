@@ -69,9 +69,15 @@ GUARD x = MkEff (CEnv x) Guard
 -- -- protect : (pcs : List PC) -> Eff () [GUARD $ Plain s]
 -- -- protect pcs = call (Protect pcs)
 
-backTo : Place -> Eff (Expr (SCH s) p) [GUARD a] -> Eff (Expr (SCH s) (setResp Alice p)) [GUARD a]
-backTo p y = do expr <- y
-                pure (setResp Alice expr)
+private
+recipientIs : Place -> Eff (Expr (SCH s) p) [GUARD a] ->
+                       Eff (Expr (SCH s) (setRecipient Alice p)) [GUARD a]
+recipientIs p y = do expr <- y
+                     pure (setRecipient Alice expr)
+
+privy : Eff (Expr (SCH s) p) [GUARD a] ->
+        Eff (Expr (SCH s) (setRecipient Alice p)) [GUARD a]
+privy = (recipientIs Alice)
 
 namespace plain
   encrypt : String -> (a : Attribute) -> Eff () [GUARD $ Plain s]
