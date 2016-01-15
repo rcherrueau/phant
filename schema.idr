@@ -29,24 +29,34 @@ namespace universe
          -- | LIST U
          -- | HOME U
 
-  mutual
-    liftSch : (s : List (String, U)) -> Type
-    liftSch []                     = ()
-    liftSch [(n,u)]                = assert_total $ el u
-    liftSch ((_,u) :: s@(a :: as)) = assert_total $ Pair (el u) (liftSch s)
+  -- Specific decoding function for the of liftSch
+  liftSchElu : U -> Type
+  liftSchElu UNIT = ()
+  liftSchElu NAT = Nat
+  liftSchElu TEXT = String
+  liftSchElu REAL = Double
+  liftSchElu BOOL = Bool
+  liftSchElu (CRYPT u) = (AES (liftSchElu u))
+  -- FIXME: nested l should be flatten
+  liftSchElu (SCH l) = ()
 
-    -- Decoding function
-    el : U -> Type
-    el UNIT         = ()
-    el NAT          = Nat
-    el TEXT         = String
-    el REAL         = Double
-    el BOOL         = Bool
-    el (CRYPT U)    = (AES (el U))
-    el (SCH l)      = List (liftSch l)
-    -- el (PAIR U1 U2) = (Pair (el U1) (el U2))
-    -- el (LIST U)     = List (el U)
-    -- el (HOME U)  = el U
+  liftSch : (s : List (String, U)) -> Type
+  liftSch []                     = ()
+  liftSch [(_,u)]                = liftSchElu u
+  liftSch ((_,u) :: s@(a :: as)) = Pair (liftSchElu u) (liftSch s)
+
+  -- Decoding function
+  el : U -> Type
+  el UNIT         = ()
+  el NAT          = Nat
+  el TEXT         = String
+  el REAL         = Double
+  el BOOL         = Bool
+  el (CRYPT U)    = (AES (el U))
+  el (SCH l)      = List (liftSch l)
+  -- el (PAIR U1 U2) = (Pair (el U1) (el U2))
+  -- el (LIST U)     = List (el U)
+  -- el (HOME U)  = el U
 
   -- -- Returns the inner u if any
   -- private
@@ -86,7 +96,7 @@ namespace universe
     BOOL == BOOL             = True
     (CRYPT x) == (CRYPT y)   = x == y
     -- FIXME: why not total?
-    -- (SCH x) == (SCH y)       = assert_total x == y
+    (SCH x) == (SCH y)       = assert_total $ x == y
     -- (LIST x) == (LIST y)     = x == y
     -- (PAIR w x) == (PAIR y z) = w == y && x == y
     -- (HOME x) == (HOME y) = x == y
