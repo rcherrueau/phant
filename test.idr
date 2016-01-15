@@ -100,7 +100,7 @@ meetings'' = do                                                  -- Alice Alice.
   let contact = expr.encrypt "mykey" "Bob"
   ql <- privy $ queryL (Project [D, Id])                         -- Alice App.L       (1)
   qr <- privy $ queryR (Project [A, Id] .
-                        Select Nc (\n => n >= contact))              -- Alice App.R       (2)
+                        Select Nc (ExprEq contact))              -- Alice App.R       (2)
   pure (ExprProject [D,A] $ ExprProduct ql qr)                   -- Alice Alice.Alice (3)
 
 main : IO ()

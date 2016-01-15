@@ -10,7 +10,6 @@ import utils
 
 import Data.List
 import Data.Vect
-import Effect.Default
 
 %default total
 %access public
@@ -30,31 +29,24 @@ namespace universe
          -- | LIST U
          -- | HOME U
 
-  -- Decoding function
-  el : U -> Type
-  el UNIT         = ()
-  el NAT          = Nat
-  el TEXT         = String
-  el REAL         = Double
-  el BOOL         = Bool
-  el (CRYPT U)    = (AES (el U))
-  el (SCH l)      = List (String, U)
-  -- el (PAIR U1 U2) = (Pair (el U1) (el U2))
-  -- el (LIST U)     = List (el U)
-  -- el (HOME U)  = el U
+  mutual
+    liftSch : (s : List (String, U)) -> Type
+    liftSch []                     = ()
+    liftSch [(n,u)]                = assert_total $ el u
+    liftSch ((_,u) :: s@(a :: as)) = assert_total $ Pair (el u) (liftSch s)
 
-  instance Default (AES (el UNIT)) where
-  instance Default (AES (el NAT)) where
-  instance Default (AES (el TEXT)) where
-  instance Default (AES (el REAL)) where
-  instance Default (AES (el BOOL)) where
-  instance Default (el u) => Default (AES (el (CRYPT u))) where
-  instance Default (AES (el (SCH l))) where
-  -- instance Default (el u) where
-  --     default {u} = ?Default_rhs_1
-
-  -- instance Default (el u) => Default (AES (el u)) where
-  --     default = ?Default_rhs_1
+    -- Decoding function
+    el : U -> Type
+    el UNIT         = ()
+    el NAT          = Nat
+    el TEXT         = String
+    el REAL         = Double
+    el BOOL         = Bool
+    el (CRYPT U)    = (AES (el U))
+    el (SCH l)      = List (liftSch l)
+    -- el (PAIR U1 U2) = (Pair (el U1) (el U2))
+    -- el (LIST U)     = List (el U)
+    -- el (HOME U)  = el U
 
   -- -- Returns the inner u if any
   -- private
@@ -233,11 +225,6 @@ types = map type
 
 getUs : Schema -> List U
 getUs = snd . unzip
-
-liftSch : (s : Schema) -> Type
-liftSch []                     = ()
-liftSch [(n,u)]                = el u
-liftSch ((_,u) :: s@(a :: as)) = Pair (el u) (liftSch s)
 
 getSchema : (fId : Fin n) -> Vect n Schema -> Schema
 getSchema FZ     (x :: xs) = x

@@ -251,7 +251,7 @@ piProcFromExpr x {p} pips = ?piProcFromExpr_rhs
 
 piProcFromRA : RA s p -> PiProcs n -> PiProcs n
 piProcFromRA (Project sproj ra)  pips = piProcFromRA ra pips
-piProcFromRA (Select a q ra {p}) pips = let expr = q (Expr [a] p)
+piProcFromRA (Select a q ra {p}) pips = let expr = q (defaultExpr (getU a) p)
                                         in piProcFromExpr expr pips
 piProcFromRA (Count scount ra)   pips = piProcFromRA ra pips
 piProcFromRA (Unit s p)          pips = case p of (_, cr, ce)
