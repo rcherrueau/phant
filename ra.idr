@@ -1,6 +1,6 @@
 module phant.ra
 
-import schema
+import public schema
 import utils
 import crypt
 
@@ -17,6 +17,9 @@ data Place : Type where
      DB    : Place
      Frag  : Fin n -> Place
 
+Process : Type
+Process = (Place,Place,Place)
+
 instance Eq Place where
   Alice    == Alice    = True
   App      == App      = True
@@ -24,25 +27,25 @@ instance Eq Place where
   (Frag j) == (Frag k) = finToNat j == finToNat k
   _        == _        = False
 
-caller : (Place,Place,Place) -> Place
+caller : Process -> Place
 caller = fst . snd
 
-callee : (Place,Place,Place) -> Place
+callee : Process -> Place
 callee = snd . snd
 
-recipient : (Place,Place,Place) -> Place
+recipient : Process -> Place
 recipient = fst
 
-setRecipient : Place -> (Place,Place,Place) -> (Place,Place,Place)
+setRecipient : Place -> Process -> Process
 setRecipient r (a, b, c) = (r , b, c)
 
-AppP : (Place, Place, Place)
+AppP : Process
 AppP = (App, App, App)
 
-AliceP : (Place, Place, Place)
+AliceP : Process
 AliceP = (Alice, Alice, Alice)
 
-findRecipient : (Place,Place,Place) -> (Place,Place,Place) -> (Place,Place,Place)
+findRecipient : Process -> Process -> Process
 findRecipient (recip1, _, _) (recip2, _, _) =
   if recip1 == Alice || recip2 == Alice
   -- It should not be something different since I cannot do Exp*
@@ -51,18 +54,18 @@ findRecipient (recip1, _, _) (recip2, _, _) =
 
 
 namespace expr
-  data Expr : U -> (Place,Place,Place) -> Type where
+  data Expr : U -> Process -> Type where
     -- ExprElU : {u : U} -> (v : a) -> Expr u
     -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     -- Type
-    -- ExprU     :  (u : U) -> (p : (Place,Place,Place)) -> Expr u p
+    -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
     ExprUNIT  : Expr UNIT AppP
     ExprNAT   : Nat -> Expr NAT AppP
     ExprTEXT  : String -> Expr TEXT AppP
     ExprREAL  : Double -> Expr REAL AppP
     ExprBOOL  : Bool -> Expr BOOL AppP
     ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) AppP
-    ExprSCH     : (s : Schema) -> (p : (Place,Place,Place)) -> Expr (SCH s) p
+    ExprSCH     : (s : Schema) -> (p : Process) -> Expr (SCH s) p
     -- Operation
     ExprEq    : Eq (el a) => Expr a p1  -> Expr a p2 -> Expr BOOL (findRecipient p1 p2)
     ExprGtEq  : Ord (el a) => Expr a p1 -> Expr a p2  -> Expr BOOL (findRecipient p1 p2)
@@ -75,13 +78,13 @@ namespace expr
                   Expr (SCH (s * s')) (findRecipient p1 p2)
     ExprProject : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (intersect sproj s)) p
 
-    ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
-                  {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
+    -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
+    --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
     ExprDrop    : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (s \\ sproj)) p
     ExprCount   : (scount : Schema) ->
                   {default (includeSingleton Here) inc : Include scount s} ->
                   Expr (SCH s) p -> Expr (SCH (count scount s {inc})) p
-    ExprPutP    : (p : (Place,Place,Place)) -> Expr a p' -> Expr a p
+    ExprPutP    : (p : Process) -> Expr a p' -> Expr a p
 
 
   -- Set the recipient of an expression
@@ -89,7 +92,7 @@ namespace expr
   setRecipient p expr {ppp} = let ppp' = setRecipient p ppp
                               in ExprPutP ppp' expr
 
-  defaultExpr : (u : U) -> (p : (Place,Place,Place)) -> Expr u p
+  defaultExpr : (u : U) -> (p : Process) -> Expr u p
   defaultExpr UNIT      p = ExprPutP p $ ExprUNIT
   defaultExpr NAT       p = ExprPutP p $ ExprNAT Z
   defaultExpr TEXT      p = ExprPutP p $ ExprTEXT ""
@@ -111,7 +114,7 @@ namespace expr
     defaultElu _               {u' = (SCH xs)  } = []
   defaultExpr (SCH s)   p = ExprSCH s p
 
-  -- givemeExpr : (u : U) -> (p : (Place,Place,Place)) -> Expr u p
+  -- givemeExpr : (u : U) -> (p : Process) -> Expr u p
   -- givemeExpr u p = ExprU u p
 
   -- Operation
@@ -197,7 +200,7 @@ namespace expr
 --
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
-data RA : Schema -> (Place,Place,Place) -> Type where
+data RA : Schema -> Process -> Type where
   -- Set operators
   -- Union    : RA s  -> RA s  -> RA s
   -- Diff     : RA s  -> RA s' -> RA s
@@ -217,7 +220,7 @@ data RA : Schema -> (Place,Place,Place) -> Type where
              {default (includeSingleton Here) inc : Include scount s} ->
              RA s p -> RA (count scount s {inc}) p
   -- -- -- Introduce
-  Unit     : (s : Schema) -> (p : (Place,Place,Place)) -> RA s p
+  Unit     : (s : Schema) -> (p : Process) -> RA s p
 
 -- union : RA s -> RA s -> RA s
 -- union = Union
@@ -246,7 +249,7 @@ data RA : Schema -> (Place,Place,Place) -> Type where
 getSchema : RA s p -> Schema
 getSchema _ {s} = s
 
-getPlaces : RA s p -> (Place,Place,Place)
+getPlaces : RA s p -> Process
 getPlaces _ {p} = p
 
 -- Local Variables:

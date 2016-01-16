@@ -32,13 +32,14 @@ places : Eff (Expr (SCH [A]) (App,App,DB))
 places = do                                                      -- Alice App.Alice   (o)
   query (Project [A] . Select D nextWeek)                        -- App   App.DB      (1)
 
--- -- 2
+-- 2
 meetings : Eff (Expr (SCH [D,Count]) (App,App,DB))
                [GUARD $ Plain [D,N,A]]
 -- meetings : sch[D, Count] from db[D,N,A]
 meetings = do                                                    -- Alice App.Alice   (2)
   query (Count [D] . Select N (ExprEq (ExprTEXT "Bob")))         -- App   App.DB      (1)
 
+-- 1 & 2
 compose : Eff (Expr (SCH [A,D,Count]) (App,App,App))
               [GUARD $ Plain [D,N,A]]
 compose = do                                                     -- Alice App.Alice   (o)

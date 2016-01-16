@@ -228,34 +228,89 @@ mkTuple s = let s' = delete Count (delete Id s)
 
 record PiProcs (fragsNumber : Nat) where
   constructor MkPiProcs
-  appPi   : PiProc
-  alicePi : PiProc
-  dbPi    : PiProc
-  fragPi  : Vect fragsNumber PiProc
+  appPi   : PiProc -> PiProc
+  alicePi : PiProc -> PiProc
+  dbPi    : PiProc -> PiProc
+  fragPi  : Vect fragsNumber (PiProc -> PiProc)
+  id      : Integer
 
 fragsNumber : PiProcs n -> Nat
 fragsNumber _ {n} = n
 
--- setPiOfPlace : Place -> PiProc -> PiProcs n -> PiProc
--- setPiOfPlace Alice      pips     =
---             record { alicePi pips
--- setPiOfPlace App        pips     = appPi   pips
--- setPiOfPlace DB         pips     = dbPi    pips
--- setPiOfPlace (Frag fId {n=n1}) pips {n=n2} =
---             let frags = fragPi pips
---                 fId'  = prim__believe_me (Fin n1) (Fin n2) fId
---             in index fId' frags
+||| Generate a fresh identifier from the Piprocs.
+freshId : PiProcs n -> PiProcs n
+freshId pips = record { id = 1 + (id pips) } pips
 
-piProcFromExpr : Expr u p -> PiProcs n -> PiProcs n
-piProcFromExpr x {p} pips = ?piProcFromExpr_rhs
+||| Sets the PiProc for a specific place.
+setPiProcs : Place -> (PiProc -> PiProc) -> PiProcs n -> PiProcs n
+setPiProcs Alice             pi pips        = record {
+             alicePi = \k => (alicePi pips) $ pi k } pips
+setPiProcs App               pi pips        = record {
+             appPi = \k => (appPi pips) $ pi k } pips
+setPiProcs DB                pi pips        = record {
+             dbPi = \k => (dbPi pips) $ pi k } pips
+setPiProcs (Frag fId {n=n1}) pi pips {n=n2} = record {
+             fragPi =
+               let frags = fragPi pips
+                   -- FIXME: give the proof that fragNums == pipFNums.
+                   -- I'm sure about that since the Frag combinator is
+                   -- applicable only once in the computation. And my
+                   -- function that construct the pips is based on
+                   -- that combinator.
+                   fId'  = prim__believe_me (Fin n1) (Fin n2) fId
+                   frag  = \k => (index fId' frags) $ pi k
+               in replaceAt fId' frag frags } pips
 
-piProcFromRA : RA s p -> PiProcs n -> PiProcs n
-piProcFromRA (Project sproj ra)  pips = piProcFromRA ra pips
-piProcFromRA (Select a q ra {p}) pips = let expr = q (defaultExpr (getU a) p)
-                                        in piProcFromExpr expr pips
-piProcFromRA (Count scount ra)   pips = piProcFromRA ra pips
-piProcFromRA (Unit s p)          pips = case p of (_, cr, ce)
-                                        => ?mlkj
+-- Make a pi proc that receive an expression. If the expression
+-- contains sub expressions with different (callee/recipient) then
+-- generate the receiver for those two.
+piProcFromExpr : Expr u p -> Process -> PiProcs n -> PiProcs n
+-- Expr/0
+piProcFromExpr ExprUNIT op pips = ?piProcFromExpr_rhs_2
+piProcFromExpr (ExprNAT k) op pips = ?piProcFromExpr_rhs_3
+piProcFromExpr (ExprTEXT s) op pips = ?piProcFromExpr_rhs_4
+piProcFromExpr (ExprREAL d) op pips = ?piProcFromExpr_rhs_5
+piProcFromExpr (ExprBOOL b) op pips = ?piProcFromExpr_rhs_6
+piProcFromExpr (ExprCRYPT x) op pips = ?piProcFromExpr_rhs_7
+piProcFromExpr (ExprSCH s p) op pips = ?piProcFromExpr_rhs_8
+-- Expr/1
+piProcFromExpr (ExprPutP p e) op pips = ?piProcFromExpr_rhs_18
+piProcFromExpr (ExprNot e) op pips = ?piProcFromExpr_rhs_12
+-- Expr/2
+piProcFromExpr (ExprEq x y) op pips = ?piProcFromExpr_rhs_9
+piProcFromExpr (ExprGtEq x y) op pips = ?piProcFromExpr_rhs_10
+piProcFromExpr (ExprElem x y) op pips = ?piProcFromExpr_rhs_11
+-- Expr_SQL
+piProcFromExpr (ExprUnion x y) op pips = ?piProcFromExpr_rhs_13
+piProcFromExpr (ExprProduct x y) op pips = ?piProcFromExpr_rhs_14
+piProcFromExpr (ExprProject sproj x) op pips = ?piProcFromExpr_rhs_15
+piProcFromExpr (ExprDrop sproj x) op pips = ?piProcFromExpr_rhs_16
+piProcFromExpr (ExprCount scount x) op pips = ?piProcFromExpr_rhs_17
+
+||| Generates the piproc for a query.
+|||
+||| First parse inner expression then produces those two:
+||| - @Caller_Q : -Callee_Q(q)-
+||| - @Callee_Q : Callee_Q(q)
+|||
+||| @ q The query.
+piProcFromQ : (q : RA s p) -> PiProcs n -> PiProcs n
+piProcFromQ q pips {p = (rc, cr, ce)} = let
+    pips1 = piProcFromQ' q pips
+    pips2 = freshId pips1
+    pips3 = setPiProcs cr (PiSend (PiValPlace ce)
+                                  (PiValQuery (id pips2) q)) pips2
+    pips4 = setPiProcs ce (PiGet  (PiValPlace ce)
+                                  (PiValQuery (id pips2) q)) pips3
+    in pips4
+  where
+  piProcFromQ' : (RA s p') -> PiProcs n -> PiProcs n
+  piProcFromQ' (Project sproj q) pips      = piProcFromQ' q pips
+  piProcFromQ' (Select a pred q) {p'} pips =
+                 let e = pred (defaultExpr (getU a) p')
+                 in piProcFromExpr e p' pips
+  piProcFromQ' (Count scount q) pips       = piProcFromQ' q pips
+  piProcFromQ' (Unit s p') pips            = pips
 
 instance MonadState (Schema,
                      List (Attribute, Key),
@@ -284,7 +339,7 @@ instance MonadState (Schema,
       (os, ks, pips) <- get
       let q' = q (Unit s p)
       -- pips of pi expr
-      let pips' = piProcFromRA q' pips
+      let pips' = piProcFromQ q' pips
       put (os, ks, pips')
       -- continuation
       k (ExprSCH (getSchema q') p) (MkPEnv s)
@@ -292,15 +347,11 @@ instance MonadState (Schema,
       (os, ks, pips) <- get
       let s = (getSchema fId ss)
       let q' = q (Unit s p)
-      -- FIXME: give the proof that fragNums == pipFNums. Note: I'm
-      -- sure about that since the Frag combinator is applicable only
-      -- once in the computation. And my function that construct the
-      -- pips is based on that combinator.
       -- let frags = fragPi pips
       -- let fId' = prim__believe_me (Fin fragNums) (Fin pipFNums) fId
       -- let f = index fId' frags
       -- construction of pi expr
-      let pips' = piProcFromRA q' pips
+      let pips' = piProcFromQ q' pips
       put (os, ks, pips')
       -- continuation
       k (ExprSCH (getSchema q') p) (MkFEnv ss)
@@ -309,7 +360,10 @@ genPV : Eff a [GUARD $ Plain s] [GUARD cstate] -> IO ()
 genPV eff {s} {a} {cstate = Plain s'} = do
   let body = the (State (Schema, List (Attribute, Key), PiProcs Z) a) $
              runInit [MkPEnv s] eff
-  let initPiProcs = (MkPiProcs PiEnd PiEnd PiEnd Nil {fragsNumber=Z})
+  let initPiProcs = (MkPiProcs (\k => PiEnd)
+                               (\k => PiEnd)
+                               (\k => PiEnd)
+                               Nil 0 {fragsNumber=Z})
   let (a,s) = runState body (s, [], initPiProcs)
   return ()
 genPV eff {s} {a} {cstate = FragV frags} = do
@@ -319,8 +373,10 @@ genPV eff {s} {a} {cstate = FragV frags} = do
   -- let body = the (StateT (Schema, Maybe Key) IO a) $ runInit [MkPEnv s] eff
   let body = the (State (Schema, List (Attribute, Key), PiProcs (length frags)) a) $
              runInit [MkPEnv s] eff
-  let initPiProcs =(MkPiProcs PiEnd PiEnd PiEnd
-                    (replicate (length frags) PiEnd))
+  let initPiProcs = (MkPiProcs (\k => PiEnd)
+                               (\k => PiEnd)
+                               (\k => PiEnd)
+                               (replicate (length frags) (\k => PiEnd)) 0)
   let (a,s) = runState body (s, [], initPiProcs)
   return ()
 
