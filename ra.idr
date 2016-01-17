@@ -52,70 +52,69 @@ findRecipient (recip1, _, _) (recip2, _, _) =
   -- computation on other place rather than Alice and App.
   then (Alice,Alice,Alice) else (App,App,App)
 
+data Expr : U -> Process -> Type where
+  -- ExprElU : {u : U} -> (v : a) -> Expr u
+  -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
+  -- Type
+  -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
+  ExprUNIT  : Expr UNIT AppP
+  ExprNAT   : Nat -> Expr NAT AppP
+  ExprTEXT  : String -> Expr TEXT AppP
+  ExprREAL  : Double -> Expr REAL AppP
+  ExprBOOL  : Bool -> Expr BOOL AppP
+  ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) AppP
+  ExprSCH     : (s : Schema) -> (p : Process) -> Expr (SCH s) p
+  -- Operation
+  ExprEq    : Eq (el a) => Expr a p1  -> Expr a p2 -> Expr BOOL (findRecipient p1 p2)
+  ExprGtEq  : Ord (el a) => Expr a p1 -> Expr a p2  -> Expr BOOL (findRecipient p1 p2)
+  ExprElem  : Eq (el a) => Expr a p1 -> Expr (SCH s) p2 -> Expr BOOL (findRecipient p1 p2)
+  ExprNot   : Expr BOOL p -> Expr BOOL p
+  -- Schema
+  ExprUnion   : Expr (SCH s) p1 -> Expr (SCH s) p2 -> Expr (SCH s) (findRecipient p1 p2)
+  -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
+  ExprProduct : Expr (SCH s) p1 -> Expr (SCH s') p2  ->
+                Expr (SCH (s * s')) (findRecipient p1 p2)
+  ExprProject : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (intersect sproj s)) p
+
+  -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
+  --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
+  ExprDrop    : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (s \\ sproj)) p
+  ExprCount   : (scount : Schema) ->
+                {default (includeSingleton Here) inc : Include scount s} ->
+                Expr (SCH s) p -> Expr (SCH (count scount s {inc})) p
+  ExprPutP    : (p : Process) -> Expr a p' -> Expr a p
+
+
+defaultExpr : (u : U) -> (p : Process) -> Expr u p
+defaultExpr UNIT      p = ExprPutP p $ ExprUNIT
+defaultExpr NAT       p = ExprPutP p $ ExprNAT Z
+defaultExpr TEXT      p = ExprPutP p $ ExprTEXT ""
+defaultExpr REAL      p = ExprPutP p $ ExprREAL 0.0
+defaultExpr BOOL      p = ExprPutP p $ ExprBOOL True
+defaultExpr (CRYPT u) p = let expr = defaultExpr u p
+                              elu = defaultElu expr
+                              aes = encrypt "key" elu
+                         in ExprPutP p $ ExprCRYPT aes
+  where
+  defaultElu : Expr u' p' -> (el u')
+  defaultElu _               {u' = UNIT      } = ()
+  defaultElu _               {u' = NAT       } = Z
+  defaultElu _               {u' = TEXT      } = ""
+  defaultElu _               {u' = REAL      } = 0.0
+  defaultElu _               {u' = BOOL      } = True
+  defaultElu (ExprCRYPT y)   {u' = (CRYPT x) } = y
+  defaultElu (ExprPutP p' y) {u' = (CRYPT x) } = defaultElu y
+  defaultElu _               {u' = (SCH xs)  } = []
+defaultExpr (SCH s)   p = ExprSCH s p
+
+  -- givemeExpr : (u : U) -> (p : Process) -> Expr u p
+  -- givemeExpr u p = ExprU u p
 
 namespace expr
-  data Expr : U -> Process -> Type where
-    -- ExprElU : {u : U} -> (v : a) -> Expr u
-    -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
-    -- Type
-    -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
-    ExprUNIT  : Expr UNIT AppP
-    ExprNAT   : Nat -> Expr NAT AppP
-    ExprTEXT  : String -> Expr TEXT AppP
-    ExprREAL  : Double -> Expr REAL AppP
-    ExprBOOL  : Bool -> Expr BOOL AppP
-    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) AppP
-    ExprSCH     : (s : Schema) -> (p : Process) -> Expr (SCH s) p
-    -- Operation
-    ExprEq    : Eq (el a) => Expr a p1  -> Expr a p2 -> Expr BOOL (findRecipient p1 p2)
-    ExprGtEq  : Ord (el a) => Expr a p1 -> Expr a p2  -> Expr BOOL (findRecipient p1 p2)
-    ExprElem  : Eq (el a) => Expr a p1 -> Expr (SCH s) p2 -> Expr BOOL (findRecipient p1 p2)
-    ExprNot   : Expr BOOL p -> Expr BOOL p
-    -- Schema
-    ExprUnion   : Expr (SCH s) p1 -> Expr (SCH s) p2 -> Expr (SCH s) (findRecipient p1 p2)
-    -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
-    ExprProduct : Expr (SCH s) p1 -> Expr (SCH s') p2  ->
-                  Expr (SCH (s * s')) (findRecipient p1 p2)
-    ExprProject : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (intersect sproj s)) p
-
-    -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
-    --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
-    ExprDrop    : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (s \\ sproj)) p
-    ExprCount   : (scount : Schema) ->
-                  {default (includeSingleton Here) inc : Include scount s} ->
-                  Expr (SCH s) p -> Expr (SCH (count scount s {inc})) p
-    ExprPutP    : (p : Process) -> Expr a p' -> Expr a p
-
-
   -- Set the recipient of an expression
   setRecipient : (p : Place) -> Expr a ppp -> Expr a (setRecipient p ppp)
   setRecipient p expr {ppp} = let ppp' = setRecipient p ppp
                               in ExprPutP ppp' expr
-
-  defaultExpr : (u : U) -> (p : Process) -> Expr u p
-  defaultExpr UNIT      p = ExprPutP p $ ExprUNIT
-  defaultExpr NAT       p = ExprPutP p $ ExprNAT Z
-  defaultExpr TEXT      p = ExprPutP p $ ExprTEXT ""
-  defaultExpr REAL      p = ExprPutP p $ ExprREAL 0.0
-  defaultExpr BOOL      p = ExprPutP p $ ExprBOOL True
-  defaultExpr (CRYPT u) p = let expr = defaultExpr u p
-                                elu = defaultElu expr
-                                aes = encrypt "key" elu
-                           in ExprPutP p $ ExprCRYPT aes
-    where
-    defaultElu : Expr u' p' -> (el u')
-    defaultElu _               {u' = UNIT      } = ()
-    defaultElu _               {u' = NAT       } = Z
-    defaultElu _               {u' = TEXT      } = ""
-    defaultElu _               {u' = REAL      } = 0.0
-    defaultElu _               {u' = BOOL      } = True
-    defaultElu (ExprCRYPT y)   {u' = (CRYPT x) } = y
-    defaultElu (ExprPutP p' y) {u' = (CRYPT x) } = defaultElu y
-    defaultElu _               {u' = (SCH xs)  } = []
-  defaultExpr (SCH s)   p = ExprSCH s p
-
-  -- givemeExpr : (u : U) -> (p : Process) -> Expr u p
-  -- givemeExpr u p = ExprU u p
 
   -- Operation
   -- (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL

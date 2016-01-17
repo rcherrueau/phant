@@ -60,6 +60,9 @@ data Guard : Effect where
             Guard (Expr (SCH s') p)
                   (CEnv $ FragV ss)
                   (\_ => CEnv $ FragV ss)
+  Privy   : Guard (Expr a (rc,cr,ce) -> Expr a (Alice,cr,ce))
+                  (CEnv $ state)
+                  (\_ => CEnv $ state)
 
 GUARD : CState -> EFFECT
 GUARD x = MkEff (CEnv x) Guard
@@ -75,8 +78,11 @@ recipientIs : Place -> Eff (Expr (SCH s) p) [GUARD a] ->
 recipientIs p y = do expr <- y
                      pure (setRecipient Alice expr)
 
+privy' : Eff (Expr a (rc,cr,ce) -> Expr a (Alice,cr,ce)) [GUARD b]
+privy' = call (Privy)
+
 privy : Eff (Expr (SCH s) p) [GUARD a] ->
-        Eff (Expr (SCH s) (setRecipient Alice p)) [GUARD a]
+         Eff (Expr (SCH s) (setRecipient Alice p)) [GUARD a]
 privy = (recipientIs Alice)
 
 namespace plain

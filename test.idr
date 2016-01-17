@@ -1,6 +1,6 @@
 module Main
 
-import pv
+-- import pv
 import crypt
 import guard
 
@@ -79,6 +79,23 @@ places'' = do                                                    -- Alice Alice.
   -- at Alice place but one of the expression is located at App place.
   pure (ExprProject [D,A] $ ExprProduct dIds qRes)               -- Alice Alice.Alice (3)
 
+places''' : Eff (Expr (SCH [D,A]) (Alice,Alice,Alice))
+               [GUARD $ Plain [D,N,A]]
+               [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
+-- places'' : sch[D,A] from (frags[[D, Id],[Nc,A,Id]] of db[D, N, A])
+places''' = do                                                    -- Alice Alice.Alice (o)
+  frag [[D]]
+  encrypt 1 "mykey" N
+  dIds <- queryL (Project [D, Id])                               -- App   App.L       (1)
+  let ids = ExprProject [Id] dIds
+  qRes <- privy' <*> queryR (Project [A, Id] .
+                             Select Id (flip ExprElem ids))         -- Alice App.R       (2)
+  -- Does one of the two arguments comes from Alice place ? Yes, do
+  -- the expr at alice place And keep it at alice place. Parsing the
+  -- expr involve an extra send from App to Alice with dIds in
+  -- arguments. It's easy to notice that since the final expr is done
+  -- at Alice place but one of the expression is located at App place.
+  pure (ExprProject [D,A] $ ExprProduct dIds qRes)               -- Alice Alice.Alice (3)
 -- 5
 meetings' : AES String -> Eff (Expr (SCH [D,Id]) (App,App,App))
                               [GUARD $ FragV [[D,Id],[Nc,A,Id]]]
@@ -104,15 +121,15 @@ meetings'' = do                                                  -- Alice Alice.
                         Select Nc (ExprEq contact))              -- Alice App.R       (2)
   pure (ExprProject [D,A] $ ExprProduct ql qr)                   -- Alice Alice.Alice (3)
 
-main : IO ()
-main = -- do let PCs =  [[N],[D,A]]
-          -- genPV PCs (do
-          --   places
-          --   meetings)
-          genPV (do
-            places'
-            meetings'')
--- -- main = putStrLn "lala"
+-- main : IO ()
+-- main = -- do let PCs =  [[N],[D,A]]
+--           -- genPV PCs (do
+--           --   places
+--           --   meetings)
+--           genPV (do
+--             places'
+--             meetings'')
+-- -- -- main = putStrLn "lala"
 
 -- -- λPROJECT> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "EC2" ] lFirstStrat
 
