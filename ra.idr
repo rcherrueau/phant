@@ -53,38 +53,45 @@ findRecipient (recip1, _, _) (recip2, _, _) =
   then (Alice,Alice,Alice) else (App,App,App)
 
 
-data Expr : U -> Type where
-  -- ExprElU : {u : U} -> (v : a) -> Expr u
-  -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
-  -- Type
-  -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
-  ExprUNIT  : Expr UNIT
-  ExprNAT   : Nat -> Expr NAT
-  ExprTEXT  : String -> Expr TEXT
-  ExprREAL  : Double -> Expr REAL
-  ExprBOOL  : Bool -> Expr BOOL
-  ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u)
-  ExprSCH     : (s : Schema) ->  Expr (SCH s)
-  -- Operation
-  ExprEq    : Eq (el a) => Expr a -> Expr a -> Expr BOOL
-  ExprGtEq  : Ord (el a) => Expr a -> Expr a -> Expr BOOL
-  ExprElem  : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
-  ExprNot   : Expr BOOL -> Expr BOOL
-  -- Schema
-  ExprUnion   : Expr (SCH s) -> Expr (SCH s) -> Expr (SCH s)
-  -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
-  ExprProduct : Expr (SCH s) -> Expr (SCH s') ->
-                Expr (SCH (s * s'))
-  ExprProject : (sproj : Schema) -> Expr (SCH s) -> Expr (SCH (intersect sproj s))
+using (bjn : Vect n U, bjn' : Vect m U)
 
-  -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
-  --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
-  ExprDrop    : (sproj : Schema) -> Expr (SCH s) -> Expr (SCH (s \\ sproj))
-  ExprCount   : (scount : Schema) ->
-                {default (includeSingleton Here) inc : Include scount s} ->
-                Expr (SCH s) -> Expr (SCH (count scount s {inc}))
-  ExprPutP    : Expr a -> Expr a
-  ExprVar     : (t : U) -> Expr t
+  data HasType : Vect n U -> Fin n -> U -> Type where
+    Stop : HasType (a :: bjn) FZ a
+    Pop  : HasType bjn i b -> HasType (a :: bjn) (FS i) b
+
+
+  data Expr : U -> Vect n U -> Type where
+    -- ExprElU : {u : U} -> (v : a) -> Expr u
+    -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
+    -- Type
+    -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
+    ExprUNIT  : Expr UNIT bjn
+    ExprNAT   : Nat -> Expr NAT bjn
+    ExprTEXT  : String -> Expr TEXT bjn
+    ExprREAL  : Double -> Expr REAL bjn
+    ExprBOOL  : Bool -> Expr BOOL bjn
+    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) bjn
+    ExprSCH     : (s : Schema) ->  Expr (SCH s) bjn
+    -- Operation
+    -- ExprEq    : Eq (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
+    -- ExprGtEq  : Ord (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
+    ExprElem  : Eq (el a) => Expr a bjn -> Expr (SCH s) bjn -> Expr BOOL bjn
+    -- ExprNot   : Expr BOOL bjn -> Expr BOOL bjn
+    -- Schema
+    -- ExprUnion   : Expr (SCH s) -> Expr (SCH s) -> Expr (SCH s)
+    -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
+    ExprProduct : Expr (SCH s) bjn -> Expr (SCH s') bjn ->
+                  Expr (SCH (s * s')) bjn
+    ExprProject : (sproj : Schema) -> Expr (SCH s) bjn -> Expr (SCH (intersect sproj s)) bjn
+
+    -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
+    --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
+    -- ExprDrop    : (sproj : Schema) -> Expr (SCH s) -> Expr (SCH (s \\ sproj))
+    -- ExprCount   : (scount : Schema) ->
+    --               {default (includeSingleton Here) inc : Include scount s} ->
+    --               Expr (SCH s) -> Expr (SCH (count scount s {inc}))
+    -- ExprPutP    : Expr a -> Expr a
+    ExprVar     : HasType bjn i a -> Expr t bjn
 
 
 -- namespace expr
@@ -202,28 +209,29 @@ data Expr : U -> Type where
 --
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
-data RA : Schema -> Type where
-  -- Set operators
-  -- Union    : RA s  -> RA s  -> RA s
-  -- Diff     : RA s  -> RA s' -> RA s
-  -- Product  : RA s  -> RA s' -> RA (s * s')
-  -- Others
-  -- Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
-  -- Dans mon context, j'enleve le s puis je remet le
-  Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
-  -- TODO: Select on an element with specific operation
-  Select  : (a : Attribute) ->
-            (Expr (getU a) -> Expr BOOL) ->
-            {auto elem : Elem a s} -> RA s -> RA s
-  -- -- TODO: Join take an element to do the join
-  -- Drop     : (sproj : Schema) -> RA s  -> RA (s \\ sproj)
-  -- -- FIXME: Do a better tatic, Something that work on each schema
-  -- -- rather than schema singleton
-  Count    : (scount : Schema) ->
-             {default (includeSingleton Here) inc : Include scount s} ->
-             RA s -> RA (count scount s {inc})
-  -- -- -- Introduce
-  Unit     : (s : Schema) -> RA s
+
+  data RA : Schema -> Vect n U -> Type where
+    -- Set operators
+    -- Union    : RA s  -> RA s  -> RA s
+    -- Diff     : RA s  -> RA s' -> RA s
+    -- Product  : RA s  -> RA s' -> RA (s * s')
+    -- Others
+    -- Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
+    -- Dans mon context, j'enleve le s puis je remet le
+    Project  : (sproj : Schema) -> RA s bjn -> RA (intersect sproj s) bjn
+    -- TODO: Select on an element with specific operation
+    Select  : (a : Attribute) ->
+              (Expr (getU a) bjn -> Expr BOOL bjn) ->
+              {auto elem : Elem a s} -> RA s bjn -> RA s bjn
+    -- -- TODO: Join take an element to do the join
+    -- Drop     : (sproj : Schema) -> RA s  -> RA (s \\ sproj)
+    -- -- FIXME: Do a better tatic, Something that work on each schema
+    -- -- rather than schema singleton
+    Count    : (scount : Schema) ->
+               {default (includeSingleton Here) inc : Include scount s} ->
+               RA s bjn -> RA (count scount s {inc}) bjn
+    -- -- -- Introduce
+    Unit     : (s : Schema) -> RA s bjn
 
 -- union : RA s -> RA s -> RA s
 -- union = Union
@@ -249,8 +257,8 @@ data RA : Schema -> Type where
 --         RA s -> RA (count scount s {inc})
 -- count = Count
 
-getSchema : RA s -> Schema
-getSchema _ {s} = s
+  getSchema : RA s bjn -> Schema
+  getSchema _ {s} = s
 
 -- Local Variables:
 -- idris-load-packages: ("effects")

@@ -18,7 +18,7 @@ A = ("Addr", TEXT)
 
 -- nextWeek : Expr (getU D) p -> Expr BOOL AppP
 -- nextWeek _ = ExprBOOL True
-nextWeek : Expr (getU D) -> Expr BOOL
+nextWeek : {bjn : Vect n U} -> Expr (getU D) bjn -> Expr BOOL bjn
 nextWeek _ = ExprBOOL True
 
 
@@ -113,24 +113,31 @@ nextWeek _ = ExprBOOL True
 --              QueryF 1 (Project [A] . Select Id (flip ExprElem (ExprSCH [Id]))) >>= \res =>
 --              Pure (ExprProject [D,A] $ ExprProduct dIds res))
 
-placesFDo' : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) (Expr (SCH [D,A]))
+syntax GUARD [x] [y] [z] = {bjn : Vect n U} -> Guard (Plain x) (FragV y) bjn (Expr z bjn)
+
+-- placesFDo' : {bjn : Vect n U} -> Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) bjn (Expr (SCH [D,A]))
+placesFDo' : GUARD [D,N,A] [[D,Id], [Nc,A,Id]] (SCH [A])
 placesFDo' =  do
   Encrypt "mykey" N
   Frag [[D]]
   dIds <- QueryF 0 (Project [D, Id] . Select D nextWeek)
   Let (ExprProject [Id] dIds) (do
-    res <- QueryF 1 (Project [A] . Select Id (flip ExprElem (ExprVar (SCH [Id]))))
-    pure (ExprProject [D,A] $ ExprProduct dIds res))
+    -- res <- QueryF 1 (Project [A] . Select Id (flip ExprElem (ExprVar (SCH [Id]))))
+    res <- QueryF 1 (Project [A] . Select Id (flip ExprElem (var Stop)))
+    -- pure (ExprProject [D,A] $ ExprProduct dIds res))
+    pure (ExprProject [A] res))
 
 
-placesFDo'' : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) (Expr (SCH [D,A]))
+-- placesFDo'' : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) Nil (Expr (SCH [D,A]))
+placesFDo'' : GUARD [D,N,A] [[D,Id], [Nc,A,Id]] (SCH [A])
 placesFDo'' =  guard(do
   Encrypt "mykey" N
   Frag [[D]]
   dIds <- QueryF 0 (Project [D, Id] . Select D nextWeek)
   let ids = ExprProject [Id] dIds
   res <- QueryF 1 (Project [A] . Select Id (flip ExprElem ids))
-  pure (ExprProject [D,A] $ ExprProduct dIds res))
+  -- pure (ExprProject [D,A] $ ExprProduct dIds res))
+  pure (ExprProject [A] res))
 
 -- -- -- 5
 -- -- meetings' : AES String -> Eff (Expr (SCH [D,Id]) (App,App,App))
