@@ -29,98 +29,93 @@ data CState : Type where
   Plain  : Schema -> CState
   FragV  : Vect n Schema -> CState
 
-data CEnv : CState -> Type where
-  MkPEnv : (s : Schema) -> CEnv (Plain s)
-  MkFEnv : (ss : Vect n Schema) -> CEnv $ FragV ss
-
-data Guard : Effect where
-  -- Protect : (s : Schema) -> (pcs : List PC) ->
-  -- Protect : (pcs : List PC) ->
-  --           Guard ()
-  --                 (r)
-  --                 (\_ => r)
+data Guard : CState -> CState -> Type -> Type where
   Encrypt : (k : String) -> (a : Attribute) ->
-            Guard ()
-                  (CEnv $ Plain s)
-                  (\_ => CEnv $ Plain (encrypt a s))
-  EncryptF: (fId : Fin n) -> (k : String) -> (a : Attribute) ->
-            Guard ()
-                  (CEnv $ FragV ss)
-                  (\_ => CEnv $ FragV (encryptF a fId ss))
-  Frag    : (sprojs : List Schema) ->
-            Guard ()
-                  (CEnv $ Plain s)
-                  (\_ => CEnv $ FragV (frag sprojs s))
-  Query   : (q : RA s p -> RA s' p) ->
-            Guard (Expr (SCH s') p)
-                  (CEnv $ Plain s)
-                  (\_ => CEnv $ Plain s)
-  QueryF  : (fId : Fin n) ->
-            (RA (getSchema fId ss) p -> RA s' p) ->
-            Guard (Expr (SCH s') p)
-                  (CEnv $ FragV ss)
-                  (\_ => CEnv $ FragV ss)
+            Guard (Plain s)
+                  (Plain (encrypt a s))
+                  (Expr UNIT)
+  EncryptF : (fId : Fin n) -> (k : String) -> (a : Attribute) ->
+             Guard (FragV ss)
+                   (FragV (encryptF a fId ss))
+                   (Expr UNIT)
+  Frag : (sprojs : List Schema) ->
+         Guard (Plain s)
+               (FragV (frag sprojs s))
+               (Expr UNIT)
+  Query : (q : RA s -> RA s') ->
+          Guard (Plain s)
+                (Plain s)
+                (Expr (SCH s'))
+  QueryF : (fId : Fin n) ->
+           (q : RA (getSchema fId ss) -> RA s') ->
+           Guard (FragV ss)
+                 (FragV ss)
+                 (Expr (SCH s'))
+  Privy : Guard cs cs' (Expr a -> Expr a)
+  Let  : TheVar (Expr a) -> (Expr a -> Guard cs cs' (Expr b)) -> Guard cs cs' (Expr b)
+  -- Functor
+  Map : (m : Expr a -> Expr b) -> Guard cs cs' (Expr a) -> Guard cs cs' (Expr b)
+  -- Applicative
+  Pure : Expr a -> Guard cs cs' (Expr a)
+  SeqApp : Guard cs cs' (Expr a -> Expr b) -> Guard cs cs' (Expr a) -> Guard cs cs' (Expr b)
+  -- Monad
+  Bind : Guard cs cs' (Expr u) ->
+         (Expr u -> Guard cs' cs'' (Expr u')) -> Guard cs cs'' (Expr u')
 
-GUARD : CState -> EFFECT
-GUARD x = MkEff (CEnv x) Guard
+map : (m : Expr a -> Expr b) -> Guard cs cs' (Expr a) -> Guard cs cs' (Expr b)
+map = Map
 
--- -- protect : (s : Schema) -> (pcs : List PC) -> Eff () [GUARD $ PCs pcs] [GUARD $ Plain s]
--- -- protect s pcs = call (Protect s pcs)
--- -- protect : (pcs : List PC) -> Eff () [GUARD $ Plain s]
--- -- protect pcs = call (Protect pcs)
+pure : Expr a -> Guard cs cs' (Expr a)
+pure = Pure
 
-private
-recipientIs : Place -> Eff (Expr (SCH s) p) [GUARD a] ->
-                       Eff (Expr (SCH s) (setRecipient Alice p)) [GUARD a]
-recipientIs p y = do expr <- y
-                     pure (setRecipient Alice expr)
+(<*>) : Guard cs cs' (Expr a -> Expr b) -> Guard cs cs' (Expr a) -> Guard cs cs' (Expr b)
+(<*>) = SeqApp
 
-privy : Eff (Expr (SCH s) p) [GUARD a] ->
-        Eff (Expr (SCH s) (setRecipient Alice p)) [GUARD a]
-privy = (recipientIs Alice)
+(>>=) : Guard cs cs' (Expr u) ->
+       (Expr u -> Guard cs' cs'' (Expr u')) -> Guard cs cs'' (Expr u')
+(>>=) = Bind
 
-namespace plain
-  encrypt : String -> (a : Attribute) -> Eff () [GUARD $ Plain s]
-                                                [GUARD $ Plain (encrypt a s)]
-  encrypt k a = call (Encrypt k a)
+-- let_ : TTName -> Expr u -> Guard cs cs' t -> Guard cs cs' t
+-- let_ n e g = Let (MkVar "n" e)  (\e => g)
 
-  frag : (sprojs : List Schema) -> Eff () [GUARD $ Plain s]
-                                          [GUARD $ FragV (frag sprojs s)]
-  frag sprojs = call (Frag sprojs)
+-- -- Takes an exp of u and make it a variable
+-- var : Expr u -> Expr u
+-- var e = ExprVar (MkVar "a" e)
 
-  query : (RA s (App, App, DB) -> RA s' (App, App, DB)) ->
-          Eff (Expr (SCH s') (App,App,DB)) [GUARD $ Plain s]
-  query q = call (Query q)
+-- dsl guard
+--     -- let = let_
+--     -- C'est quoi qui est le \ids dans la lambda
+--     -- Chez moi c'est un ExprVar
+--     variable = var
+--     -- index_first = idxfst
+inter : Guard cs cs' e -> IO c
+inter (Encrypt k a) = ?inter_rhs_1
+inter (EncryptF fId k a) = ?inter_rhs_2
+inter (Frag sprojs) = ?inter_rhs_3
+inter (Query q) = ?inter_rhs_4
+inter (QueryF fId q) = ?inter_rhs_5
+inter Privy = ?inter_rhs_6
+inter (Let x f) = ?inter_rhs_7
+inter (Map m x) = ?inter_rhs_8
+inter (Pure x) = ?inter_rhs_9
+inter (SeqApp x y) = ?inter_rhs_10
+inter (Bind x f) = do e <- inter x
+                      inter (f (ExprVar (MkVar "a" e)))
+
+-- -- inter (Encrypt k a) = ?inter_rhs_1
+-- -- inter (EncryptF fId k a) = ?inter_rhs_2
+-- -- inter (Frag sprojs) = ?inter_rhs_3
+-- -- inter (Query q) = ?inter_rhs_4
+-- -- inter (QueryF fId q) = ?inter_rhs_5
+-- -- inter Privy = ?inter_rhs_6
+-- -- inter (Let x k) = ?inter_rhs_7
+-- -- inter (Map m g) = ?inter_rhs_8
+-- -- inter (Pure e) = ?inter_rhs_9
+-- -- inter (SeqApp f g) = ?inter_rhs_10
+-- -- inter (Bind g f)     = do e <- (inter g)
+-- --                           (inter $ f (ExprVar (MkVar "a" e)))
 
 
-namespace frag
-  encrypt : (fId : Fin n) -> String -> (a : Attribute) ->
-            Eff () [GUARD $ FragV ss]
-                   [GUARD $ FragV (encryptF a fId ss)]
-  encrypt fId k a = call (EncryptF fId k a)
-
-  query : (fId : Fin n) ->
-          (RA (getSchema fId ss) (App, App, Frag fId) ->
-           RA s'                 (App, App, Frag fId)) ->
-          Eff (Expr (SCH s') (App,App,Frag fId)) [GUARD $ FragV ss]
-  query fId q = call (QueryF fId q)
-
-  queryL : (RA (getSchema (the (Fin 2) FZ) ss)
-               (App, App, Frag (the (Fin 2) FZ)) ->
-            RA s'
-               (App, App, Frag (the (Fin 2) FZ))) ->
-            Eff (Expr (SCH s')
-                (App, App, Frag (the (Fin 2) FZ))) [GUARD $ FragV ss]
-  queryL q = call (QueryF FZ q)
-
-  queryR : (RA (getSchema (the (Fin 2) (FS FZ)) ss)
-               (App, App, Frag (the (Fin 2) (FS FZ))) ->
-            RA s'
-               (App, App, Frag (the (Fin 2) (FS FZ)))) ->
-            Eff (Expr (SCH s')
-                (App, App, Frag (the (Fin 2) (FS FZ)))) [GUARD $ FragV ss]
-  queryR q = call (QueryF (FS FZ) q)
-
--- -- Local Variables:
--- -- idris-load-packages: ("effects")
--- -- End:
+-- Local Variables:
+-- idris-load-packages: ("effects")
+-- End:

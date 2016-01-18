@@ -52,139 +52,143 @@ findRecipient (recip1, _, _) (recip2, _, _) =
   -- computation on other place rather than Alice and App.
   then (Alice,Alice,Alice) else (App,App,App)
 
-
 namespace expr
-  data Expr : U -> Process -> Type where
+  data TheVar : a -> Type where
+    MkVar : String -> a -> TheVar a
+
+  data Expr : U -> Type where
     -- ExprElU : {u : U} -> (v : a) -> Expr u
     -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     -- Type
     -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
-    ExprUNIT  : Expr UNIT AppP
-    ExprNAT   : Nat -> Expr NAT AppP
-    ExprTEXT  : String -> Expr TEXT AppP
-    ExprREAL  : Double -> Expr REAL AppP
-    ExprBOOL  : Bool -> Expr BOOL AppP
-    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) AppP
-    ExprSCH     : (s : Schema) -> (p : Process) -> Expr (SCH s) p
+    ExprUNIT  : Expr UNIT
+    ExprNAT   : Nat -> Expr NAT
+    ExprTEXT  : String -> Expr TEXT
+    ExprREAL  : Double -> Expr REAL
+    ExprBOOL  : Bool -> Expr BOOL
+    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u)
+    ExprSCH     : (s : Schema) ->  Expr (SCH s)
     -- Operation
-    ExprEq    : Eq (el a) => Expr a p1  -> Expr a p2 -> Expr BOOL (findRecipient p1 p2)
-    ExprGtEq  : Ord (el a) => Expr a p1 -> Expr a p2  -> Expr BOOL (findRecipient p1 p2)
-    ExprElem  : Eq (el a) => Expr a p1 -> Expr (SCH s) p2 -> Expr BOOL (findRecipient p1 p2)
-    ExprNot   : Expr BOOL p -> Expr BOOL p
+    ExprEq    : Eq (el a) => Expr a -> Expr a -> Expr BOOL
+    ExprGtEq  : Ord (el a) => Expr a -> Expr a -> Expr BOOL
+    ExprElem  : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
+    ExprNot   : Expr BOOL -> Expr BOOL
     -- Schema
-    ExprUnion   : Expr (SCH s) p1 -> Expr (SCH s) p2 -> Expr (SCH s) (findRecipient p1 p2)
+    ExprUnion   : Expr (SCH s) -> Expr (SCH s) -> Expr (SCH s)
     -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
-    ExprProduct : Expr (SCH s) p1 -> Expr (SCH s') p2  ->
-                  Expr (SCH (s * s')) (findRecipient p1 p2)
-    ExprProject : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (intersect sproj s)) p
+    ExprProduct : Expr (SCH s) -> Expr (SCH s') ->
+                  Expr (SCH (s * s'))
+    ExprProject : (sproj : Schema) -> Expr (SCH s) -> Expr (SCH (intersect sproj s))
 
     -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
     --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
-    ExprDrop    : (sproj : Schema) -> Expr (SCH s) p -> Expr (SCH (s \\ sproj)) p
+    ExprDrop    : (sproj : Schema) -> Expr (SCH s) -> Expr (SCH (s \\ sproj))
     ExprCount   : (scount : Schema) ->
                   {default (includeSingleton Here) inc : Include scount s} ->
-                  Expr (SCH s) p -> Expr (SCH (count scount s {inc})) p
-    ExprPutP    : (p : Process) -> Expr a p' -> Expr a p
+                  Expr (SCH s) -> Expr (SCH (count scount s {inc}))
+    ExprPutP    : Expr a -> Expr a
+    ExprVar     : (TheVar (Expr a)) -> Expr a
 
 
-  -- Set the recipient of an expression
-  setRecipient : (p : Place) -> Expr a ppp -> Expr a (setRecipient p ppp)
-  setRecipient p expr {ppp} = let ppp' = setRecipient p ppp
-                              in ExprPutP ppp' expr
+  -- -- Set the recipient of an expression
+  -- setRecipient : (p : Place) -> Expr a ppp -> Expr a (setRecipient p ppp)
+  -- setRecipient p expr {ppp} = let ppp' = setRecipient p ppp
+  --                             in ExprPutP ppp' expr
 
-  defaultExpr : (u : U) -> (p : Process) -> Expr u p
-  defaultExpr UNIT      p = ExprPutP p $ ExprUNIT
-  defaultExpr NAT       p = ExprPutP p $ ExprNAT Z
-  defaultExpr TEXT      p = ExprPutP p $ ExprTEXT ""
-  defaultExpr REAL      p = ExprPutP p $ ExprREAL 0.0
-  defaultExpr BOOL      p = ExprPutP p $ ExprBOOL True
-  defaultExpr (CRYPT u) p = let expr = defaultExpr u p
-                                elu = defaultElu expr
-                                aes = encrypt "key" elu
-                           in ExprPutP p $ ExprCRYPT aes
+  defaultExpr : (u : U) -> Expr u
+  defaultExpr UNIT      = ExprUNIT
+  defaultExpr NAT       = ExprNAT Z
+  defaultExpr TEXT      = ExprTEXT ""
+  defaultExpr REAL      = ExprREAL 0.0
+  defaultExpr BOOL      = ExprBOOL True
+  defaultExpr (CRYPT u) = let expr = defaultExpr u
+                              elu = defaultElu expr
+                              aes = encrypt "key" elu
+                           in ExprCRYPT aes
     where
-    defaultElu : Expr u' p' -> (el u')
+    defaultElu : Expr u' -> (el u')
     defaultElu _               {u' = UNIT      } = ()
     defaultElu _               {u' = NAT       } = Z
     defaultElu _               {u' = TEXT      } = ""
     defaultElu _               {u' = REAL      } = 0.0
     defaultElu _               {u' = BOOL      } = True
     defaultElu (ExprCRYPT y)   {u' = (CRYPT x) } = y
-    defaultElu (ExprPutP p' y) {u' = (CRYPT x) } = defaultElu y
+    defaultElu (ExprPutP  y)   {u' = (CRYPT x) } = defaultElu y
+    defaultElu (ExprVar (MkVar s y))     {u' = (CRYPT x) } = assert_total $ defaultElu y
     defaultElu _               {u' = (SCH xs)  } = []
-  defaultExpr (SCH s)   p = ExprSCH s p
+  defaultExpr (SCH s)  = ExprSCH s
 
-  -- givemeExpr : (u : U) -> (p : Process) -> Expr u p
-  -- givemeExpr u p = ExprU u p
+  -- -- givemeExpr : (u : U) -> (p : Process) -> Expr u p
+  -- -- givemeExpr u p = ExprU u p
 
-  -- Operation
-  -- (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
-  -- (==) = ExprEq
+  -- -- Operation
+  -- -- (==) : Eq (el a) => Expr a -> Expr a -> Expr BOOL
+  -- -- (==) = ExprEq
 
-  -- (>=) : Ord (el a) => Expr a -> Expr a -> Expr BOOL
-  -- (>=) = ExprGtEq
+  -- -- (>=) : Ord (el a) => Expr a -> Expr a -> Expr BOOL
+  -- -- (>=) = ExprGtEq
 
-  -- elem : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
-  -- elem = ExprElem
+  -- -- elem : Eq (el a) => Expr a -> Expr (SCH s) -> Expr BOOL
+  -- -- elem = ExprElem
 
-  -- not : Expr BOOL -> Expr BOOL
-  -- not = ExprNot
+  -- -- not : Expr BOOL -> Expr BOOL
+  -- -- not = ExprNot
 
-  const : Expr a  p1 -> Expr b p2 -> Expr a p1
-  const a b = a
+  -- const : Expr a  p1 -> Expr b p2 -> Expr a p1
+  -- const a b = a
 
-  encrypt : Crypt (el u) (AES (el u)) => Key -> (el u) -> Expr (CRYPT u) AppP
-  encrypt k x = ExprCRYPT (encrypt k x)
-  -- encrypt k x {u} = ExprU (CRYPT u) AppP
+  -- encrypt : Crypt (el u) (AES (el u)) => Key -> (el u) -> Expr (CRYPT u) AppP
+  -- encrypt k x = ExprCRYPT (encrypt k x)
+  -- -- encrypt k x {u} = ExprU (CRYPT u) AppP
 
-  -- union : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
-  -- union = ExprUnion
+  -- -- union : Expr $ SCH s -> Expr $ SCH s -> Expr $ SCH s
+  -- -- union = ExprUnion
 
-  -- diff : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
-  -- diff = ExprDiff
+  -- -- diff : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH s
+  -- -- diff = ExprDiff
 
-  -- (*) : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
-  -- (*) = ExprProduct
+  -- -- (*) : Expr $ SCH s -> Expr $ SCH s' -> Expr $ SCH (s * s')
+  -- -- (*) = ExprProduct
 
-  -- project : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
-  -- project = ExprProject
+  -- -- project : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (intersect sproj s)
+  -- -- project = ExprProject
 
-  -- select : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
-  --        {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
-  -- select = assert_total ExprSelect
+  -- -- select : {s : Schema} -> (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+  -- --        {auto elem : Elem a s} -> Expr $ SCH s -> Expr $ SCH s
+  -- -- select = assert_total ExprSelect
 
-  -- drop : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
-  -- drop = ExprDrop
+  -- -- drop : (sproj : Schema) -> Expr $ SCH s -> Expr $ SCH (s \\ sproj)
+  -- -- drop = ExprDrop
 
-  -- count : (scount : Schema) ->
-  --         {default (includeSingleton Here) inc : Include scount s} ->
-  --         Expr $ SCH s -> Expr $ SCH (count scount s {inc})
-  -- count = ExprCount
-  -- -- Implicit conversion for dsl
-  -- -- -- λΠ> the (Expr (PAIR NAT (PAIR NAT UNIT))) (1,1,())
-  -- -- implicit pairPAIR : (Pair (el x) (el y)) -> Expr (PAIR x y)
-  -- -- pairPAIR = ExprPAIR
+  -- -- count : (scount : Schema) ->
+  -- --         {default (includeSingleton Here) inc : Include scount s} ->
+  -- --         Expr $ SCH s -> Expr $ SCH (count scount s {inc})
+  -- -- count = ExprCount
+  -- -- -- Implicit conversion for dsl
+  -- -- -- -- λΠ> the (Expr (PAIR NAT (PAIR NAT UNIT))) (1,1,())
+  -- -- -- implicit pairPAIR : (Pair (el x) (el y)) -> Expr (PAIR x y)
+  -- -- -- pairPAIR = ExprPAIR
 
-  -- implicit unitUNIT : () -> Expr UNIT
-  -- unitUNIT _ = ExprUNIT
+  -- -- implicit unitUNIT : () -> Expr UNIT
+  -- -- unitUNIT _ = ExprUNIT
 
-  -- implicit natNAT : Nat -> Expr NAT
-  -- natNAT = ExprNAT
+  -- -- implicit natNAT : Nat -> Expr NAT
+  -- -- natNAT = ExprNAT
 
-  -- implicit stringTEXT : String -> Expr TEXT
-  -- stringTEXT = ExprTEXT
+  -- -- implicit stringTEXT : String -> Expr TEXT
+  -- -- stringTEXT = ExprTEXT
 
-  -- implicit doubleREAL : Double -> Expr REAL
-  -- doubleREAL = ExprREAL
+  -- -- implicit doubleREAL : Double -> Expr REAL
+  -- -- doubleREAL = ExprREAL
 
-  -- implicit boolBOOL : Bool -> Expr BOOL
-  -- boolBOOL = ExprBOOL
+  -- -- implicit boolBOOL : Bool -> Expr BOOL
+  -- -- boolBOOL = ExprBOOL
 
-  -- implicit aesCRYPT : AES (el u) -> Expr (CRYPT u)
-  -- aesCRYPT = ExprCRYPT
+  -- -- implicit aesCRYPT : AES (el u) -> Expr (CRYPT u)
+  -- -- aesCRYPT = ExprCRYPT
 
-  -- implicit schemaSCH : (l : Schema) -> Expr (SCH l)
-  -- schemaSCH = ExprSCH
+  -- -- implicit schemaSCH : (l : Schema) -> Expr (SCH l)
+  -- -- schemaSCH = ExprSCH
 
 
   -- A query expression (Relation Algebra)
@@ -200,7 +204,7 @@ namespace expr
 --
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
-data RA : Schema -> Process -> Type where
+data RA : Schema -> Type where
   -- Set operators
   -- Union    : RA s  -> RA s  -> RA s
   -- Diff     : RA s  -> RA s' -> RA s
@@ -208,19 +212,19 @@ data RA : Schema -> Process -> Type where
   -- Others
   -- Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
   -- Dans mon context, j'enleve le s puis je remet le
-  Project  : (sproj : Schema) -> RA s p -> RA (intersect sproj s) p
+  Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
   -- TODO: Select on an element with specific operation
-  Select  : (a : Attribute) -> (Expr (getU a) p  -> Expr BOOL p') ->
-            {auto elem : Elem a s} -> RA s p -> RA s p
+  Select  : (a : Attribute) -> (Expr (getU a) -> Expr BOOL) ->
+            {auto elem : Elem a s} -> RA s -> RA s
   -- -- TODO: Join take an element to do the join
   -- Drop     : (sproj : Schema) -> RA s  -> RA (s \\ sproj)
   -- -- FIXME: Do a better tatic, Something that work on each schema
   -- -- rather than schema singleton
   Count    : (scount : Schema) ->
              {default (includeSingleton Here) inc : Include scount s} ->
-             RA s p -> RA (count scount s {inc}) p
+             RA s -> RA (count scount s {inc})
   -- -- -- Introduce
-  Unit     : (s : Schema) -> (p : Process) -> RA s p
+  Unit     : (s : Schema) -> RA s
 
 -- union : RA s -> RA s -> RA s
 -- union = Union
@@ -246,11 +250,8 @@ data RA : Schema -> Process -> Type where
 --         RA s -> RA (count scount s {inc})
 -- count = Count
 
-getSchema : RA s p -> Schema
+getSchema : RA s -> Schema
 getSchema _ {s} = s
-
-getPlaces : RA s p -> Process
-getPlaces _ {p} = p
 
 -- Local Variables:
 -- idris-load-packages: ("effects")
