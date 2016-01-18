@@ -52,12 +52,14 @@ data Guard : CState -> CState -> Type -> Type where
                  (FragV ss)
                  (Expr (SCH s'))
   Privy : Guard cs cs' (Expr a -> Expr a)
-  Let  : TheVar (Expr a) -> (Expr a -> Guard cs cs' (Expr b)) -> Guard cs cs' (Expr b)
+  Let  : (e : Expr a) -> Guard cs cs' (Expr b) ->
+         Guard cs cs' (Expr b)
   -- Functor
   Map : (m : Expr a -> Expr b) -> Guard cs cs' (Expr a) -> Guard cs cs' (Expr b)
   -- Applicative
   Pure : Expr a -> Guard cs cs' (Expr a)
-  SeqApp : Guard cs cs' (Expr a -> Expr b) -> Guard cs cs' (Expr a) -> Guard cs cs' (Expr b)
+  SeqApp : Guard cs cs' (Expr a -> Expr b) -> Guard cs cs' (Expr a) ->
+           Guard cs cs' (Expr b)
   -- Monad
   Bind : Guard cs cs' (Expr u) ->
          (Expr u -> Guard cs' cs'' (Expr u')) -> Guard cs cs'' (Expr u')
@@ -77,43 +79,37 @@ pure = Pure
 
 -- let_ : TTName -> Expr u -> Guard cs cs' t -> Guard cs cs' t
 -- let_ n e g = Let (MkVar "n" e)  (\e => g)
+let_ : _ -> (e : Expr a) -> Guard cs cs' (Expr b) ->
+       Guard cs cs' (Expr b)
+let_ _ = Let
 
 -- -- Takes an exp of u and make it a variable
 -- var : Expr u -> Expr u
 -- var e = ExprVar (MkVar "a" e)
 
--- dsl guard
---     -- let = let_
+idxfst : Expr a
+idxfst {a} = ExprVar a
+
+dsl guard
+    let = let_
 --     -- C'est quoi qui est le \ids dans la lambda
 --     -- Chez moi c'est un ExprVar
---     variable = var
---     -- index_first = idxfst
-inter : Guard cs cs' e -> IO c
-inter (Encrypt k a) = ?inter_rhs_1
-inter (EncryptF fId k a) = ?inter_rhs_2
-inter (Frag sprojs) = ?inter_rhs_3
-inter (Query q) = ?inter_rhs_4
-inter (QueryF fId q) = ?inter_rhs_5
-inter Privy = ?inter_rhs_6
-inter (Let x f) = ?inter_rhs_7
-inter (Map m x) = ?inter_rhs_8
-inter (Pure x) = ?inter_rhs_9
-inter (SeqApp x y) = ?inter_rhs_10
-inter (Bind x f) = do e <- inter x
-                      inter (f (ExprVar (MkVar "a" e)))
+    variable = id
+    index_first = idxfst
 
--- -- inter (Encrypt k a) = ?inter_rhs_1
--- -- inter (EncryptF fId k a) = ?inter_rhs_2
--- -- inter (Frag sprojs) = ?inter_rhs_3
--- -- inter (Query q) = ?inter_rhs_4
--- -- inter (QueryF fId q) = ?inter_rhs_5
--- -- inter Privy = ?inter_rhs_6
--- -- inter (Let x k) = ?inter_rhs_7
--- -- inter (Map m g) = ?inter_rhs_8
--- -- inter (Pure e) = ?inter_rhs_9
--- -- inter (SeqApp f g) = ?inter_rhs_10
--- -- inter (Bind g f)     = do e <- (inter g)
--- --                           (inter $ f (ExprVar (MkVar "a" e)))
+-- inter : Guard cs cs' e -> IO c
+-- inter (Encrypt k a) = ?inter_rhs_1
+-- inter (EncryptF fId k a) = ?inter_rhs_2
+-- inter (Frag sprojs) = ?inter_rhs_3
+-- inter (Query q) = ?inter_rhs_4
+-- inter (QueryF fId q) = ?inter_rhs_5
+-- inter Privy = ?inter_rhs_6
+-- inter (Let x f) = ?inter_rhs_7
+-- inter (Map m x) = ?inter_rhs_8
+-- inter (Pure x) = ?inter_rhs_9
+-- inter (SeqApp x y) = ?inter_rhs_10
+-- inter (Bind x f) = do e <- inter x
+--                       inter (f (ExprVar (MkVar "a" e)))
 
 
 -- Local Variables:
