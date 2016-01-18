@@ -53,7 +53,7 @@ findRecipient (recip1, _, _) (recip2, _, _) =
   then (Alice,Alice,Alice) else (App,App,App)
 
 
-using (bjn : Vect n U, bjn' : Vect m U)
+using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U)
 
   data HasType : Vect n U -> Fin n -> U -> Type where
     Stop : HasType (a :: bjn) FZ a
@@ -67,29 +67,29 @@ using (bjn : Vect n U, bjn' : Vect m U)
     -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
     ExprUNIT  : Expr UNIT bjn
     ExprNAT   : Nat -> Expr NAT bjn
-    ExprTEXT  : String -> Expr TEXT bjn
+    ExprTEXT  : String -> Expr TEXT Nil
     ExprREAL  : Double -> Expr REAL bjn
     ExprBOOL  : Bool -> Expr BOOL bjn
-    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) bjn
+    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) Nil
     ExprSCH     : (s : Schema) ->  Expr (SCH s) bjn
     -- Operation
-    -- ExprEq    : Eq (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
+    ExprEq    : Eq (el a) => Expr a bjn -> Expr a bjn' -> Expr BOOL bjn''
     -- ExprGtEq  : Ord (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
     ExprElem  : Eq (el a) => Expr a bjn -> Expr (SCH s) bjn -> Expr BOOL bjn
     -- ExprNot   : Expr BOOL bjn -> Expr BOOL bjn
     -- Schema
     -- ExprUnion   : Expr (SCH s) -> Expr (SCH s) -> Expr (SCH s)
     -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
-    ExprProduct : Expr (SCH s) bjn -> Expr (SCH s') bjn ->
-                  Expr (SCH (s * s')) bjn
+    ExprProduct : Expr (SCH s) bjn -> Expr (SCH s') bjn' ->
+                  Expr (SCH (s * s')) bjn''
     ExprProject : (sproj : Schema) -> Expr (SCH s) bjn -> Expr (SCH (intersect sproj s)) bjn
 
     -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
     --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
     -- ExprDrop    : (sproj : Schema) -> Expr (SCH s) -> Expr (SCH (s \\ sproj))
-    -- ExprCount   : (scount : Schema) ->
-    --               {default (includeSingleton Here) inc : Include scount s} ->
-    --               Expr (SCH s) -> Expr (SCH (count scount s {inc}))
+    ExprCount   : (scount : Schema) ->
+                  {default (includeSingleton Here) inc : Include scount s} ->
+                  Expr (SCH s) bjn -> Expr (SCH (count scount s {inc})) bjn
     -- ExprPutP    : Expr a -> Expr a
     ExprVar     : HasType bjn i a -> Expr t bjn
 
