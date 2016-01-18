@@ -5,17 +5,16 @@ import utils
 import crypt
 
 import Data.List
-import Debug.Trace
 import Data.Vect
 
 %default total
 %access public
 
 data Place : Type where
-     Alice : Place
-     App   : Place
-     DB    : Place
-     Frag  : Fin n -> Place
+  Alice : Place
+  App   : Place
+  DB    : Place
+  Frag  : Fin n -> Place
 
 Process : Type
 Process = (Place,Place,Place)
@@ -27,14 +26,14 @@ instance Eq Place where
   (Frag j) == (Frag k) = finToNat j == finToNat k
   _        == _        = False
 
+recipient : Process -> Place
+recipient = fst
+
 caller : Process -> Place
 caller = fst . snd
 
 callee : Process -> Place
 callee = snd . snd
-
-recipient : Process -> Place
-recipient = fst
 
 setRecipient : Place -> Process -> Process
 setRecipient r (a, b, c) = (r , b, c)
@@ -90,7 +89,7 @@ using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U)
     ExprCount   : (scount : Schema) ->
                   {default (includeSingleton Here) inc : Include scount s} ->
                   Expr (SCH s) bjn -> Expr (SCH (count scount s {inc})) bjn
-    -- ExprPutP    : Expr a -> Expr a
+    ExprPutP    : Expr a bjn -> Expr a bjn
     ExprVar     : HasType bjn i a -> Expr t bjn
 
 

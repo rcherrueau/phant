@@ -13,9 +13,6 @@ import public Data.Vect
 %default total
 %access public
 
-DB : Type -> Type
-DB = List
-
 ||| Type for a Privay Constraint.
 |||
 ||| ````idris example
@@ -58,14 +55,14 @@ using (bjn : Vect n U, bjn' : Vect m U)
                    (FragV ss)
                           bjn
                    (Expr (SCH s') bjn)
-    -- Privy : Guard cs cs' (Expr a -> Expr a)
+    Privy : Guard cs cs' bjn (Expr a bjn -> Expr a bjn)
     Let  : Expr a bjn -> Guard cs cs' (a :: bjn) (Expr b (a :: bjn)) -> Guard cs cs' bjn (Expr b bjn)
     -- Functor
     -- Map : (m : Expr a -> Expr b) -> Guard cs cs' bjn (Expr a) -> Guard cs cs' bjn (Expr b)
     -- Applicative
     Pure : Expr a bjn -> Guard cs cs' bjn (Expr a bjn)
-    -- SeqApp : Guard cs cs' bjn (Expr a -> Expr b) -> Guard cs cs' bjn (Expr a) ->
-    --          Guard cs cs' bjn (Expr b)
+    SeqApp : Guard cs cs' bjn (Expr a bjn -> Expr b bjn) -> Guard cs cs' bjn (Expr a bjn) ->
+             Guard cs cs' bjn (Expr b bjn)
     -- Monad
     Bind : Guard cs cs' bjn (Expr u bjn) ->
            (Expr u bjn -> Guard cs' cs'' bjn (Expr u' bjn)) -> Guard cs cs'' bjn (Expr u' bjn)
@@ -76,9 +73,9 @@ using (bjn : Vect n U, bjn' : Vect m U)
   pure : Expr a bjn -> Guard cs cs' bjn (Expr a bjn)
   pure = Pure
 
-  -- (<*>) : Guard cs cs' bjn (Expr a -> Expr b) -> Guard cs cs' bjn (Expr a) ->
-  --         Guard cs cs' bjn (Expr b)
-  -- (<*>) = SeqApp
+  (<*>) : Guard cs cs' bjn (Expr a bjn -> Expr b bjn) -> Guard cs cs' bjn (Expr a bjn) ->
+          Guard cs cs' bjn (Expr b bjn)
+  (<*>) = SeqApp
 
   (>>=) : Guard cs cs' bjn (Expr u bjn) ->
          (Expr u bjn -> Guard cs' cs'' bjn (Expr u' bjn)) -> Guard cs cs'' bjn (Expr u' bjn)
