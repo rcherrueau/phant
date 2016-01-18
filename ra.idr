@@ -52,7 +52,8 @@ findRecipient (recip1, _, _) (recip2, _, _) =
   then (Alice,Alice,Alice) else (App,App,App)
 
 
-using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U)
+using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U,
+       p : Process, p' : Process, p'' : Process)
 
   data HasType : Vect n U -> Fin n -> U -> Type where
     Stop : HasType (a :: bjn) FZ a
@@ -64,13 +65,14 @@ using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U)
     -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     -- Type
     -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
-    ExprUNIT  : Expr UNIT bjn
-    ExprNAT   : Nat -> Expr NAT bjn
-    ExprTEXT  : String -> Expr TEXT Nil
-    ExprREAL  : Double -> Expr REAL bjn
-    ExprBOOL  : Bool -> Expr BOOL bjn
-    ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) Nil
-    ExprSCH     : (s : Schema) ->  Expr (SCH s) bjn
+    -- ExprUNIT  : Expr UNIT bjn
+    -- ExprNAT   : Nat -> Expr NAT bjn
+    -- ExprTEXT  : String -> Expr TEXT Nil
+    -- ExprREAL  : Double -> Expr REAL bjn
+    -- ExprBOOL  : Bool -> Expr BOOL bjn
+    -- ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) Nil
+    -- ExprSCH     : (s : Schema) ->  Expr (SCH s) bjn
+    ExprVal   : {default Nil bjn : Vect n U} -> {u : U} -> (el u) -> Expr u bjn
     -- Operation
     ExprEq    : Eq (el a) => Expr a bjn -> Expr a bjn' -> Expr BOOL bjn''
     -- ExprGtEq  : Ord (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
@@ -90,7 +92,7 @@ using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U)
                   {default (includeSingleton Here) inc : Include scount s} ->
                   Expr (SCH s) bjn -> Expr (SCH (count scount s {inc})) bjn
     ExprPutP    : Expr a bjn -> Expr a bjn
-    ExprVar     : HasType bjn i a -> Expr t bjn
+    ExprVar     : HasType bjn i a -> Expr a bjn
 
 
 -- namespace expr

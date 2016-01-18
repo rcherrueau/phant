@@ -23,7 +23,7 @@ syntax DB [x] = (Plain x)
 -- nextWeek : Expr (getU D) p -> Expr BOOL AppP
 -- nextWeek _ = ExprBOOL True
 nextWeek : {bjn : Vect n U} -> Expr (getU D) bjn -> Expr BOOL bjn
-nextWeek _ = ExprBOOL True
+nextWeek _ = ExprVal True {bjn=_}
 
 -- -- 1
 -- places : Eff (Expr (SCH [A]) (App,App,DB))
@@ -42,7 +42,7 @@ places = Query (Project [A] . Select D nextWeek)
 --   query (Count [D] . Select N (ExprEq (ExprTEXT "Bob")))         -- App   App.DB      (1)
 -- meetings : Guard (Plain [D,N,A]) (Plain [D,N,A]) Nil (Expr (SCH [D,Count]) Nil)
 meetings : GUARD (DB[D,N,A]) (DB[D,N,A]) (SCH [D,Count])
-meetings = Query (Count [D] . Select N (ExprEq (ExprTEXT "Bob")))
+meetings = Query (Count [D] . Select N (ExprEq (ExprVal "Bob")))
 
 
 -- -- -- 1 & 2
@@ -121,8 +121,7 @@ placesFDo = guard(do
 --            Let (ExprProject [Id] dIds) (
 --              QueryF 1 (Project [A] . Select Id (flip ExprElem (ExprSCH [Id]))) >>= \res =>
 --              Pure (ExprProject [D,A] $ ExprProduct dIds res))
-
-
+--
 -- placesFDo' : {bjn : Vect n U} -> Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) bjn (Expr (SCH [D,A]))
 placesFDo' : GUARD (DB[D,N,A]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
 placesFDo' =  do
@@ -132,7 +131,6 @@ placesFDo' =  do
   Let (ExprProject [Id] dIds) (do
     res <- QueryF 1 (Project [A] . Select Id (flip ExprElem (var Stop)))
     pure (ExprProject [D,A] $ ExprProduct dIds res))
-
 
 -- placesFDo'' : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) Nil (Expr (SCH [D,A]))
 placesFDo'' : GUARD (DB[D,N,A]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
@@ -162,16 +160,16 @@ placesFDo'' =  guard(do
 --                                (Expr Nil (SCH [D,Id]))
 meetingF : AES String ->
            GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,Id])
-meetingF c = QueryF 0 (Project [D, Id])                                 >>= \ql =>
+meetingF c = QueryF 0 (Project [D, Id])                       >>= \ql =>
              QueryF 1 (Project [Id] .
-                       Select Nc (ExprEq (ExprCRYPT c)))                >>= \qr =>
+                       Select Nc (ExprEq (ExprVal c)))        >>= \qr =>
              Pure (ExprProduct ql qr)
 
 meetingFDo : AES String ->
              GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,Id])
 meetingFDo c = guard(do
   ql <- QueryF 0 (Project [D, Id])
-  qr <- QueryF 1 (Project [Id] . Select Nc (ExprEq (ExprCRYPT c)))
+  qr <- QueryF 1 (Project [Id] . Select Nc (ExprEq (ExprVal c)))
   pure (ExprProduct ql qr))
 
 -- -- 6
@@ -189,31 +187,31 @@ meetingFDo c = guard(do
 --                                 (Expr (SCH [D, A]))
 meetingF' : AES String ->
             GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
-meetingF' c = Privy <*> QueryF 0 (Project [D, Id])                  >>= \ql =>
+meetingF' c = Privy <*> QueryF 0 (Project [D, Id])                >>= \ql =>
               Privy <*> QueryF 1 (Project [A, Id] .
-                                  Select Nc (ExprEq (ExprCRYPT c))) >>= \qr =>
+                                  Select Nc (ExprEq (ExprVal c))) >>= \qr =>
               Pure (ExprProject [D,A] $ ExprProduct ql qr)
 
 meetingFDo' : AES String ->
               GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
 meetingFDo' c = guard(do
   ql <- Privy <*> QueryF 0 (Project [D, Id])
-  qr <- Privy <*> QueryF 1 (Project [A, Id] . Select Nc (ExprEq (ExprCRYPT c)))
+  qr <- Privy <*> QueryF 1 (Project [A, Id] . Select Nc (ExprEq (ExprVal c)))
   pure (ExprProject [D,A] $ ExprProduct ql qr))
 
 
--- main : IO ()
--- main = -- do let PCs =  [[N],[D,A]]
---           -- genPV PCs (do
---           --   places
---           --   meetings)
---           genPV (do
---             places'
---             meetings'')
--- -- -- main = putStrLn "lala"
+-- -- main : IO ()
+-- -- main = -- do let PCs =  [[N],[D,A]]
+-- --           -- genPV PCs (do
+-- --           --   places
+-- --           --   meetings)
+-- --           genPV (do
+-- --             places'
+-- --             meetings'')
+-- -- -- -- main = putStrLn "lala"
 
--- λPROJECT> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "EC2" ] lFirstStrat
+-- -- λPROJECT> the (IO (LocTy $ RA [D,Id] @ "fl")) $ runInit [MkPEnv [D,N,A] "EC2" ] lFirstStrat
 
--- Local Variables:
--- idris-load-packages: ("effects")
--- End:
+-- -- Local Variables:
+-- -- idris-load-packages: ("effects")
+-- -- End:
