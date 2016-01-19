@@ -10,57 +10,15 @@ import Data.Vect
 %default total
 %access public
 
-data Place : Type where
-  Alice : Place
-  App   : Place
-  DB    : Place
-  Frag  : Fin n -> Place
-
-Process : Type
-Process = (Place,Place,Place)
-
-instance Eq Place where
-  Alice    == Alice    = True
-  App      == App      = True
-  DB       == DB       = True
-  (Frag j) == (Frag k) = finToNat j == finToNat k
-  _        == _        = False
-
-recipient : Process -> Place
-recipient = fst
-
-caller : Process -> Place
-caller = fst . snd
-
-callee : Process -> Place
-callee = snd . snd
-
-setRecipient : Place -> Process -> Process
-setRecipient r (a, b, c) = (r , b, c)
-
-AppP : Process
-AppP = (App, App, App)
-
-AliceP : Process
-AliceP = (Alice, Alice, Alice)
-
-findRecipient : Process -> Process -> Process
-findRecipient (recip1, _, _) (recip2, _, _) =
-  if recip1 == Alice || recip2 == Alice
-  -- It should not be something different since I cannot do Exp*
-  -- computation on other place rather than Alice and App.
-  then (Alice,Alice,Alice) else (App,App,App)
-
-
-using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U,
+using (bjn : Vect n (U,Process),
        p : Process, p' : Process, p'' : Process)
 
-  data HasType : Vect n U -> Fin n -> U -> Type where
+  data HasType : Vect n (U,Process) -> Fin n -> (U,Process) -> Type where
     Stop : HasType (a :: bjn) FZ a
     Pop  : HasType bjn i b -> HasType (a :: bjn) (FS i) b
 
 
-  data Expr : U -> Vect n U -> Type where
+  data Expr : U -> Vect n (U,Process) -> Type where
     -- ExprElU : {u : U} -> (v : a) -> Expr u
     -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     -- Type
@@ -72,7 +30,7 @@ using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U,
     -- ExprBOOL  : Bool -> Expr BOOL bjn
     -- ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) Nil
     -- ExprSCH     : (s : Schema) ->  Expr (SCH s) bjn
-    ExprVal   : {default Nil bjn : Vect n U} -> {u : U} -> (el u) -> Expr u bjn
+    ExprVal   : {default Nil bjn : Vect n (U,Process)} -> {u : U} -> Process -> (el u) -> Expr u bjn
     -- Operation
     ExprEq    : Eq (el a) => Expr a bjn -> Expr a bjn' -> Expr BOOL bjn''
     -- ExprGtEq  : Ord (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
@@ -91,8 +49,14 @@ using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U,
     ExprCount   : (scount : Schema) ->
                   {default (includeSingleton Here) inc : Include scount s} ->
                   Expr (SCH s) bjn -> Expr (SCH (count scount s {inc})) bjn
-    ExprPutP    : Expr a bjn -> Expr a bjn
-    ExprVar     : HasType bjn i a -> Expr a bjn
+    ExprPutP    : Process -> Expr a bjn -> Expr a bjn
+    ExprVar     : HasType bjn i (u,_) -> Process -> Expr u bjn
+
+  getProcess : Expr u bjn -> Process
+  getProcess (ExprVal p elu) = p
+  getProcess (ExprVar prf p) = p
+  getProcess (ExprPutP p e)  = p
+  getProcess _               = AppP
 
 
 -- namespace expr
@@ -211,7 +175,7 @@ using (bjn : Vect n U, bjn' : Vect m U, bjn'' : Vect o U,
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
 
-  data RA : Schema -> Vect n U -> Type where
+  data RA : Schema -> Vect n (U,Process) -> Type where
     -- Set operators
     -- Union    : RA s  -> RA s  -> RA s
     -- Diff     : RA s  -> RA s' -> RA s

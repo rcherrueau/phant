@@ -26,9 +26,9 @@ data CState : Type where
   Plain  : Schema -> CState
   FragV  : Vect n Schema -> CState
 
-using (bjn : Vect n U, bjn' : Vect m U)
+using (bjn : Vect n (U,Process), bjn' : Vect m (U,Process))
 
-  data Guard : CState -> CState -> (bjn : Vect n U) -> Type -> Type where
+  data Guard : CState -> CState -> (bjn : Vect n (U,Process)) -> Type -> Type where
     Encrypt : (k : String) -> (a : Attribute) ->
               Guard (Plain s)
                     (Plain (encrypt a s))
@@ -56,7 +56,9 @@ using (bjn : Vect n U, bjn' : Vect m U)
                           bjn
                    (Expr (SCH s') bjn)
     Privy : Guard cs cs' bjn (Expr a bjn -> Expr a bjn)
-    Let  : Expr a bjn -> Guard cs cs' (a :: bjn) (Expr b (a :: bjn)) -> Guard cs cs' bjn (Expr b bjn)
+    Let  : (e : Expr a bjn) ->
+           Guard cs cs' ((a, (getProcess e)) :: bjn) (Expr b ((a, (getProcess e)) :: bjn)) ->
+           Guard cs cs' bjn (Expr b bjn)
     -- Functor
     -- Map : (m : Expr a -> Expr b) -> Guard cs cs' bjn (Expr a) -> Guard cs cs' bjn (Expr b)
     -- Applicative
@@ -83,15 +85,17 @@ using (bjn : Vect n U, bjn' : Vect m U)
 
   -- let_ : TTName -> Expr u -> Guard cs cs' t -> Guard cs cs' t
   -- let_ n e g = Let (MkVar "n" e)  (\e => g)
-  let_ : _ -> Expr a bjn -> Guard cs cs' (a :: bjn) (Expr b (a :: bjn)) -> Guard cs cs' bjn (Expr b bjn)
+  let_  : _ -> (e : Expr a bjn) ->
+               Guard cs cs' ((a, (getProcess e)) :: bjn) (Expr b ((a, (getProcess e)) :: bjn)) ->
+               Guard cs cs' bjn (Expr b bjn)
   let_ _ = Let
 
   -- -- Takes an exp of u and make it a variable
-  -- var : (bjn : Vect n U) -> HasType bjn i a -> Expr a
+  -- var : (bjn : Vect n (U,Process)) -> HasType bjn i a -> Expr a
   -- var (a :: xs) Stop = ExprVar a
   -- var (a :: xs) (Pop x) = var xs x
-  var : HasType bjn i a -> Expr a bjn
-  var = ExprVar
+  var : HasType bjn i (u,p) -> Expr u bjn
+  var prf {p} = ExprVar prf p
 
 dsl guard
     let = let_

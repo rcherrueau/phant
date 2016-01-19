@@ -1,6 +1,7 @@
 module phant.utils
 
 import public Data.List
+import public Data.Vect
 
 %default total
 %access public
@@ -22,13 +23,13 @@ namespace inclusion
 
   ------------------------------------------------------------ Utils
   -- Being an element of a singleton list implies to be that singleton
-  elemSingleton : Elem z [x] -> z = x
+  elemSingleton : with List Elem z [x] -> z = x
   elemSingleton Here           = Refl
   elemSingleton (There zInNil) = absurd zInNil
 
   -- Being an element of a non empty list and not being the fisrt
   -- element implies to be an element of the tail.
-  elemTail : (z = hd -> Void) -> Elem z (hd :: tl) -> Elem z tl
+  elemTail : (z = hd -> Void) -> with List Elem z (hd :: tl) -> Elem z tl
   -- (z ∈ [hd] => z = hd) ∧ z ≠ hd
   elemTail nzIsHd zInHdTl   {tl = []} = let zIsHd = elemSingleton zInHdTl in
                                         void $ nzIsHd zIsHd
@@ -167,3 +168,44 @@ namespace other
   update (a, b) xs = case lookup a xs of
                        Just _  => (a, b) :: (delete (a, b) xs)
                        Nothing => xs
+
+data Place : Type where
+  Alice : Place
+  App   : Place
+  DB    : Place
+  Frag  : Fin n -> Place
+
+Process : Type
+Process = (Place,Place,Place)
+
+instance Eq Place where
+  Alice    == Alice    = True
+  App      == App      = True
+  DB       == DB       = True
+  (Frag j) == (Frag k) = finToNat j == finToNat k
+  _        == _        = False
+
+recipient : Process -> Place
+recipient = fst
+
+caller : Process -> Place
+caller = fst . snd
+
+callee : Process -> Place
+callee = snd . snd
+
+setRecipient : Place -> Process -> Process
+setRecipient r (a, b, c) = (r , b, c)
+
+AppP : Process
+AppP = (App, App, App)
+
+AliceP : Process
+AliceP = (Alice, Alice, Alice)
+
+findRecipient : Process -> Process -> Process
+findRecipient (recip1, _, _) (recip2, _, _) =
+  if recip1 == Alice || recip2 == Alice
+  -- It should not be something different since I cannot do Exp*
+  -- computation on other place rather than Alice and App.
+  then (Alice,Alice,Alice) else (App,App,App)
