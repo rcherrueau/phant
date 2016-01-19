@@ -26,9 +26,9 @@ data CState : Type where
   Plain  : Schema -> CState
   FragV  : Vect n Schema -> CState
 
-using (bjn : Vect n (U,Process), bjn' : Vect m (U,Process))
+using (bjn : Vect n Ctx, bjn' : Vect m Ctx)
 
-  data Guard : CState -> CState -> (bjn : Vect n (U,Process)) -> Type -> Type where
+  data Guard : CState -> CState -> (bjn : Vect n Ctx) -> Type -> Type where
     Encrypt : (k : String) -> (a : Attribute) ->
               Guard (Plain s)
                     (Plain (encrypt a s))
@@ -56,8 +56,8 @@ using (bjn : Vect n (U,Process), bjn' : Vect m (U,Process))
                           bjn
                    (Expr (SCH s') bjn)
     Privy : Guard cs cs' bjn (Expr a bjn -> Expr a bjn)
-    Let  : (e : Expr a bjn) ->
-           Guard cs cs' ((a, (getProcess e)) :: bjn) (Expr b ((a, (getProcess e)) :: bjn)) ->
+    Let  : (t : TTName) -> (e : Expr a bjn) ->
+           Guard cs cs' ((a, getProcess e, t) :: bjn) (Expr b ((a, getProcess e, t) :: bjn)) ->
            Guard cs cs' bjn (Expr b bjn)
     -- Functor
     -- Map : (m : Expr a -> Expr b) -> Guard cs cs' bjn (Expr a) -> Guard cs cs' bjn (Expr b)
@@ -66,8 +66,9 @@ using (bjn : Vect n (U,Process), bjn' : Vect m (U,Process))
     SeqApp : Guard cs cs' bjn (Expr a bjn -> Expr b bjn) -> Guard cs cs' bjn (Expr a bjn) ->
              Guard cs cs' bjn (Expr b bjn)
     -- Monad
-    Bind : Guard cs cs' bjn (Expr u bjn) ->
-           (Expr u bjn -> Guard cs' cs'' bjn (Expr u' bjn)) -> Guard cs cs'' bjn (Expr u' bjn)
+    Bind : Guard cs cs' bjn (Expr a bjn) ->
+           (Expr a bjn -> Guard cs' cs'' bjn (Expr b bjn)) ->
+           Guard cs cs'' bjn (Expr b bjn)
 
   -- map : (m : Expr a -> Expr b) -> Guard cs cs' bjn (Expr a) -> Guard cs cs' bjn (Expr b)
   -- map = Map
@@ -79,28 +80,28 @@ using (bjn : Vect n (U,Process), bjn' : Vect m (U,Process))
           Guard cs cs' bjn (Expr b bjn)
   (<*>) = SeqApp
 
-  (>>=) : Guard cs cs' bjn (Expr u bjn) ->
-         (Expr u bjn -> Guard cs' cs'' bjn (Expr u' bjn)) -> Guard cs cs'' bjn (Expr u' bjn)
+  (>>=): Guard cs cs' bjn (Expr a bjn) ->
+         (Expr a bjn -> Guard cs' cs'' bjn (Expr b bjn)) ->
+         Guard cs cs'' bjn (Expr b bjn)
   (>>=) = Bind
 
-  -- let_ : TTName -> Expr u -> Guard cs cs' t -> Guard cs cs' t
-  -- let_ n e g = Let (MkVar "n" e)  (\e => g)
-  let_  : _ -> (e : Expr a bjn) ->
-               Guard cs cs' ((a, (getProcess e)) :: bjn) (Expr b ((a, (getProcess e)) :: bjn)) ->
-               Guard cs cs' bjn (Expr b bjn)
-  let_ _ = Let
+  let_  : (tn : TTName) -> (e : Expr a bjn) ->
+                           -- Let's add the current expression to the variable context
+                           Guard cs cs'
+                                 ((a, getProcess e, tn) :: bjn)
+                                  (Expr b ((a, getProcess e, tn) :: bjn)) ->
+                           Guard cs cs' bjn (Expr b bjn)
+  let_ tn = Let tn
 
   -- -- Takes an exp of u and make it a variable
-  -- var : (bjn : Vect n (U,Process)) -> HasType bjn i a -> Expr a
+  -- var : (bjn : Vect n Ctx) -> HasType bjn i a -> Expr a
   -- var (a :: xs) Stop = ExprVar a
   -- var (a :: xs) (Pop x) = var xs x
-  var : HasType bjn i (u,p) -> Expr u bjn
-  var prf {p} = ExprVar prf p
+  var : HasType bjn i (u,p,tn) -> Expr u bjn
+  var prf {p} {tn} = ExprVar prf tn p
 
 dsl guard
     let = let_
---     -- C'est quoi qui est le \ids dans la lambda
---     -- Chez moi c'est un ExprVar
     variable = var
     index_first = Stop
     index_next = Pop

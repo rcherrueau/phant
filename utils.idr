@@ -170,20 +170,20 @@ namespace other
                        Nothing => xs
 
 data Place : Type where
-  Alice : Place
-  App   : Place
-  DB    : Place
-  Frag  : Fin n -> Place
+  AtAlice : Place
+  AtApp   : Place
+  AtDB    : Place
+  AtFrag  : Fin n -> Place
 
 Process : Type
 Process = (Place,Place,Place)
 
 instance Eq Place where
-  Alice    == Alice    = True
-  App      == App      = True
-  DB       == DB       = True
-  (Frag j) == (Frag k) = finToNat j == finToNat k
-  _        == _        = False
+  AtAlice    == AtAlice    = True
+  AtApp      == AtApp      = True
+  AtDB       == AtDB       = True
+  (AtFrag j) == (AtFrag k) = finToNat j == finToNat k
+  _          == _          = False
 
 recipient : Process -> Place
 recipient = fst
@@ -198,14 +198,14 @@ setRecipient : Place -> Process -> Process
 setRecipient r (a, b, c) = (r , b, c)
 
 AppP : Process
-AppP = (App, App, App)
+AppP = (AtApp, AtApp, AtApp)
 
 AliceP : Process
-AliceP = (Alice, Alice, Alice)
+AliceP = (AtAlice, AtAlice, AtAlice)
 
 findRecipient : Process -> Process -> Process
 findRecipient (recip1, _, _) (recip2, _, _) =
-  if recip1 == Alice || recip2 == Alice
+  if recip1 == AtAlice || recip2 == AtAlice
   -- It should not be something different since I cannot do Exp*
   -- computation on other place rather than Alice and App.
-  then (Alice,Alice,Alice) else (App,App,App)
+  then AliceP else AppP

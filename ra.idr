@@ -10,15 +10,18 @@ import Data.Vect
 %default total
 %access public
 
-using (bjn : Vect n (U,Process),
+Ctx : Type
+Ctx = (U, Process, TTName)
+
+using (bjn : Vect n Ctx,
        p : Process, p' : Process, p'' : Process)
 
-  data HasType : Vect n (U,Process) -> Fin n -> (U,Process) -> Type where
+  data HasType : Vect n Ctx -> Fin n -> Ctx -> Type where
     Stop : HasType (a :: bjn) FZ a
     Pop  : HasType bjn i b -> HasType (a :: bjn) (FS i) b
 
 
-  data Expr : U -> Vect n (U,Process) -> Type where
+  data Expr : U -> Vect n Ctx -> Type where
     -- ExprElU : {u : U} -> (v : a) -> Expr u
     -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     -- Type
@@ -30,7 +33,7 @@ using (bjn : Vect n (U,Process),
     -- ExprBOOL  : Bool -> Expr BOOL bjn
     -- ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) Nil
     -- ExprSCH     : (s : Schema) ->  Expr (SCH s) bjn
-    ExprVal   : {default Nil bjn : Vect n (U,Process)} -> {u : U} -> Process -> (el u) -> Expr u bjn
+    ExprVal   : {default Nil bjn : Vect n Ctx} -> {u : U} -> Process -> (el u) -> Expr u bjn
     -- Operation
     ExprEq    : Eq (el a) => Expr a bjn -> Expr a bjn' -> Expr BOOL bjn''
     -- ExprGtEq  : Ord (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
@@ -50,14 +53,19 @@ using (bjn : Vect n (U,Process),
                   {default (includeSingleton Here) inc : Include scount s} ->
                   Expr (SCH s) bjn -> Expr (SCH (count scount s {inc})) bjn
     ExprPutP    : Process -> Expr a bjn -> Expr a bjn
-    ExprVar     : HasType bjn i (u,_) -> Process -> Expr u bjn
+    ExprVar     : HasType bjn i (u,_) -> TTName -> Process -> Expr u bjn
 
   getProcess : Expr u bjn -> Process
-  getProcess (ExprVal p elu) = p
-  getProcess (ExprVar prf p) = p
-  getProcess (ExprPutP p e)  = p
-  getProcess _               = AppP
+  getProcess (ExprVal p elu)   = p
+  getProcess (ExprVar prf n p) = p
+  getProcess (ExprPutP p e)    = p
+  getProcess _                 = AppP
 
+  -- getProcess : (Lazy (Expr u bjn)) -> Process
+  -- getProcess (Delay (ExprVal p elu)) = p
+  -- getProcess (Delay (ExprVar prf p)) = p
+  -- getProcess (Delay (ExprPutP p e)) = p
+  -- getProcess (Delay _) = AppP
 
 -- namespace expr
   -- -- Set the recipient of an expression
@@ -175,7 +183,7 @@ using (bjn : Vect n (U,Process),
 -- Cartesion product flattens the schema.
 -- See, https://en.wikipedia.org/wiki/Relational_algebra#Set_operators
 
-  data RA : Schema -> Vect n (U,Process) -> Type where
+  data RA : Schema -> Vect n Ctx -> Type where
     -- Set operators
     -- Union    : RA s  -> RA s  -> RA s
     -- Diff     : RA s  -> RA s' -> RA s
