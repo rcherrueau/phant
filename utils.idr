@@ -6,10 +6,6 @@ import public Data.Vect
 %default total
 %access public
 
-infix 5 @
-infix 5 @@
-
-
 -- List Inclusion.
 namespace inclusion
   -- Inclusion predicate
@@ -117,42 +113,53 @@ namespace inclusion
   --   let zsIncYs = \z,zInZs => snd $ elemInter xs ys z zInZs in
   --   (zsIncXs, zsIncYs)
 namespace location
-  Ip : Type
-  Ip = String
+  data Place : Type where
+    AtAlice : Place
+    AtApp   : Place
+    AtDB    : Place
+    AtFrag  : Fin n -> Place
 
-  -- abstract -- to keep constructor private
-  -- TODO: rename @ as Loc. @@ as @. Make it instance of Functor
-  data Loc : (ip : Ip) -> (a : Type) -> Type where
-    (@) : (v : a) -> (ip : Ip) -> Loc ip a
+  instance Eq Place where
+    AtAlice    == AtAlice    = True
+    AtApp      == AtApp      = True
+    AtDB       == AtDB       = True
+    (AtFrag j) == (AtFrag k) = finToNat j == finToNat k
+    _          == _          = False
 
-  getVal : Loc ip a -> a
-  getVal ((@) v ip) = v
+  Process : Type
+  Process = (Place,Place,Place)
 
-  getIp : Loc ip a -> Ip
-  getIp _ {ip} = ip
+  AppP : Process
+  AppP = (AtApp, AtApp, AtApp)
 
-  instance Functor (Loc ip) where
-      map m x = let v  = getVal x
-                    ip = getIp x
-                in (m v) @ ip
+  AliceP : Process
+  AliceP = (AtAlice, AtAlice, AtAlice)
 
-  -- The algorithm is more complicated than this. The idea is the
-  -- following.
-  --
-  -- > Are the two ip equals?
-  -- > Yes => Keep the ip
-  -- > No => Is the computation involve attributes that are inside
-  -- >       the PCs?
-  -- >       Yes => Set ip to local
-  -- >       No  => Set ip to application
-  --
-  -- Unfortunately, this requires PC and schema, two information that
-  -- are not available as it.
-  manageIp : Ip -> Ip -> Ip
-  manageIp x y = if x == "local" || y == "local" then x
-                 else if x == "app" then y
-                 else if y == "app" then x
-                 else "local"
+  recipient : Process -> Place
+  recipient = fst
+
+  caller : Process -> Place
+  caller = fst . snd
+
+  callee : Process -> Place
+  callee = snd . snd
+
+  setRecipient : Place -> Process -> Process
+  setRecipient rc (_, cr, ce) = (rc , cr, ce)
+
+  setCaller : Place -> Process -> Process
+  setCaller cr (rc, _, ce) = (rc , cr, ce)
+
+  setCallee : Place -> Process -> Process
+  setCallee ce (rc, cr, _) = (rc , cr, ce)
+
+  manageRecipient : Process -> Process -> Process
+  manageRecipient (recip1, _, _) (recip2, _, _) =
+                if recip1 == AtAlice || recip2 == AtAlice
+                -- It should not be something different since I cannot
+                -- do ExpSQL computation on other place rather than
+                -- Alice and App.
+                then AliceP else AppP
 
 namespace other
   map : (a -> b) -> (a, a) -> (b, b)
@@ -169,43 +176,3 @@ namespace other
                        Just _  => (a, b) :: (delete (a, b) xs)
                        Nothing => xs
 
-data Place : Type where
-  AtAlice : Place
-  AtApp   : Place
-  AtDB    : Place
-  AtFrag  : Fin n -> Place
-
-Process : Type
-Process = (Place,Place,Place)
-
-instance Eq Place where
-  AtAlice    == AtAlice    = True
-  AtApp      == AtApp      = True
-  AtDB       == AtDB       = True
-  (AtFrag j) == (AtFrag k) = finToNat j == finToNat k
-  _          == _          = False
-
-recipient : Process -> Place
-recipient = fst
-
-caller : Process -> Place
-caller = fst . snd
-
-callee : Process -> Place
-callee = snd . snd
-
-setRecipient : Place -> Process -> Process
-setRecipient r (a, b, c) = (r , b, c)
-
-AppP : Process
-AppP = (AtApp, AtApp, AtApp)
-
-AliceP : Process
-AliceP = (AtAlice, AtAlice, AtAlice)
-
-findRecipient : Process -> Process -> Process
-findRecipient (recip1, _, _) (recip2, _, _) =
-  if recip1 == AtAlice || recip2 == AtAlice
-  -- It should not be something different since I cannot do Exp*
-  -- computation on other place rather than Alice and App.
-  then AliceP else AppP

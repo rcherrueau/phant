@@ -16,14 +16,10 @@ Nc = ("Name", CRYPT TEXT)
 A : Attribute
 A = ("Addr", TEXT)
 
-syntax GUARD [x] [y] [z] = {bjn : Vect n Ctx} -> Guard x y bjn (Expr z bjn)
-syntax FRAG [x] = (FragV x)
-syntax DB [x] = (Plain x)
-
 -- nextWeek : Expr (getU D) p -> Expr BOOL AppP
 -- nextWeek _ = ExprBOOL True
-nextWeek : {bjn : Vect n Ctx} -> Expr (getU D) bjn -> Expr BOOL bjn
-nextWeek _ = ExprVal AppP True {bjn=_}
+nextWeek : {bctx : Vect n Ctx} -> Expr (getU D) bctx -> Expr BOOL bctx
+nextWeek _ = ExprVal AppP True {bctx=_}
 
 -- -- 1
 -- places : Eff (Expr (SCH [A]) (App,App,DB))
@@ -122,14 +118,14 @@ placesFDo = guard(do
 --              QueryF 1 (Project [A] . Select Id (flip ExprElem (ExprSCH [Id]))) >>= \res =>
 --              Pure (ExprProject [D,A] $ ExprProduct dIds res))
 --
--- placesFDo' : {bjn : Vect n U} -> Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) bjn (Expr (SCH [D,A]))
+-- placesFDo' : {bctx : Vect n U} -> Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) bctx (Expr (SCH [D,A]))
 placesFDo' : GUARD (DB[D,N,A]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
 placesFDo' =  do
   Encrypt "mykey" N
   Frag [[D]]
   dIds <- QueryF 0 (Project [D, Id] . Select D nextWeek)
   Let (UN "ids") (ExprProject [Id] dIds) (do
-    res <- QueryF 1 (Project [A] . Select Id (flip ExprElem (var Stop)))
+    res <- QueryF 1 (Project [A] . Select Id (flip ExprElem (var_ Stop)))
     pure (ExprProject [D,A] $ ExprProduct dIds res))
 
 -- placesFDo'' : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) Nil (Expr (SCH [D,A]))

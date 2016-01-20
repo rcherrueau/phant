@@ -30,6 +30,7 @@ namespace universe
          -- | HOME U
 
   -- Specific decoding function for the of liftSch
+  private
   liftSchElu : U -> Type
   liftSchElu UNIT = ()
   liftSchElu NAT = Nat
@@ -44,6 +45,11 @@ namespace universe
   liftSch []                     = ()
   liftSch [(_,u)]                = liftSchElu u
   liftSch ((_,u) :: s@(a :: as)) = Pair (liftSchElu u) (liftSch s)
+
+  -- liftSchU : (s : Schema) -> U
+  -- liftSchU []                     = UNIT
+  -- liftSchU [(n,u)]                = u
+  -- liftSchU ((_,u) :: s@(a :: as)) = PAIR u (liftSchU s)
 
   -- Decoding function
   el : U -> Type
@@ -140,6 +146,12 @@ namespace universe
 -- An attribute of the database is a paire of a name and a type
 Attribute: Type
 Attribute = (String, U)
+
+-- Named instance as an alternative for equality on attributes.
+-- http://docs.idris-lang.org/en/latest/tutorial/classes.html?highlight=monad#named-instances
+instance [attrEq] Eq Attribute where
+    (n1, _) == (n2, _) = n1 == n2
+    x      /= y        = not ((==)@{attrEq} x y)
 
 -- A specific attribute for indexing
 Id : Attribute
@@ -241,7 +253,3 @@ getSchema FZ     (x :: xs) = x
 getSchema (FS k) (x :: xs) = getSchema k xs
 
 
--- liftSchU : (s : Schema) -> U
--- liftSchU []                     = UNIT
--- liftSchU [(n,u)]                = u
--- liftSchU ((_,u) :: s@(a :: as)) = PAIR u (liftSchU s)

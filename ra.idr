@@ -13,12 +13,11 @@ import Data.Vect
 Ctx : Type
 Ctx = (U, Process, TTName)
 
-using (bjn : Vect n Ctx,
-       p : Process, p' : Process, p'' : Process)
+using (bctx : Vect n Ctx, p : Process, p' : Process, p'' : Process)
 
   data HasType : Vect n Ctx -> Fin n -> Ctx -> Type where
-    Stop : HasType (a :: bjn) FZ a
-    Pop  : HasType bjn i b -> HasType (a :: bjn) (FS i) b
+    Stop : HasType (a :: bctx) FZ a
+    Pop  : HasType bctx i b -> HasType (a :: bctx) (FS i) b
 
 
   data Expr : U -> Vect n Ctx -> Type where
@@ -26,46 +25,42 @@ using (bjn : Vect n Ctx,
     -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
     -- Type
     -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
-    -- ExprUNIT  : Expr UNIT bjn
-    -- ExprNAT   : Nat -> Expr NAT bjn
+    -- ExprUNIT  : Expr UNIT bctx
+    -- ExprNAT   : Nat -> Expr NAT bctx
     -- ExprTEXT  : String -> Expr TEXT Nil
-    -- ExprREAL  : Double -> Expr REAL bjn
-    -- ExprBOOL  : Bool -> Expr BOOL bjn
+    -- ExprREAL  : Double -> Expr REAL bctx
+    -- ExprBOOL  : Bool -> Expr BOOL bctx
     -- ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) Nil
-    -- ExprSCH     : (s : Schema) ->  Expr (SCH s) bjn
-    ExprVal   : {default Nil bjn : Vect n Ctx} -> {u : U} -> Process -> (el u) -> Expr u bjn
+    -- ExprSCH     : (s : Schema) ->  Expr (SCH s) bctx
+    ExprVal   : {default Nil bctx : Vect n Ctx} -> {u : U} -> Process -> (el u) -> Expr u bctx
     -- Operation
-    ExprEq    : Eq (el a) => Expr a bjn -> Expr a bjn' -> Expr BOOL bjn''
-    -- ExprGtEq  : Ord (el a) => Expr a bjn -> Expr a bjn -> Expr BOOL bjn
-    ExprElem  : Eq (el a) => Expr a bjn -> Expr (SCH s) bjn -> Expr BOOL bjn
-    -- ExprNot   : Expr BOOL bjn -> Expr BOOL bjn
+    ExprEq    : Eq (el a) => Expr a bctx -> Expr a bjn' -> Expr BOOL bjn''
+    -- ExprGtEq  : Ord (el a) => Expr a bctx -> Expr a bctx -> Expr BOOL bctx
+    ExprElem  : Eq (el a) => Expr a bctx -> Expr (SCH s) bctx -> Expr BOOL bctx
+    -- ExprNot   : Expr BOOL bctx -> Expr BOOL bctx
     -- Schema
     -- ExprUnion   : Expr (SCH s) -> Expr (SCH s) -> Expr (SCH s)
     -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
-    ExprProduct : Expr (SCH s) bjn -> Expr (SCH s') bjn' ->
+    ExprProduct : Expr (SCH s) bctx -> Expr (SCH s') bjn' ->
                   Expr (SCH (s * s')) bjn''
-    ExprProject : (sproj : Schema) -> Expr (SCH s) bjn -> Expr (SCH (intersect sproj s)) bjn
+    ExprProject : (sproj : Schema) -> Expr (SCH s) bctx -> Expr (SCH (intersect sproj s)) bctx
 
     -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
     --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
     -- ExprDrop    : (sproj : Schema) -> Expr (SCH s) -> Expr (SCH (s \\ sproj))
     ExprCount   : (scount : Schema) ->
                   {default (includeSingleton Here) inc : Include scount s} ->
-                  Expr (SCH s) bjn -> Expr (SCH (count scount s {inc})) bjn
-    ExprPutP    : Process -> Expr a bjn -> Expr a bjn
-    ExprVar     : HasType bjn i (u,_) -> TTName -> Process -> Expr u bjn
+                  Expr (SCH s) bctx -> Expr (SCH (count scount s {inc})) bctx
+    ExprPrivy   : Expr a bctx -> Expr a bctx
+    ExprVar     : HasType bctx i (u,_) -> TTName -> Process -> Expr u bctx
+    ExprVar'    : TTName -> Expr u bctx -> Expr u bctx
 
-  getProcess : Expr u bjn -> Process
-  getProcess (ExprVal p elu)   = p
-  getProcess (ExprVar prf n p) = p
-  getProcess (ExprPutP p e)    = p
-  getProcess _                 = AppP
-
-  -- getProcess : (Lazy (Expr u bjn)) -> Process
-  -- getProcess (Delay (ExprVal p elu)) = p
-  -- getProcess (Delay (ExprVar prf p)) = p
-  -- getProcess (Delay (ExprPutP p e)) = p
-  -- getProcess (Delay _) = AppP
+  process : Expr u bctx -> Process
+  process (ExprVal p elu)   = p
+  process (ExprVar prf n p) = p
+  process (ExprVar' n e)    = process e
+  process (ExprPrivy e)     = AliceP
+  process _                 = AppP
 
 -- namespace expr
   -- -- Set the recipient of an expression
@@ -191,20 +186,20 @@ using (bjn : Vect n Ctx,
     -- Others
     -- Project  : (sproj : Schema) -> RA s -> RA (intersect sproj s)
     -- Dans mon context, j'enleve le s puis je remet le
-    Project  : (sproj : Schema) -> RA s bjn -> RA (intersect sproj s) bjn
+    Project  : (sproj : Schema) -> RA s bctx -> RA (intersect sproj s) bctx
     -- TODO: Select on an element with specific operation
     Select  : (a : Attribute) ->
-              (Expr (getU a) bjn -> Expr BOOL bjn) ->
-              {auto elem : Elem a s} -> RA s bjn -> RA s bjn
+              (Expr (getU a) bctx -> Expr BOOL bctx) ->
+              {auto elem : Elem a s} -> RA s bctx -> RA s bctx
     -- -- TODO: Join take an element to do the join
     -- Drop     : (sproj : Schema) -> RA s  -> RA (s \\ sproj)
     -- -- FIXME: Do a better tatic, Something that work on each schema
     -- -- rather than schema singleton
     Count    : (scount : Schema) ->
                {default (includeSingleton Here) inc : Include scount s} ->
-               RA s bjn -> RA (count scount s {inc}) bjn
+               RA s bctx -> RA (count scount s {inc}) bctx
     -- -- -- Introduce
-    Unit     : (s : Schema) -> RA s bjn
+    Unit     : (s : Schema) -> RA s bctx
 
 -- union : RA s -> RA s -> RA s
 -- union = Union
@@ -230,7 +225,7 @@ using (bjn : Vect n Ctx,
 --         RA s -> RA (count scount s {inc})
 -- count = Count
 
-  getSchema : RA s bjn -> Schema
+  getSchema : RA s bctx -> Schema
   getSchema _ {s} = s
 
 -- Local Variables:
