@@ -113,9 +113,9 @@ using (bctx : Vect n Ctx)
     e <-  genPi' x
     genPi' (f !(mkVar e))
 
-  genPi : Guard (Plain s) cs' bctx (Expr a bctx) -> IO ()
-  genPi g {s} {a} {bctx} = let
-      expr = the (IO (Expr a bctx)) $
+  genPi : Guard (Plain s) cs' [] (Expr a []) -> IO ()
+  genPi g {s} {a} = let
+      expr = the (IO (Expr a _)) $
              runInit [(MkCTX [] Nothing 0), ()] $
              genPi' g
     in print ""
