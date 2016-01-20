@@ -10,11 +10,11 @@ D = ("Date", NAT)
 N : Attribute
 N = ("Name", TEXT)
 
-Nc : Attribute
-Nc = ("Name", CRYPT TEXT)
-
 A : Attribute
 A = ("Addr", TEXT)
+
+C_ : Attribute -> Attribute
+C_ (n, u) = (n, CRYPT u)
 
 -- nextWeek : Expr (getU D) p -> Expr BOOL AppP
 -- nextWeek _ = ExprBOOL True
@@ -27,8 +27,9 @@ nextWeek _ = ExprVal AppP True {bctx=_}
 -- places = do                                                      -- Alice App.Alice   (o)
 --   query (Project [A] . Select D nextWeek)                        -- App   App.DB      (1)
 -- places : Guard (Plain [D,N,A]) (Plain [D,N,A]) Nil (Expr (SCH [A]) Nil)
-places : GUARD (DB[D,N,A]) (DB[D,N,A]) (SCH [A])
-places = Query (Project [A] . Select D nextWeek)
+places : GUARD (DB[D,N,A]) -> (SCH [A])
+places = guard(
+  Query (Project [A] . Select D nextWeek))
 
 
 -- -- 2
@@ -37,8 +38,9 @@ places = Query (Project [A] . Select D nextWeek)
 -- meetings = do                                                    -- Alice App.Alice   (2)
 --   query (Count [D] . Select N (ExprEq (ExprTEXT "Bob")))         -- App   App.DB      (1)
 -- meetings : Guard (Plain [D,N,A]) (Plain [D,N,A]) Nil (Expr (SCH [D,Count]) Nil)
-meetings : GUARD (DB[D,N,A]) (DB[D,N,A]) (SCH [D,Count])
-meetings = Query (Count [D] . Select N (ExprEq (ExprVal AppP "Bob")))
+meetings : GUARD (DB[D,N,A]) -> (SCH [D,Count])
+meetings = guard(
+  Query (Count [D] . Select N (ExprEq (ExprVal AppP "Bob"))))
 
 
 -- -- 1 & 2
@@ -49,13 +51,14 @@ meetings = Query (Count [D] . Select N (ExprEq (ExprVal AppP "Bob")))
 --   q2 <- meetings                                                 -- App   App.DB      (2)
 --   pure (ExprProduct q1 q2)                                       -- App   App.App     (3)
 -- compose : Guard (Plain [D,N,A]) (Plain [D,N,A]) Nil (Expr (SCH [A,D,Count]) Nil)
-compose : GUARD (DB[D,N,A]) (DB[D,N,A]) (SCH [A,D,Count])
-compose = places   >>= \q1 =>
-          meetings >>= \q2 =>
-          Pure (ExprProduct q1 q2)
+compose : GUARD (DB[D,N,A]) -> (SCH [A,D,Count])
+compose = guard(
+  places   >>= \q1 =>
+  meetings >>= \q2 =>
+  Pure (ExprProduct q1 q2))
 
 -- composeDo : Guard (Plain [D,N,A]) (Plain [D,N,A]) (Expr Nil (SCH [A,D,Count]))
-composeDo : GUARD (DB[D,N,A]) (DB[D,N,A]) (SCH [A,D,Count])
+composeDo : GUARD (DB[D,N,A]) -> (SCH [A,D,Count])
 composeDo = guard(do
   q1 <- places
   q2 <- meetings
@@ -75,15 +78,16 @@ composeDo = guard(do
 --   qRes <- queryR (Project [A] . Select Id (flip ExprElem ids))   -- App   App.R       (2)
 --   pure qRes                                                      -- App   App.R       (2)
 -- placesF : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) (Expr Nil (SCH [A]))
-placesF : GUARD (DB[D,N,A]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [A])
-placesF = Encrypt "mykey" N                                      >>= \_ =>
-          Frag [[D]]                                             >>= \_ =>
-          QueryF 0 (Project [Id] . Select D nextWeek)            >>= \ids =>
-          QueryF 1 (Project [A] . Select Id (flip ExprElem ids)) >>= \res =>
-          Pure res
+placesF : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [A])
+placesF = guard(
+  Encrypt "mykey" N                                      >>= \_ =>
+  Frag [[D]]                                             >>= \_ =>
+  QueryF 0 (Project [Id] . Select D nextWeek)            >>= \ids =>
+  QueryF 1 (Project [A] . Select Id (flip ExprElem ids)) >>= \res =>
+  Pure res)
 
--- placesFDo : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) (Expr Nil (SCH [A]))
-placesFDo : GUARD (DB[D,N,A]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [A])
+-- placesFDo : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) Nil (Expr (SCH [A]) Nil)
+placesFDo : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [A])
 placesFDo = guard(do
   Encrypt "mykey" N
   Frag [[D]]
@@ -119,17 +123,17 @@ placesFDo = guard(do
 --              Pure (ExprProject [D,A] $ ExprProduct dIds res))
 --
 -- placesFDo' : {bctx : Vect n U} -> Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) bctx (Expr (SCH [D,A]))
-placesFDo' : GUARD (DB[D,N,A]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
-placesFDo' =  do
+placesFDo' : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
+placesFDo' = guard(do
   Encrypt "mykey" N
   Frag [[D]]
   dIds <- QueryF 0 (Project [D, Id] . Select D nextWeek)
   Let (UN "ids") (ExprProject [Id] dIds) (do
     res <- QueryF 1 (Project [A] . Select Id (flip ExprElem (var_ Stop)))
-    pure (ExprProject [D,A] $ ExprProduct dIds res))
+    pure (ExprProject [D,A] $ ExprProduct dIds res)))
 
 -- placesFDo'' : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) Nil (Expr (SCH [D,A]))
-placesFDo'' : GUARD (DB[D,N,A]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
+placesFDo'' : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
 placesFDo'' =  guard(do
   Encrypt "mykey" N
   Frag [[D]]
@@ -137,6 +141,7 @@ placesFDo'' =  guard(do
   let ids = ExprProject [Id] dIds
   res <- Privy <*> QueryF 1 (Project [A] . Select Id (flip ExprElem ids))
   pure (ExprProject [D,A] $ ExprProduct dIds res))
+
 
 -- -- 5
 -- meetings' : AES String -> Eff (Expr (SCH [D,Id]) (App,App,App))
@@ -154,19 +159,19 @@ placesFDo'' =  guard(do
 -- meetingF : AES String -> Guard (FragV [[D,Id], [Nc,A,Id]])
 --                                (FragV [[D,Id], [Nc,A,Id]])
 --                                (Expr Nil (SCH [D,Id]))
-meetingF : AES String ->
-           GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,Id])
-meetingF c = QueryF 0 (Project [D, Id])                       >>= \ql =>
-             QueryF 1 (Project [Id] .
-                       Select Nc (ExprEq (ExprVal AppP c)))   >>= \qr =>
-             Pure (ExprProduct ql qr)
+meetingF : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,Id])
+meetingF c = guard(
+  QueryF 0 (Project [D, Id])                           >>= \ql =>
+  QueryF 1 (Project [Id] .
+            Select (C_ N) (ExprEq (ExprVal AppP c)))   >>= \qr =>
+  Pure (ExprProduct ql qr))
 
-meetingFDo : AES String ->
-             GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,Id])
+meetingFDo : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,Id])
 meetingFDo c = guard(do
   ql <- QueryF 0 (Project [D, Id])
-  qr <- QueryF 1 (Project [Id] . Select Nc (ExprEq (ExprVal AppP c)))
+  qr <- QueryF 1 (Project [Id] . Select (C_ N) (ExprEq (ExprVal AppP c)))
   pure (ExprProduct ql qr))
+
 
 -- -- 6
 -- meetings'' : Eff (Expr (SCH [D,A]) (Alice,Alice,Alice))
@@ -181,18 +186,18 @@ meetingFDo c = guard(do
 -- meetingF' : AES String -> Guard (FragV [[D,Id], [Nc,A,Id]])
 --                                 (FragV [[D,Id], [Nc,A,Id]])
 --                                 (Expr (SCH [D, A]))
-meetingF' : AES String ->
-            GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
-meetingF' c = Privy <*> QueryF 0 (Project [D, Id])                >>= \ql =>
-              Privy <*> QueryF 1 (Project [A, Id] .
-                                  Select Nc (ExprEq (ExprVal AppP c))) >>= \qr =>
-              Pure (ExprProject [D,A] $ ExprProduct ql qr)
+meetingF' : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
+meetingF' c = guard(
+  Privy <*> QueryF 0 (Project [D, Id])                         >>= \ql =>
+  Privy <*> QueryF 1 (Project [A, Id] .
+                      Select (C_ N) (ExprEq (ExprVal AppP c))) >>= \qr =>
+  Pure (ExprProject [D,A] $ ExprProduct ql qr))
 
-meetingFDo' : AES String ->
-              GUARD (FRAG[[D,Id], [Nc,A,Id]]) (FRAG[[D,Id], [Nc,A,Id]]) (SCH [D,A])
+meetingFDo' : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
 meetingFDo' c = guard(do
   ql <- Privy <*> QueryF 0 (Project [D, Id])
-  qr <- Privy <*> QueryF 1 (Project [A, Id] . Select Nc (ExprEq (ExprVal AppP c)))
+  qr <- Privy <*> QueryF 1 (Project [A, Id] .
+                            Select (C_ N) (ExprEq (ExprVal AppP c)))
   pure (ExprProject [D,A] $ ExprProduct ql qr))
 
 

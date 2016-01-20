@@ -24,7 +24,7 @@ using (bctx : Vect n Ctx)
     Plain  : Schema -> CState
     FragV  : Vect n Schema -> CState
 
-  data Guard : (cs : CState) -> (cs' : CState) ->
+  data Guard : CState -> CState ->
                (bctx : Vect n Ctx) -> Type -> Type where
     ---- Security combinator
     Encrypt  : (k : String) -> (a : Attribute) ->
@@ -102,7 +102,8 @@ using (bctx : Vect n Ctx)
   var_ : HasType bctx i (u,p,tn) -> Expr u bctx
   var_ prf {p} {tn} = ExprVar prf tn p
 
-  syntax GUARD [x] [y] [z] = {bjn : Vect n Ctx} -> Guard x y bjn (Expr z bjn)
+  syntax GUARD [x] "~>" [y] "->" [z] = {bjn : Vect n Ctx} -> Guard x y bjn (Expr z bjn)
+  syntax GUARD [x] "->" [z] = GUARD x ~> x -> z
   syntax FRAG [x] = (FragV x)
   syntax DB [x] = (Plain x)
 

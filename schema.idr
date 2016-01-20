@@ -147,11 +147,11 @@ namespace universe
 Attribute: Type
 Attribute = (String, U)
 
--- Named instance as an alternative for equality on attributes.
--- http://docs.idris-lang.org/en/latest/tutorial/classes.html?highlight=monad#named-instances
-instance [attrEq] Eq Attribute where
-    (n1, _) == (n2, _) = n1 == n2
-    x      /= y        = not ((==)@{attrEq} x y)
+-- -- Named instance as an alternative for equality on attributes.
+-- -- http://docs.idris-lang.org/en/latest/tutorial/classes.html?highlight=monad#named-instances
+-- instance [attrEq] Eq Attribute where
+--     (n1, _) == (n2, _) = n1 == n2
+--     x      /= y        = not ((==)@{attrEq} x y)
 
 -- A specific attribute for indexing
 Id : Attribute
