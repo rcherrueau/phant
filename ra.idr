@@ -19,6 +19,8 @@ using (bctx : Vect n Ctx, p : Process, p' : Process, p'' : Process)
     Stop : HasType (a :: bctx) FZ a
     Pop  : HasType bctx i b -> HasType (a :: bctx) (FS i) b
 
+  downHasCtx : HasType (x :: bctx) (FS i) ctx  -> HasType bctx i ctx
+  downHasCtx (Pop x) = x
 
   data Expr : U -> Vect n Ctx -> Type where
     -- ExprElU : {u : U} -> (v : a) -> Expr u
@@ -62,34 +64,29 @@ using (bctx : Vect n Ctx, p : Process, p' : Process, p'' : Process)
   process (ExprPrivy e)     = AliceP
   process _                 = AppP
 
+  ||| Produces an ExprVal for a specific type of the universse U.
+  defaultExprVal : (u : U) -> (bctx : Vect n Ctx) -> Process -> Expr u bctx
+  defaultExprVal u bctx ppp = ExprVal {bctx} {u} ppp (defaultElu u)
+
+
+  downBctx : Expr u (x :: bctx) -> Expr u bctx
+  downBctx (ExprVal ppp elu) {bctx} = ExprVal ppp elu {bctx}
+  downBctx (ExprVar Stop ttn ppp)  = ?ljm_1 -- TODO: Make it absurd
+  downBctx (ExprVar (Pop prf) ttn ppp) {bctx} = ExprVar prf ttn ppp
+  downBctx (ExprVar' n x) = ?downBctx_rhs_9
+  downBctx (ExprEq x y) = ?downBctx_rhs_2
+  downBctx (ExprElem x y) = ?downBctx_rhs_3
+  downBctx (ExprProduct x y) = ?downBctx_rhs_4
+  downBctx (ExprProject sproj x) = ?downBctx_rhs_5
+  downBctx (ExprCount scount x) = ?downBctx_rhs_6
+  downBctx (ExprPrivy x) = ?downBctx_rhs_7
+
 -- namespace expr
   -- -- Set the recipient of an expression
-  -- setRecipient : (p : Place) -> Expr a ppp -> Expr a (setRecipient p ppp)
+  -- setRecipient : (p : Place) -> Expr a ppp -> Expr a (setRecipient p ppp) bb
   -- setRecipient p expr {ppp} = let ppp' = setRecipient p ppp
   --                             in ExprPutP ppp' expr
 
-  -- defaultExpr : (u : U) -> Expr u
-  -- defaultExpr UNIT      = ExprUNIT
-  -- defaultExpr NAT       = ExprNAT Z
-  -- defaultExpr TEXT      = ExprTEXT ""
-  -- defaultExpr REAL      = ExprREAL 0.0
-  -- defaultExpr BOOL      = ExprBOOL True
-  -- defaultExpr (CRYPT u) = let expr = defaultExpr u
-  --                             elu = defaultElu expr
-  --                             aes = encrypt "key" elu
-  --                          in ExprCRYPT aes
-  --   where
-  --   defaultElu : Expr u' -> (el u')
-  --   defaultElu _               {u' = UNIT      } = ()
-  --   defaultElu _               {u' = NAT       } = Z
-  --   defaultElu _               {u' = TEXT      } = ""
-  --   defaultElu _               {u' = REAL      } = 0.0
-  --   defaultElu _               {u' = BOOL      } = True
-  --   defaultElu (ExprCRYPT y)   {u' = (CRYPT x) } = y
-  --   defaultElu (ExprPutP  y)   {u' = (CRYPT x) } = defaultElu y
-  --   defaultElu (ExprVar (MkVar s y))     {u' = (CRYPT x) } = assert_total $ defaultElu y
-  --   defaultElu _               {u' = (SCH xs)  } = []
-  -- defaultExpr (SCH s)  = ExprSCH s
 
   -- -- givemeExpr : (u : U) -> (p : Process) -> Expr u p
   -- -- givemeExpr u p = ExprU u p

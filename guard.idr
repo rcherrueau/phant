@@ -57,10 +57,10 @@ using (bctx : Vect n Ctx)
                Guard cs cs'
                      bctx
                      (Expr b bctx)
-    ---- Functor
-    Map      : (m : Expr a bctx -> Expr b bctx) ->
-               Guard cs cs' bctx (Expr a bctx) ->
-               Guard cs cs' bctx (Expr b bctx)
+    -- ---- Functor
+    -- Map      : (m : Expr a bctx -> Expr b bctx) ->
+    --            Guard cs cs' bctx (Expr a bctx) ->
+    --            Guard cs cs' bctx (Expr b bctx)
     ---- Applicative
     Pure     : Expr a bctx -> Guard cs cs' bctx (Expr a bctx)
     SeqApp   : Guard cs cs bctx (Expr a bctx -> Expr b bctx) ->
@@ -72,10 +72,10 @@ using (bctx : Vect n Ctx)
                Guard cs cs'' bctx (Expr b bctx)
 
   ---------------------------------------------------------- Guard Language
-  map : (m : Expr a bctx -> Expr b bctx) ->
-        Guard cs cs' bctx (Expr a bctx) ->
-        Guard cs cs' bctx (Expr b bctx)
-  map = Map
+  -- map : (m : Expr a bctx -> Expr b bctx) ->
+  --       Guard cs cs' bctx (Expr a bctx) ->
+  --       Guard cs cs' bctx (Expr b bctx)
+  -- map = Map
 
   pure : Expr a bctx -> Guard cs cs' bctx (Expr a bctx)
   pure = Pure

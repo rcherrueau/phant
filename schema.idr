@@ -64,6 +64,16 @@ namespace universe
   -- el (LIST U)     = List (el U)
   -- el (HOME U)  = el U
 
+  defaultElu : (u : U) -> (el u)
+  defaultElu UNIT      = ()
+  defaultElu NAT       = Z
+  defaultElu TEXT      = ""
+  defaultElu REAL      = 0.0
+  defaultElu BOOL      = False
+  defaultElu (CRYPT x) = let xElu = defaultElu x
+                         in encrypt "key" xElu
+  defaultElu (SCH s)   = []
+
   -- -- Returns the inner u if any
   -- private
   -- getU : U -> U
