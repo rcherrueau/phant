@@ -13,14 +13,19 @@ import Data.Vect
 Ctx : Type
 Ctx = (U, Process, TTName)
 
-using (bctx : Vect n Ctx, p : Process, p' : Process, p'' : Process)
+biggest : Vect n Ctx -> Vect m Ctx -> Vect (max n m) Ctx
+biggest xs ys {n} {m} with (n > m)
+  biggest xs ys {n} {m} | False = ys
+  biggest xs ys {n} {m} | True = xs
+
+using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : Process)
 
   data HasType : Vect n Ctx -> Fin n -> Ctx -> Type where
     Stop : HasType (a :: bctx) FZ a
     Pop  : HasType bctx i b -> HasType (a :: bctx) (FS i) b
 
-  downHasCtx : HasType (x :: bctx) (FS i) ctx  -> HasType bctx i ctx
-  downHasCtx (Pop x) = x
+  -- downHasCtx : HasType (x :: bctx) (FS i) ctx  -> HasType bctx i ctx
+  -- downHasCtx (Pop x) = x
 
   data Expr : U -> Vect n Ctx -> Type where
     -- ExprElU : {u : U} -> (v : a) -> Expr u
@@ -43,9 +48,9 @@ using (bctx : Vect n Ctx, p : Process, p' : Process, p'' : Process)
     -- Schema
     -- ExprUnion   : Expr (SCH s) -> Expr (SCH s) -> Expr (SCH s)
     -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
-    ExprProduct : Expr (SCH s) bctx -> Expr (SCH s') bjn' ->
-                  Expr (SCH (s * s')) bjn''
-    ExprProject : (sproj : Schema) -> Expr (SCH s) bctx -> Expr (SCH (intersect sproj s)) bctx
+    ExprProduct : Expr (SCH s) bctx -> Expr (SCH s') bctx' ->
+                  Expr (SCH (s * s')) (biggest bctx bctx')
+    ExprProject : (sproj : Schema) -> Expr (SCH s) bctx -> Expr (SCH (intersect sproj s)) bctx'
 
     -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
     --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
@@ -68,18 +73,20 @@ using (bctx : Vect n Ctx, p : Process, p' : Process, p'' : Process)
   defaultExprVal : (u : U) -> (bctx : Vect n Ctx) -> Process -> Expr u bctx
   defaultExprVal u bctx ppp = ExprVal {bctx} {u} ppp (defaultElu u)
 
+  -- namespace expr 
+    -- dropBctx : Expr u bctx -> Expr u []
 
-  downBctx : Expr u (x :: bctx) -> Expr u bctx
-  downBctx (ExprVal ppp elu) {bctx} = ExprVal ppp elu {bctx}
-  downBctx (ExprVar Stop ttn ppp)  = ?ljm_1 -- TODO: Make it absurd
-  downBctx (ExprVar (Pop prf) ttn ppp) {bctx} = ExprVar prf ttn ppp
-  downBctx (ExprVar' n x) = ?downBctx_rhs_9
-  downBctx (ExprEq x y) = ?downBctx_rhs_2
-  downBctx (ExprElem x y) = ?downBctx_rhs_3
-  downBctx (ExprProduct x y) = ?downBctx_rhs_4
-  downBctx (ExprProject sproj x) = ?downBctx_rhs_5
-  downBctx (ExprCount scount x) = ?downBctx_rhs_6
-  downBctx (ExprPrivy x) = ?downBctx_rhs_7
+  -- downBctx : Expr u (x :: bctx) -> Expr u bctx
+  -- downBctx (ExprVal ppp elu) {bctx} = ExprVal ppp elu {bctx}
+  -- downBctx (ExprVar Stop ttn ppp)  = ?ljm_1 -- TODO: Make it absurd
+  -- downBctx (ExprVar (Pop prf) ttn ppp) {bctx} = ExprVar prf ttn ppp
+  -- downBctx (ExprVar' n x) = ?downBctx_rhs_9
+  -- downBctx (ExprEq x y) = ?downBctx_rhs_2
+  -- downBctx (ExprElem x y) = ?downBctx_rhs_3
+  -- downBctx (ExprProduct x y) = ?downBctx_rhs_4
+  -- downBctx (ExprProject sproj x) = ?downBctx_rhs_5
+  -- downBctx (ExprCount scount x) = ?downBctx_rhs_6
+  -- downBctx (ExprPrivy x) = ?downBctx_rhs_7
 
 -- namespace expr
   -- -- Set the recipient of an expression

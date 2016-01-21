@@ -11,29 +11,32 @@ import Effect.StdIO
 %default total
 
 -- Pi language
+data PiChan : Type where
+  MkPiChan : TTName -> PiChan
+
 data PiVal : Type where
+  MkPiVal  : TTName -> PiVal
+  MkPiValQ : RA s bctx -> List (Expr u bctx) -> PiVal
+
   PiValExpr  : Integer -> Expr u p -> PiVal
   PiValQuery : Integer -> RA s p -> PiVal
   PiValPlace : Place -> PiVal
 
 data PiProc : Type where
-  PiGet :    PiVal -> PiVal -> PiProc -> PiProc
-  PiSend :   PiVal -> PiVal -> PiProc -> PiProc
+  PiGet :    PiChan -> PiVal -> PiProc -> PiProc
+  PiSend :   PiChan -> PiVal -> PiProc -> PiProc
   PiPar :    PiProc -> PiProc -> PiProc
   PiMkChan : PiVal -> PiProc -> PiProc
   PiBang :   PiProc -> PiProc
   PiEnd :    PiProc
 
 
--- record PiProcs (fragsNumber : Nat) where
---   constructor MkPiProcs
---   appPi   : PiProc -> PiProc
---   alicePi : PiProc -> PiProc
---   dbPi    : PiProc -> PiProc
---   fragPi  : Vect fragsNumber (PiProc -> PiProc)
-
--- fragsNumber : PiProcs n -> Nat
--- fragsNumber _ {n} = n
+record PiProcs where
+  constructor MkPiProcs
+  appPi   : PiProc -> PiProc
+  alicePi : PiProc -> PiProc
+  dbPi    : PiProc -> PiProc
+  fragPi  : List (PiProc -> PiProc)
 
 using (bctx : Vect n Ctx)
   data Q : Type where

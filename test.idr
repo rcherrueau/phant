@@ -138,6 +138,7 @@ placesFDo'' =  guard(do
   Encrypt "mykey" N
   Frag [[D]]
   dIds <- QueryF 0 (Project [D, Id] . Select D nextWeek)
+  let truc = dIds
   let ids = ExprProject [Id] dIds
   res <- Privy <*> QueryF 1 (Project [A] . Select Id (flip ExprElem ids))
   pure (ExprProject [D,A] $ ExprProduct dIds res))
