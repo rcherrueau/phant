@@ -13,10 +13,15 @@ import Data.Vect
 Ctx : Type
 Ctx = (U, Process, TTName)
 
-biggest : Vect n Ctx -> Vect m Ctx -> Vect (max n m) Ctx
-biggest xs ys {n} {m} with (n > m)
-  biggest xs ys {n} {m} | False = ys
-  biggest xs ys {n} {m} | True = xs
+biggest : Vect n Ctx -> Vect m Ctx -> Vect (maximum n m) Ctx
+biggest xs ys {n} {m} with (decEq n m)
+  biggest xs ys {n = n} {m = m} | (Yes prf) = rewrite sym prf in
+                                              rewrite maximumIdempotent n in xs
+  biggest [] ys {n = Z} {m = m} | (No contra) = ys
+  biggest (x :: xs) [] {n = (S k)} {m = Z} | (No contra) = (x :: xs)
+  biggest (x :: xs) (y :: ys) {n = (S k)} {m = (S j)} | (No contra) = let rec = (biggest xs ys)
+                                                                      in x :: rec
+
 
 using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : Process)
 
