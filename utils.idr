@@ -126,6 +126,12 @@ namespace location
     (AtFrag j) == (AtFrag k) = finToNat j == finToNat k
     _          == _          = False
 
+  instance Show Place where
+    show AtAlice    = "Alice"
+    show AtApp      = "App"
+    show AtDB       = "DB"
+    show (AtFrag x) = "Frag" ++ show (finToNat x)
+
   Process : Type
   Process = (Place,Place,Place)
 
@@ -175,4 +181,3 @@ namespace other
   update (a, b) xs = case lookup a xs of
                        Just _  => (a, b) :: (delete (a, b) xs)
                        Nothing => xs
-

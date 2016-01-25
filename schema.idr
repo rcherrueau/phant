@@ -103,6 +103,15 @@ namespace universe
   le _ {p = IsSCH}  = SCH []
   -- le _ {p = IsPAIR {p1} {p2} {u1} {u2}} = PAIR (le u1 {p=p1}) (le u2 {p=p2})
   -- le _ {p = IsLIST {p} {u}} = LIST (le u {p})
+  
+  instance Show U where
+    show UNIT = "UNIT"
+    show NAT = "NAT"
+    show TEXT = "TEXT"
+    show REAL = "REAL"
+    show BOOL = "BOOL"
+    show (CRYPT x) = "CRYPT " ++ show x
+    show (SCH xs) = "SCH " ++ show xs
 
   instance Eq U where
     UNIT == UNIT             = True

@@ -13,17 +13,53 @@ import Data.Vect
 Ctx : Type
 Ctx = (U, Process, TTName)
 
+-- biggest : Vect n Ctx -> Vect m Ctx -> Vect (maximum n m) Ctx
+-- biggest xs ys {n} {m} with (decEq n m)
+--   biggest xs ys {n = n} {m = m} | (Yes prf) = rewrite sym prf in
+--                                               rewrite maximumIdempotent n in xs
+--   biggest [] ys {n = Z} {m = m} | (No contra) = ys
+--   biggest (x :: xs) [] {n = (S k)} {m = Z} | (No contra) = (x :: xs)
+--   biggest (x :: xs) (y :: ys) {n = (S k)} {m = (S j)} | (No contra) = let rec = (biggest xs ys)
+--                                                                       in x :: rec
+
+maxi_lemma : (maximum (S j) (S k) = S j -> Void) -> maximum j k = j -> Void
+maxi_lemma contra prf = void $ contra $ cong prf {f=S}
+
+maximumIsTheOther : (l : Nat) -> (r : Nat) -> ((maximum l r = l) -> Void) -> maximum l r = r
+maximumIsTheOther l r contra with (decEq (maximum l r) r)
+  maximumIsTheOther l r contra | (Yes prf) = prf
+  maximumIsTheOther l     Z     contra | (No f) =
+    let maxLZisL = maximumZeroNLeft l
+    in void (contra maxLZisL)
+  maximumIsTheOther Z     (S k) contra | (No f) =
+    Refl
+  maximumIsTheOther (S j) (S k) contra | (No f) =
+    let nMaxJKisJ = maxi_lemma contra
+        maxJKisK  = maximumIsTheOther j k nMaxJKisJ
+    in cong maxJKisK {f=S}
+
 biggest : Vect n Ctx -> Vect m Ctx -> Vect (maximum n m) Ctx
-biggest xs ys {n} {m} with (decEq n m)
-  biggest xs ys {n = n} {m = m} | (Yes prf) = rewrite sym prf in
-                                              rewrite maximumIdempotent n in xs
-  biggest [] ys {n = Z} {m = m} | (No contra) = ys
-  biggest (x :: xs) [] {n = (S k)} {m = Z} | (No contra) = (x :: xs)
-  biggest (x :: xs) (y :: ys) {n = (S k)} {m = (S j)} | (No contra) = let rec = (biggest xs ys)
-                                                                      in x :: rec
+biggest xs ys {n = Z} = ys
+biggest xs ys {n}     {m = Z} =
+        rewrite maximumZeroNLeft n in xs
+biggest xs ys {n}     {m} with (decEq n m)
+  biggest xs ys {n}     {m} | (Yes prf) =
+          rewrite sym prf in
+          rewrite maximumIdempotent n in xs
+  biggest xs ys {n}     {m} | (No _) with (decEq (maximum n m) n)
+    biggest xs ys {n}     {m} | (No _) | (Yes prf) =
+            rewrite prf in xs
+    biggest xs ys {n}     {m} | (No _) | (No contra) =
+            let prf = maximumIsTheOther n m contra
+            in rewrite prf in ys
+-- biggest xs ys {n} {m} with (decEq (maximum n m) n)
+--   biggest xs ys {n} {m} | (Yes prf) = rewrite prf in xs
+--   biggest xs ys {n} {m} | (No contra) = let prf = maximumIsTheOther n m contra
+--                                         in rewrite prf in ys
 
-
-using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : Process)
+using (bctx : Vect n Ctx, -- bctx' : Vect m Ctx, bctx'' : Vect l Ctx,
+       p : Process, p' : Process, p'' : Process,
+       s : Schema, s' : Schema)
 
   data HasType : Vect n Ctx -> Fin n -> Ctx -> Type where
     Stop : HasType (a :: bctx) FZ a
@@ -33,29 +69,21 @@ using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : P
   -- downHasCtx (Pop x) = x
 
   data Expr : U -> Vect n Ctx -> Type where
-    -- ExprElU : {u : U} -> (v : a) -> Expr u
-    -- ExprPAIR  : (Pair (el x) (el y)) -> Expr (PAIR x y)
-    -- Type
-    -- ExprU     :  (u : U) -> (p : Process) -> Expr u p
-    -- ExprUNIT  : Expr UNIT bctx
-    -- ExprNAT   : Nat -> Expr NAT bctx
-    -- ExprTEXT  : String -> Expr TEXT Nil
-    -- ExprREAL  : Double -> Expr REAL bctx
-    -- ExprBOOL  : Bool -> Expr BOOL bctx
-    -- ExprCRYPT : {u : U} -> AES (el u) -> Expr (CRYPT u) Nil
-    -- ExprSCH     : (s : Schema) ->  Expr (SCH s) bctx
-    ExprVal   : {default Nil bctx : Vect n Ctx} -> {u : U} -> Process -> (el u) -> Expr u bctx
     -- Operation
-    ExprEq    : Eq (el a) => Expr a bctx -> Expr a bjn' -> Expr BOOL bjn''
+    ExprEq    : Eq (el a) =>
+                -- {default Nil bctx : Vect n Ctx} -> {default Nil bctx' : Vect m Ctx} ->
+                Expr a bctx' -> Expr a bctx -> Expr BOOL bctx
     -- ExprGtEq  : Ord (el a) => Expr a bctx -> Expr a bctx -> Expr BOOL bctx
     ExprElem  : Eq (el a) => Expr a bctx -> Expr (SCH s) bctx -> Expr BOOL bctx
     -- ExprNot   : Expr BOOL bctx -> Expr BOOL bctx
     -- Schema
     -- ExprUnion   : Expr (SCH s) -> Expr (SCH s) -> Expr (SCH s)
     -- ExprDiff    : Expr (SCH s) -> Expr (SCH s') -> Expr (SCH s)
-    ExprProduct : Expr (SCH s) bctx -> Expr (SCH s') bctx' ->
-                  Expr (SCH (s * s')) (biggest bctx bctx')
-    ExprProject : (sproj : Schema) -> Expr (SCH s) bctx -> Expr (SCH (intersect sproj s)) bctx'
+    ExprProduct : -- {default Nil bctx : Vect n Ctx} -> {default Nil bctx' : Vect m Ctx} ->
+                  Expr (SCH s) bctx' -> Expr (SCH s') bctx ->
+                  -- Expr (SCH (s * s')) (biggest bctx bctx')
+                  Expr (SCH (s * s')) bctx
+    ExprProject : (sproj : Schema) -> Expr (SCH s) bctx -> Expr (SCH (intersect sproj s)) bctx
 
     -- ExprSelect  : {s : Schema} -> (a : Attribute) -> (Expr (getU a) p -> Expr BOOL p') ->
     --               {auto elem : Elem a s} -> Expr (SCH s) p -> Expr (SCH s) (findRecipient p p')
@@ -64,13 +92,28 @@ using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : P
                   {default (includeSingleton Here) inc : Include scount s} ->
                   Expr (SCH s) bctx -> Expr (SCH (count scount s {inc})) bctx
     ExprPrivy   : Expr a bctx -> Expr a bctx
-    ExprVar     : HasType bctx i (u,_) -> TTName -> Process -> Expr u bctx
-    ExprVar'    : TTName -> Expr u bctx -> Expr u bctx
+    ExprVal   : {default Nil bctx : Vect n Ctx} -> {u : U} ->
+                 Process -> (el u) -> Expr u bctx
+    ExprLetVar : HasType bctx i (u,p,ttn) -> TTName -> Process -> Expr u bctx
+    ExprVar    : TTName -> Expr u bctx -> Expr u bctx
+
+  -- -- il ne peux pas reduire car n'infère pas de taille pour le `n` de
+  -- -- `bctx`
+  -- lala : {default (%runElab ?mlkj) v : Vect n Ctx} -> Expr TEXT bctx -> Expr BOOL v
+  -- -- lala : Expr TEXT bctx -> Expr BOOL bctx
+  -- lala e = ExprEq e (ExprVal AppP "lala")
+
+  (==) : Eq (el a) => Expr a bctx' -> Expr a bctx -> Expr BOOL bctx
+  (==) = ExprEq
+
+  (*) : Expr (SCH s) bctx' -> Expr (SCH s') bctx -> Expr (SCH (s * s')) bctx
+  (*) = ExprProduct
+
 
   process : Expr u bctx -> Process
   process (ExprVal p elu)   = p
-  process (ExprVar prf n p) = p
-  process (ExprVar' n e)    = process e
+  process (ExprLetVar prf n p) = p
+  process (ExprVar n e)    = process e
   process (ExprPrivy e)     = AliceP
   process _                 = AppP
 
@@ -78,7 +121,38 @@ using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : P
   defaultExprVal : (u : U) -> (bctx : Vect n Ctx) -> Process -> Expr u bctx
   defaultExprVal u bctx ppp = ExprVal {bctx} {u} ppp (defaultElu u)
 
-  -- namespace expr 
+  mkId : TTName -> String
+  mkId (UN x) = x
+  mkId (NS n xs) = let name = mkId n
+                       nspace = concat (intersperse "." (reverse xs))
+                   in nspace ++ "." ++ name
+  mkId (MN x y) = y ++ show x
+  mkId (SN x) = "special_name"
+
+  instance Show (Expr u bctx) where
+    show (ExprVal ppp elu) {u = UNIT} =
+      "(Val " ++ show elu ++ "@" ++ show ppp ++ ")"
+    show (ExprVal ppp elu) {u = NAT} =
+      "(Val " ++ show elu ++ "@" ++ show ppp ++ ")"
+    show (ExprVal ppp elu) {u = TEXT} =
+      "(Val " ++ show elu ++ "@" ++ show ppp ++ ")"
+    show (ExprVal ppp elu) {u = REAL} =
+      "(Val " ++ show elu ++ "@" ++ show ppp ++ ")"
+    show (ExprVal ppp elu) {u = BOOL} =
+      "(Val " ++ show elu ++ "@" ++ show ppp ++ ")"
+    show (ExprVal ppp elu) {u = (CRYPT x)} =
+      "(Val CRYPT " ++ show x ++ "@" ++ show ppp ++ ")"
+    show (ExprVal ppp elu) {u = (SCH xs)} =
+      "(Val SCH " ++ show xs ++ "@" ++ show ppp ++ ")"
+    show (ExprEq x y) = show x ++ " == " ++ show y
+    show (ExprElem x y) = show x ++ " elem " ++ show y
+    show (ExprProduct x y) = show x ++ " * " ++ show y
+    show (ExprProject sproj x) = "project " ++ show sproj ++ " " ++ show x
+    show (ExprCount scount x) = "count " ++ show scount ++ " " ++ show x
+    show (ExprPrivy x) = "privy " ++ show x
+    show (ExprLetVar prf ttn ppp) = "(LetVar " ++ mkId ttn ++ "@" ++ show ppp ++ ")"
+    show (ExprVar ttn e) = "(Var "++ mkId ttn ++ show e ++ ")"
+
     -- dropBctx : Expr u bctx -> Expr u []
 
   -- downBctx : Expr u (x :: bctx) -> Expr u bctx
@@ -197,7 +271,8 @@ using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : P
     -- Dans mon context, j'enleve le s puis je remet le
     Project  : (sproj : Schema) -> RA s bctx -> RA (intersect sproj s) bctx
     -- TODO: Select on an element with specific operation
-    Select  : (a : Attribute) ->
+    Select  :  -- {default Nil bctx : Vect n Ctx} ->
+              (a : Attribute) ->
               (Expr (getU a) bctx -> Expr BOOL bctx) ->
               {auto elem : Elem a s} -> RA s bctx -> RA s bctx
     -- -- TODO: Join take an element to do the join
@@ -209,6 +284,12 @@ using (bctx : Vect n Ctx, bctx' : Vect m Ctx, p : Process, p' : Process, p'' : P
                RA s bctx -> RA (count scount s {inc}) bctx
     -- -- -- Introduce
     Unit     : (s : Schema) -> RA s bctx
+
+  instance Show (RA s bctx) where
+    show (Project sproj x) = "project " ++ show sproj ++ " " ++ show x
+    show (Select a f x) = "select " ++ show a ++ " "  ++  show x
+    show (Count scount x) = "count " ++ show scount ++ " " ++ show x
+    show (Unit s) = "unit " ++ show s
 
 -- union : RA s -> RA s -> RA s
 -- union = Union
