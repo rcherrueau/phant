@@ -17,7 +17,7 @@ C_ (n, u) = (n, CRYPT u)
 -- nextWeek : Expr (getU D) p -> Expr BOOL AppP
 -- nextWeek _ = ExprBOOL True
 nextWeek : Query NAT bctx -> Query BOOL bctx
-nextWeek _ = QVal True
+nextWeek _ = QVal True AppP
 
 -- -- 1
 -- places : Guard (Plain [D,N,A]) (Plain [D,N,A]) Nil (Expr (SCH [A]) Nil)
@@ -30,7 +30,7 @@ placesDB = guard(
 -- meetings : Guard (Plain [D,N,A]) (Plain [D,N,A]) Nil (Expr (SCH [D,Count]) Nil)
 meetingsDB : GUARD (DB[D,N,A]) -> (SCH [D,Count])
 meetingsDB = guard(
-  Query (QCount [D] . QSelect N (QEq (QVal "Bob"))))
+  Query (QCount [D] . QSelect N (QEq (QVal "Bob" AppP))))
 
 
 -- -- 1 & 2
@@ -146,13 +146,13 @@ meetingF : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,Id])
 meetingF c = guard(
   QueryF 0 (QProject [D, Id])                          >>= \ql =>
   QueryF 1 (QProject [Id] .
-            QSelect (C_ N) (QEq (QVal c)))             >>= \qr =>
+            QSelect (C_ N) (QEq (QVal c AppP)))             >>= \qr =>
   Pure (ql * qr))
 
 meetingFDo : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,Id])
 meetingFDo c = guard(do
   ql <- QueryF 0 (QProject [D, Id])
-  qr <- QueryF 1 (QProject [Id] . QSelect (C_ N) (QEq (QVal c)))
+  qr <- QueryF 1 (QProject [Id] . QSelect (C_ N) (QEq (QVal c AppP)))
   pure (ql * qr))
 
 
@@ -161,12 +161,12 @@ meetingF' : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
 meetingF' c = guard(
   Privy <*> QueryF 0 (QProject [D, Id])               >>= \ql =>
   Privy <*> QueryF 1 (QProject [A, Id] .
-                      QSelect (C_ N) (QEq (QVal c)))  >>= \qr =>
+                      QSelect (C_ N) (QEq (QVal c AppP)))  >>= \qr =>
   Pure (QProject [D,A] $ ql * qr))
 
 meetingFDo' : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
 meetingFDo' c = guard(do
   ql <- Privy <*> QueryF 0 (QProject [D, Id])
   qr <- Privy <*> QueryF 1 (QProject [A, Id] .
-                            QSelect (C_ N) (QEq (QVal c)))
+                            QSelect (C_ N) (QEq (QVal c AppP)))
   pure (QProject [D,A] $ ql * qr))

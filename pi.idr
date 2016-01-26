@@ -1,7 +1,6 @@
 module phant.pi
 
 import guard
-import ra
 import test
 
 import public Effects
@@ -17,7 +16,7 @@ data PiChan : Type where
 
 data PiVal : Type where
   MkPiVal  : TTName -> PiVal
-  MkPiValQ : RA s bctx -> List (Expr u bctx) -> PiVal
+  -- MkPiValQ : RA s bctx -> List (Expr u bctx) -> PiVal
 
   PiValExpr  : Integer -> Expr u p -> PiVal
   PiValQuery : Integer -> RA s p -> PiVal

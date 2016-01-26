@@ -12,7 +12,7 @@ import Data.Vect
 
 
 Ctx : Type
-Ctx = U
+Ctx = (U, TTName, Process)
 
 data CState : Type where
   Plain  : Schema -> CState
@@ -29,14 +29,14 @@ using (n : Nat, a : U, b : U, u : U,
     Pop  : HasType bctx i ctx -> HasType (x :: bctx) (FS i) ctx
 
   data Query : U -> Vect n Ctx -> Type where
-    QVal     : (el u) -> Query u bctx
-    QVar     : HasType bctx i u -> Query u bctx
+    QVal     : (el u) -> Process -> Query u bctx
+    QVar     : HasType bctx i (u,_) -> TTName -> Process -> Query u bctx
+    QPrivy   : Query u bctx -> Query u bctx
     -- OP/2
     QEq      : Eq (el u) =>
                Query u bctx -> Query u bctx -> Query BOOL bctx
     QElem    : Eq (el u) =>
                Query u bctx -> Query (SCH s) bctx -> Query BOOL bctx
-    -- QLet     : (ttn : TTName) -> Query a bctx -> Query
     -- SQL/1
     QProject : (sproj : Schema) ->
                Query (SCH s) bctx -> Query (SCH (intersect sproj s)) bctx
@@ -51,6 +51,29 @@ using (n : Nat, a : U, b : U, u : U,
     QProduct : Query (SCH s) bctx -> Query (SCH s') bctx ->
                Query (SCH (s * s')) bctx
 
+  defaultQVal : (u : U) -> Process -> (bctx : Vect n Ctx) -> Query u bctx
+  defaultQVal u ppp bctx = QVal (defaultElu u) ppp {bctx}
+
+  getProcess : Query u bctx -> Process
+  getProcess (QVal _ ppp)               = ppp
+  getProcess (QVar _ _ ppp)             = ppp
+  getProcess (QPrivy x)                 = AliceP
+  getProcess _                          = AppP
+  -- getProcess (QEq x y)                  = manageRecipient (getProcess x) (getProcess y)
+  -- getProcess (QElem x y)                = manageRecipient (getProcess x) (getProcess y)
+  -- getProcess (QProject _ x)             = getProcess x
+  -- getProcess (QProduct x y)             = manageRecipient (getProcess x) (getProcess y)
+  -- TODO: find how to make QSelect total
+  -- getProcess (QSelect (_,u) p x) {bctx} =
+  --   -- -- getProcess is only used by Let, so giving AppP to attr is OK
+  --   -- let attr = defaultQVal u AppP bctx
+  --   --     y    = p attr
+  --   -- in manageRecipient (getProcess x) (getProcess y)
+  --   getProcess x
+  -- getProcess (QCount _ x)               = getProcess x
+
+  -- TODO: set the visibility to private. I can also avoid this with a
+  -- special Query constructor.
   deepQ : Query u bctx -> Query u bctx'
   deepQ = really_believe_me
 
@@ -110,7 +133,7 @@ using (n : Nat, a : U, b : U, u : U,
       Privy    : Guard cs cs' bctx (Query a bctx -> Query a bctx)
       ---- Binding for request on expression
       Let      : (ttn : TTName) -> (e : Query a bctx) ->
-                 Guard cs cs (a :: bctx) (Query b (a :: bctx)) ->
+                 Guard cs cs ((a,ttn,getProcess e) :: bctx) (Query b ((a,ttn,getProcess e) :: bctx)) ->
                  Guard cs cs bctx (Query b bctx)
       -- ---- Functor
       -- Map      : (m : Query a bctx -> Query b bctx) ->
@@ -146,12 +169,12 @@ using (n : Nat, a : U, b : U, u : U,
   (>>=) = Bind
 
   let_  : (ttn : TTName) -> (e : Query a bctx) ->
-          Guard cs cs (a :: bctx) (Query b (a :: bctx)) ->
+          Guard cs cs ((a,ttn,getProcess e) :: bctx) (Query b ((a,ttn,getProcess e) :: bctx)) ->
           Guard cs cs bctx (Query b bctx)
   let_ ttn = Let ttn
 
-  var_ : HasType bctx i u -> Query u bctx
-  var_ prf = QVar prf
+  var_ : HasType bctx i (u,ttn,ppp) -> Query u bctx
+  var_ prf {ttn} {ppp} = QVar prf ttn ppp
 
   data PrinterBctx : Vect n Ctx -> Type where
     MkPB : (bctx : Vect n Ctx) -> PrinterBctx bctx
