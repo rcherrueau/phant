@@ -49,16 +49,16 @@ composeDB' = guard(do
   pure (q1 * q2))
 
 
--- -- -- left-first strategy
--- -- -- 3
--- -- placesF : Guard (Plain [D,N,A]) (FragV [[D,Id], [C_ N,A,Id]]) (Expr (SCH [A]) Nil)
--- placesF : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [A])
--- placesF = guard(
---   Encrypt "mykey" N                                      >>= \_ =>
---   Frag [[D]]                                             >>= \_ =>
---   QueryF 0 (QProject [Id] . QSelect D nextWeek)          >>= \ids =>
---   QueryF 1 (QProject [A] . QSelect Id (flip QElem ids))  >>= \res =>
---   Pure res)
+-- -- left-first strategy
+-- -- 3
+-- placesF : Guard (Plain [D,N,A]) (FragV [[D,Id], [C_ N,A,Id]]) (Expr (SCH [A]) Nil)
+placesF : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [A])
+placesF = guard(
+  Encrypt "mykey" N                                      >>= \_ =>
+  Frag [[D]]                                             >>= \_ =>
+  QueryF 0 (QProject [Id] . QSelect D nextWeek)          >>= \ids =>
+  QueryF 1 (QProject [A] . QSelect Id (flip QElem ids))  >>= \res =>
+  Pure res)
 
 -- placesFDo : Guard (Plain [D,N,A]) (FragV [[D,Id], [C_ N,A,Id]]) (Expr (SCH [A]) Nil)
 placesFDo : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [A])
@@ -78,6 +78,7 @@ placesF_2 = guard(
   Frag [[D]]                                                      >>= \_ =>
   QueryF 0 (QProject [D, Id] . QSelect D nextWeek)                >>= \dIds =>
   Let (UN "ids") (QProject [Id] dIds) (
+    Privy                                                         <*>
     QueryF 1 (QProject [A] . QSelect Id (flip QElem (var_ Stop))) >>= \res =>
     Pure (QProject [D,A] $ dIds * res)))
 
@@ -88,7 +89,7 @@ placesF_2Do = guard(do
   Frag [[D]]
   dIds <- QueryF 0 (QProject [D, Id] . QSelect D nextWeek)
   Let (UN "ids") (QProject [Id] dIds) (do
-    res <- QueryF 1 (QProject [A] . QSelect Id (flip QElem (var_ Stop)))
+    res <- Privy <*> QueryF 1 (QProject [A] . QSelect Id (flip QElem (var_ Stop)))
     pure (QProject [D,A] $ dIds * res)))
 
 -- placesFDo'' : Guard (Plain [D,N,A]) (FragV [[D,Id], [Nc,A,Id]]) Nil (Expr (SCH [D,A]))
@@ -99,7 +100,7 @@ placesF_2Let =  guard(do
   dIds <- QueryF 0 (QProject [D, Id] . QSelect D nextWeek)
   let truc = dIds
   let ids = QProject [Id] (deepQ dIds)
-  res <- QueryF 1 (QProject [A] . QSelect Id (flip QElem ids))
+  res <- Privy <*> QueryF 1 (QProject [A] . QSelect Id (flip QElem ids))
   pure (QProject [D,A] $ dIds * res))
 
 -- placesF_3Let : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (UNIT)
@@ -135,9 +136,10 @@ placesF_3Let =  guard(do
   dIds <- QueryF 0 (QProject [D, Id] . QSelect D nextWeek)
   let truc = dIds
   let ids = QProject [Id] truc
-  ql <- QueryF 1 (QProject [A] . QSelect Id (flip QElem ids))
+  ql <- Privy <*> QueryF 1 (QProject [A] . QSelect Id (flip QElem ids))
   let res = QProject [D,A] $ truc * ql
   pure res)
+
 
 -- -- 5
 meetingF : AES String -> GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,Id])
