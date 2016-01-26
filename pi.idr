@@ -18,8 +18,8 @@ data PiVal : Type where
   MkPiVal  : TTName -> PiVal
   -- MkPiValQ : RA s bctx -> List (Expr u bctx) -> PiVal
 
-  PiValExpr  : Integer -> Expr u p -> PiVal
-  PiValQuery : Integer -> RA s p -> PiVal
+  -- PiValExpr  : Integer -> Expr u p -> PiVal
+  -- PiValQuery : Integer -> RA s p -> PiVal
   PiValPlace : Place -> PiVal
 
 data PiProc : Type where
@@ -38,9 +38,13 @@ data PiProc : Type where
 --   dbPi    : PiProc -> PiProc
 --   fragPi  : List (PiProc -> PiProc)
 
-using (bctx : Vect n Ctx)
+using (n : Nat, a : U, b : U, u : U,
+       bctx : Vect n Ctx, bctx' : Vect m Ctx,
+       p : Process, p' : Process, p'' : Process,
+       s : Schema, s' : Schema, s'': Schema,
+       cs : CState, cs' : CState)
   data Q : Type where
-    MkQ : RA s _ -> Q
+    MkQ : Query u _ -> Q
 
   -- data Env : Vect n (U, Process, TTName) -> Type where
   --   Nil  : Env Nil
@@ -68,79 +72,79 @@ using (bctx : Vect n Ctx)
                pure theId
 
 
-  mkVar : {bctx : Vect n Ctx} -> Expr u bctx -> Eff (Expr u bctx) [STATE $ CTX n]
-  mkVar e @ (ExprVar _ _)  = pure e
-  -- FIXME: use the context to unbind the let and bind the var
-  mkVar e @ (ExprLetVar _ n _) = pure (ExprVar n e)
-  mkVar e                   = do id <- freshId
-                                 let name = "var_" ++ show id
-                                 pure (ExprVar name e)
+  mkVar : {bctx : Vect n Ctx} -> Query u bctx -> Eff (Query u bctx) [STATE $ CTX n]
+  -- mkVar e @ (ExprVar _ _)  = pure e
+  -- -- FIXME: use the context to unbind the let and bind the var
+  -- mkVar e @ (ExprLetVar _ n _) = pure (ExprVar n e)
+  -- mkVar e                   = do id <- freshId
+  --                                let name = "var_" ++ show id
+  --                                pure (ExprVar name e)
 
   PiProcs : Type
   PiProcs = List (Place, (PiProc -> PiProc))
 
-  genPi' : {bctx : Vect n Ctx} -> Guard cs cs' bctx (Expr b bctx) ->
-           Eff (Expr b bctx) [STATE $ CTX n, STDIO]
+  genPi' : Guard cs cs' bctx (Query u bctx) -> Eff (Query u bctx) [STATE $ CTX n, STDIO]
   genPi' (Encrypt k a) {bctx}       = do
     ctx <- get
     put  $ record { keys = update (a, k) (keys ctx) } ctx
-    pure $ defaultExprVal UNIT bctx AppP
+    pure $ defaultQVal UNIT AppP bctx
   genPi' (EncryptF fId k a) {bctx}  = do
     ctx <- get
     put  $ record { keys = update (a, k) (keys ctx) } ctx
-    pure $ defaultExprVal UNIT bctx AppP
+    pure $ defaultQVal UNIT AppP bctx
   genPi' (Frag sprojs) {bctx} =
-    pure $ defaultExprVal UNIT bctx AppP
-  genPi' (Query q {s}) {bctx}       = do
-    -- 1. parse q. If it involve sending to DB. Look at DB if the
-    -- sending is already done or done it.
-    ctx <- get
-    let q' = q (Unit s)
-    put  $ record { query = Just (AtDB, MkQ q') } ctx
-    pure $ defaultExprVal (SCH $ getSchema q')
-                          bctx
-                          (AtApp, AtApp, AtDB)
-  genPi' (QueryF fId q {ss}) {bctx} = do
-    -- 1. parse q. If it involve sending to Frag. Look at DB if the
-    -- sending is already done or done it.
-    ctx <- get
-    let s = getSchema fId ss
-    let q' = q (Unit s)
-    put  $ record { query = Just (AtFrag fId, MkQ q') } ctx
-    pure $ defaultExprVal (SCH $ getSchema q')
-                          bctx
-                          (AtApp, AtApp, AtFrag fId)
-  genPi' (Let ttn e g)              = do
-    -- FIXME: if `e` involve Alice Data, the let should be done at
-    -- Alice place, And Alice should send the result. Actually, I made
-    -- the assumption that it is done at App place.
-    ctx <- get
-    let ctx' = addOsef () ctx
-    innerE <- do
-              putM ctx'
-              genPi' g
-    putM ctx
-    ?mlkjk
-  genPi' (Pure x) = pure x
-  genPi' (SeqApp Privy g)           = do
-    e <- genPi' g
-    pure (ExprPrivy e)
-  genPi' (Bind x f)                 = do
-    e <-  genPi' x
-    genPi' (f !(mkVar e))
+    pure $ defaultQVal UNIT AppP bctx
+  genPi' _ = ?mlkjmlkj
+  -- genPi' (Query q {s}) {bctx}       = do
+  --   -- 1. parse q. If it involve sending to DB. Look at DB if the
+  --   -- sending is already done or done it.
+  --   ctx <- get
+  --   let q' = q (Unit s)
+  --   put  $ record { query = Just (AtDB, MkQ q') } ctx
+  --   pure $ defaultQVal (SCH $ getSchema q')
+  --                      (AtApp, AtApp, AtDB)
+  --                      bctx
+  -- genPi' (QueryF fId q {ss}) {bctx} = do
+  --   -- 1. parse q. If it involve sending to Frag. Look at DB if the
+  --   -- sending is already done or done it.
+  --   ctx <- get
+  --   let s = getSchema fId ss
+  --   let q' = q (Unit s)
+  --   put  $ record { query = Just (AtFrag fId, MkQ q') } ctx
+  --   pure $ defaultExprVal (SCH $ getSchema q')
+  --                         bctx
+  --                         (AtApp, AtApp, AtFrag fId)
+  -- genPi' (Let ttn e g)              = do
+  --   -- FIXME: if `e` involve Alice Data, the let should be done at
+  --   -- Alice place, And Alice should send the result. Actually, I made
+  --   -- the assumption that it is done at App place.
+  --   ctx <- get
+  --   let ctx' = addOsef () ctx
+  --   innerE <- do
+  --             putM ctx'
+  --             genPi' g
+  --   putM ctx
+  --   ?mlkjk
+  -- genPi' (Pure x) = pure x
+  -- genPi' (SeqApp Privy g)           = do
+  --   e <- genPi' g
+  --   pure (ExprPrivy e)
+  -- genPi' (Bind x f)                 = do
+  --   e <-  genPi' x
+  --   genPi' (f !(mkVar e))
 
-  genPi : Guard (Plain s) cs' [] (Expr a []) -> IO ()
-  genPi g {s} {a} = let
-      expr = the (IO (Expr a _)) $
+  genPi : Guard (Plain s) cs' [] (Query u []) -> IO ()
+  genPi g {s} {u} = let
+      expr = the (IO (Query u _)) $
              runInit [(MkCTX [] Nothing [] 0), ()] $
              genPi' g
     in print ""
 
-  -- lala : Guard (Plain s) cs' [] (Expr a []) -> String
-  -- lala g = show g
+  -- lala : Guard (Plain s) cs' [] (Query a []) -> IO ()
+  -- lala g = genPi g
 
-  -- lala' : String
-  -- lala' = lala meetings
+  -- lala' : IO ()
+  -- lala' = lala meetingsDB
 
 -- Local Variables:
 -- idris-load-packages: ("effects")
