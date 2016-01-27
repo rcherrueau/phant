@@ -123,7 +123,7 @@ namespace location
     AtAlice    == AtAlice    = True
     AtApp      == AtApp      = True
     AtDB       == AtDB       = True
-    (AtFrag j) == (AtFrag k) = finToNat j == finToNat k
+    (AtFrag i) == (AtFrag j) = finToNat i == finToNat j
     _          == _          = False
 
   instance Show Place where
