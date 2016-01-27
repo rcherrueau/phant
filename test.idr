@@ -112,10 +112,8 @@ placesF_2Let =  guard(do
 --   ql <- QueryF 1 (QProject [A] . QSelect Id (flip QElem ids))
 --   let res = QProject [D,A] $ QProduct ids ql
 --   pure $ QVal ())
-placesF_3 : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [A])
+placesF_3 : GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [A])
 placesF_3 =  guard(do
-  Encrypt "mykey" N
-  Frag [[D]]
   dIds <- QueryF 0 (QProject [D, Id] . QSelect D nextWeek)
   Let (UN "ids") (QProject [Id] dIds) (
     QueryF 1 (QProject [A] . QSelect Id (flip QElem (var_ Stop))) >>= \ql =>
@@ -129,10 +127,8 @@ placesF_3 =  guard(do
   -- let res = QProject [D,A] $ QProduct ids ql
   -- pure $ QVal ())
 
-placesF_3Let : GUARD (DB[D,N,A]) ~> (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
+placesF_3Let : GUARD (FRAG[[D,Id], [C_ N,A,Id]]) -> (SCH [D,A])
 placesF_3Let =  guard(do
-  Encrypt "mykey" N
-  Frag [[D]]
   dIds <- QueryF 0 (QProject [D, Id] . QSelect D nextWeek)
   let truc = dIds
   let ids = QProject [Id] truc

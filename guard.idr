@@ -30,7 +30,8 @@ using (n : Nat, a : U, b : U, u : U,
 
   data Query : U -> Vect n Ctx -> Type where
     QVal     : (el u) -> Process -> Query u bctx
-    QVar     : HasType bctx i (u,_) -> TTName -> Process -> Query u bctx
+    QVar     : HasType bctx i (u,_,_) -> Query u bctx
+    QVar_    : TTName -> (u : U) -> Process -> Query u bctx
     QPrivy   : Query u bctx -> Query u bctx
     -- OP/2
     QEq      : Eq (el u) =>
@@ -55,10 +56,18 @@ using (n : Nat, a : U, b : U, u : U,
   defaultQVal u ppp bctx = QVal (defaultElu u) ppp {bctx}
 
   getProcess : Query u bctx -> Process
-  getProcess (QVal _ ppp)               = ppp
-  getProcess (QVar _ _ ppp)             = ppp
-  getProcess (QPrivy x)                 = AliceP
-  getProcess _                          = AppP
+  getProcess (QVal _ ppp)  = ppp
+  getProcess (QVar prf)    = getProcess' prf
+    where
+    getProcess' : HasType bctx' i ctx -> Process
+    getProcess' Stop    {bctx' = ((_,_,ppp) :: xs)} = ppp
+    getProcess' (Pop y) {bctx' = (x :: xs)}         = getProcess' y {bctx'=xs}
+  getProcess (QPrivy x)    = AliceP
+  getProcess _             = AppP
+
+  getU : Query u _ -> U
+  getU _ {u} = u
+
   -- getProcess (QEq x y)                  = manageRecipient (getProcess x) (getProcess y)
   -- getProcess (QElem x y)                = manageRecipient (getProcess x) (getProcess y)
   -- getProcess (QProject _ x)             = getProcess x
@@ -174,7 +183,7 @@ using (n : Nat, a : U, b : U, u : U,
   let_ ttn = Let ttn
 
   var_ : HasType bctx i (u,ttn,ppp) -> Query u bctx
-  var_ prf {ttn} {ppp} = QVar prf ttn ppp
+  var_ prf = QVar prf
 
   data PrinterBctx : Vect n Ctx -> Type where
     MkPB : (bctx : Vect n Ctx) -> PrinterBctx bctx
@@ -197,6 +206,11 @@ using (n : Nat, a : U, b : U, u : U,
     index_next = Pop
 
   -- ---------------------------------------------------------- Guard utils
+  instance Show TTName where
+    show x = mkId x
+
+  instance Show (Query u bctx) where
+    show x {u} = "query " ++ show u
   -- instance Show (Guard cs cs' e) where
   --   show (Encrypt k a) =
   --     "Encrypt " ++ show k ++ " " ++ show a

@@ -177,7 +177,23 @@ namespace other
   liftSigma : {m : Type -> Type} -> (f : a -> m a) -> (v : a ** p) -> (v : m a ** p)
   liftSigma f (x ** pf) = (f x ** pf)
 
+  updateBy : (a -> a -> Bool) -> (a,b) -> List (a,b) -> List (a,b)
+  updateBy f p@(a,b) xs =
+    case lookupBy f a xs of
+      Just _  => p :: deleteBy (\(a1,_) => \(a2,_) => f a1 a2) p xs
+      Nothing => (a,b) :: xs
+
   update : (Eq a, Eq b) => (a,b) -> List (a,b) -> List (a,b)
-  update (a, b) xs = case lookup a xs of
-                       Just _  => (a, b) :: (delete (a, b) xs)
-                       Nothing => xs
+  update p xs = updateBy (==) p xs
+
+  mkId : TTName -> String
+  mkId (UN x)                 = x
+  mkId (NS n xs)              =
+    let name = mkId n
+        nspace = concat (intersperse "." (reverse xs))
+    in nspace ++ "." ++ name
+  mkId (MN x y)               = y ++ show x
+  mkId (SN x)                 = "special_name"
+
+  ttnEq : TTName -> TTName -> Bool
+  ttnEq x y = mkId x == mkId y
