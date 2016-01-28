@@ -177,10 +177,10 @@ using (n : Nat, a : U, b : U, u : U,
          Guard cs cs'' bctx (Query b bctx)
   (>>=) = Bind
 
-  let_  : (ttn : TTName) -> (e : Query a bctx) ->
-          Guard cs cs ((a,ttn,getProcess e) :: bctx) (Query b ((a,ttn,getProcess e) :: bctx)) ->
-          Guard cs cs bctx (Query b bctx)
-  let_ ttn = Let ttn
+  -- let_  : (ttn : TTName) -> (e : Query a bctx) ->
+  --         Guard cs cs ((a,ttn,getProcess e) :: bctx) (Query b ((a,ttn,getProcess e) :: bctx)) ->
+  --         Guard cs cs bctx (Query b bctx)
+  -- let_ ttn = Let ttn
 
   var_ : HasType bctx i (u,ttn,ppp) -> Query u bctx
   var_ prf = QVar prf
@@ -200,7 +200,7 @@ using (n : Nat, a : U, b : U, u : U,
   syntax DB [x] = (Plain x)
 
   dsl guard
-    let = let_
+    let = Let
     variable = var_
     index_first = Stop
     index_next = Pop
@@ -209,8 +209,62 @@ using (n : Nat, a : U, b : U, u : U,
   instance Show TTName where
     show x = mkId x
 
+  partial
+  printQ : Query u bctx -> String
+  printQ (QVal elu ppp) {u = UNIT} =
+    "(QVal " ++ show elu ++ "@" ++ show ppp ++ ")"
+  printQ (QVal elu ppp) {u = NAT} =
+    "(QVal " ++ show elu ++ "@" ++ show ppp ++ ")"
+  printQ (QVal elu ppp) {u = TEXT} =
+    "(QVal " ++ show elu ++ "@" ++ show ppp ++ ")"
+  printQ (QVal elu ppp) {u = REAL} =
+    "(QVal " ++ show elu ++ "@" ++ show ppp ++ ")"
+  printQ (QVal elu ppp) {u = BOOL} =
+    "(QVal " ++ show elu ++ "@" ++ show ppp ++ ")"
+  printQ (QVal elu ppp) {u = (CRYPT x)} =
+    "(QVal (CRYPT " ++ show x ++ ")@" ++ show ppp ++ ")"
+  printQ (QVal elu ppp) {u = (SCH xs)} =
+    "(QVal (SCH " ++ show xs ++ ")@" ++ show ppp ++ ")"
+  printQ (QVar_ ttn u ppp) =
+    -- assert_total $
+    "(QVar_ " ++ show ttn ++ ":" ++ show u ++ "@" ++ show ppp ++ ")"
+  printQ (QVar prf) = "(QVar " ++ printQ' prf ++ ")"
+    where
+    partial printQ' : HasType bctx' i ctx -> String
+    printQ' Stop    {bctx' = ((ttn,u,ppp) :: xs)} =
+      -- assert_total $
+      "Z " ++ show ttn ++ ":" ++ show u ++ "@" ++ show ppp
+    printQ' (Pop y) {bctx' = (x :: xs)}           =
+      "S" ++ printQ' y {bctx'=xs}
+  printQ (QPrivy q) =
+    "(QPrivy " ++  printQ q ++ ")"
+  printQ (QEq q1 q2) =
+    "(QEq " ++ printQ q1 ++ " " ++ printQ q2 ++ ")"
+  printQ (QElem q1 q2) =
+    "(QElem " ++ printQ q1 ++ " " ++ printQ q2 ++ ")"
+  printQ (QProject sproj q) =
+    "(QProject " ++ show sproj ++ " " ++ printQ q ++ ")"
+  printQ (QCount scount q) =
+    "(QCount " ++ show scount ++ " " ++ printQ q ++ ")"
+  printQ (QProduct q1 q2) =
+    "(QProduct " ++ printQ q1 ++ " " ++ printQ q2 ++ ")"
+  printQ (QSelect a p q) =
+    "(QSelect " ++ show a ++ " " ++ printQ q ++ ")"
+
   instance Show (Query u bctx) where
-    show x {u} = "query " ++ show u
+    show q = printQ q
+    -- show (QVal elu ppp) =
+    --   "(QVal " ++ show elu ++ "@" ++ show ppp ++ ")"
+    -- show (QVar prf )  = ?mlkj_thd_2
+    -- show (QVar_ n' u x) = ?mlkj_thd_3
+    -- show (QPrivy x) = ?mlkj_thd_4
+    -- show (QEq x y) = ?mlkj_thd_5
+    -- show (QElem x y) = ?mlkj_thd_6
+    -- show (QProject sproj x) = ?mlkj_thd_7
+    -- show (QSelect a p x) = ?mlkj_thd_8
+    -- show (QCount scount x) = ?mlkj_thd_9
+    -- show (QProduct x y) = ?mlkj_thd_10
+
   -- instance Show (Guard cs cs' e) where
   --   show (Encrypt k a) =
   --     "Encrypt " ++ show k ++ " " ++ show a

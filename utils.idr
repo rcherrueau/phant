@@ -183,7 +183,7 @@ namespace other
       Just _  => p :: deleteBy (\(a1,_) => \(a2,_) => f a1 a2) p xs
       Nothing => (a,b) :: xs
 
-  update : (Eq a, Eq b) => (a,b) -> List (a,b) -> List (a,b)
+  update : Eq a => (a,b) -> List (a,b) -> List (a,b)
   update p xs = updateBy (==) p xs
 
   mkId : TTName -> String

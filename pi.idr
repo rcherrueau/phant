@@ -8,6 +8,7 @@ import public Effects
 import Effect.Random
 import Effect.State
 import Effect.StdIO
+-- import Debug.Trace
 
 -- %default total
 
@@ -15,15 +16,28 @@ import Effect.StdIO
 data PiChan : Type where
   MkPiChan : Place -> PiChan
 
+instance Show PiChan where
+  show (MkPiChan p) = "(πc " ++ show p ++ ")"
+
 data PiVal : Type where
   MkPiVal : Query u bctx -> PiVal
 
+instance Show PiVal where
+  show (MkPiVal q) = "(πv " ++ show q ++ ")"
+
 data PiProc : Type where
-  PiSend :   PiChan -> PiChan -> PiVal -> PiProc -> PiProc
+  PiSend :   (ce : PiChan) -> (rc : PiChan) -> PiVal -> PiProc -> PiProc
   PiGet :    PiChan -> PiVal -> PiProc -> PiProc
-  PiPar :    PiProc -> PiProc -> PiProc
-  PiBang :   PiProc -> PiProc
+  -- PiPar :    PiProc -> PiProc -> PiProc
+  -- PiBang :   PiProc -> PiProc
   PiEnd :    PiProc
+
+instance Show PiProc where
+  show (PiSend x y z pi) =
+    "(π! " ++ show x ++ " " ++ show y ++ " " ++ show z ++ ") . " ++ show pi
+  show (PiGet x y pi) =
+    "(π? " ++ show x ++ " " ++ show y ++ ") . " ++ show pi
+  show PiEnd = "0"
 
 
 record PiProcs where
@@ -31,7 +45,16 @@ record PiProcs where
   appPi   : PiProc -> PiProc
   alicePi : PiProc -> PiProc
   dbPi    : PiProc -> PiProc
-  fragPi  : List (Place, PiProc -> PiProc)
+  fragsPi : List (Place, PiProc -> PiProc)
+
+instance Show PiProcs where
+    show (MkPiProcs appPi alicePi dbPi fragsPi) =
+      show "App: " ++ show (appPi PiEnd) ++ "\n" ++
+      show "Alice: " ++ show (alicePi PiEnd) ++ "\n" ++
+      show "DB: " ++ show (dbPi PiEnd) ++ "\n" ++
+      unlines (map (\((AtFrag fId), fpi) =>
+        "Frag" ++ (show $ finToNat fId) ++ ": " ++
+        show (fpi PiEnd)) fragsPi)
 
 using (n : Nat, a : U, b : U, u : U,
        bctx : Vect n Ctx, bctx' : Vect m Ctx,
@@ -80,14 +103,12 @@ using (n : Nat, a : U, b : U, u : U,
     pure ttn'
 
   updateTTName : (ttn' : TTName) ->
-                 Guard cs cs' ((u,ttn,ppp) :: bctx) (Query a ((u,ttn,ppp) :: bctx)) ->
-                 Guard cs cs' ((u,ttn',ppp) :: bctx) (Query a ((u,ttn',ppp) :: bctx))
+                 Guard cs cs' ((u,ttn,ppp) :: bctx)
+                       (Query a ((u,ttn,ppp) :: bctx)) ->
+                 Guard cs cs' ((u,ttn',ppp) :: bctx)
+                       (Query a ((u,ttn',ppp) :: bctx))
   updateTTName _ = really_believe_me
 
-  -- See if `q'` involves some variable. If yes, it means that DB
-  -- requires data from App. So, take a look at the piproc of DB. If
-  -- there is no receiving of the data, then add it.
-  -- DB.
   setPiProcs : Place -> (PiProc -> PiProc) -> Eff () [STATE CTX]
   setPiProcs AtAlice pi = do
     ctx <- get
@@ -107,24 +128,28 @@ using (n : Nat, a : U, b : U, u : U,
   setPiProcs (AtFrag fId) pi = do
     ctx <- get
     let pips  = piprocs ctx
-    -- let pips' = record { fragPi =
-    --                        let frags = fragPi pips }
-  -- record {
-  --            fragPi =
-  --              let frags = fragPi pips
-  --                  -- FIXME: give the proof that fragNums == pipFNums.
-  --                  -- I'm sure about that since the Frag combinator is
-  --                  -- applicable only once in the computation. And my
-  --                  -- function that construct the pips is based on
-  --                  -- that combinator.
-  --                  fId'  = prim__believe_me (Fin n1) (Fin n2) fId
-  --                  frag  = \k => (index fId' frags) $ pi k
-  --              in replaceAt fId' frag frags } pips
-    ?mlj
+    let pips' = record { fragsPi =
+      let frags  = fragsPi pips
+          fragPi = case lookup (AtFrag fId) frags of
+                     Just fPi => \k => fPi $ pi k
+                     Nothing  => pi
+      in update ((AtFrag fId), fragPi) frags } pips
+    put $ record { piprocs = pips' } ctx
 
+  -- See if `q'` involves some variable. If yes, it means that DB
+  -- requires data from App. So, take a look at the piproc of DB. If
+  -- there is no receiving of the data, then add it.
+  -- DB.
   piProcsForQ : (q : Query u bctx) -> (qvar : Query u bctx) ->
                 Process -> Eff () [STATE CTX]
-  piProcsForQ q qvar (rc,cr,ce) = ?piProcsForQ_rhs
+  piProcsForQ q qvar (rc,cr,ce) = do
+    -- Caller
+    setPiProcs cr (PiSend (MkPiChan ce) (MkPiChan rc) (MkPiVal qvar))
+    -- Callee
+    setPiProcs ce (PiGet (MkPiChan ce) (MkPiVal q))
+    setPiProcs ce (PiSend (MkPiChan rc) (MkPiChan rc) (MkPiVal qvar))
+    -- Recipient
+    setPiProcs rc (PiGet (MkPiChan rc) (MkPiVal qvar))
 
   genPi' : Guard cs cs' bctx (Query u bctx) -> Eff (Query u bctx) [STATE CTX]
   genPi' (Encrypt k a) {bctx}       = do
@@ -179,11 +204,14 @@ using (n : Nat, a : U, b : U, u : U,
       q   <- genPi' g
       ttn <- addEnv q (UN "var")
       ctx <- get
-      let recipient = recipient (getProcess q)
-      let caller    = AtApp
-      let callee    = callee ctx
       let qvar = QVar_ ttn (getU q) (getProcess q)
-      -- Je construit le piproc
+      case callee ctx of
+        Just ce => do
+          let rc = recipient (getProcess q)
+          let cr    = AtApp
+          -- Je construit le piproc
+          piProcsForQ q qvar (rc,cr,ce)
+        Nothing => pure ()
       genPi' (f qvar)
       -- id  <- freshId
       -- ctx <- get
@@ -209,8 +237,8 @@ using (n : Nat, a : U, b : U, u : U,
             q   <- genPi' g
             ctx <- get
             -- Now update piprocs (from ctx) with q and update it
-            let env_ = CTX.env ctx
-            putStr $ show env_
+            let piprocs_ = CTX.piprocs ctx
+            putStr $ show piprocs_
     where
     genAtFrag : (m : Nat) -> (n : Nat) -> List Place -> List Place
     genAtFrag Z     n ps = case natToFin Z n of
@@ -222,13 +250,13 @@ using (n : Nat, a : U, b : U, u : U,
 
     initPiProcs : CState -> PiProcs
     initPiProcs (Plain  _)     =
-      MkPiProcs (\k => PiEnd) (\k => PiEnd) (\k => PiEnd) Nil
+      MkPiProcs id id id Nil
     initPiProcs (FragV ss {n}) =
       let fPlaces  = genAtFrag n n []
-          fPiProcs = replicate n (\k => PiEnd)
-          fragPi   = the (List (Place, (PiProc -> PiProc))) $
+          fPiProcs = replicate n id
+          fragsPi   = the (List (Place, (PiProc -> PiProc))) $
                      zip fPlaces fPiProcs
-      in MkPiProcs (\k => PiEnd) (\k => PiEnd) (\k => PiEnd) fragPi
+      in MkPiProcs id id id fragsPi
 
   -- lala : Guard (Plain s) cs' [] (Query a []) -> IO ()
   -- lala g = genPi g
