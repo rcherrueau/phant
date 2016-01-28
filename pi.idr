@@ -26,15 +26,15 @@ instance Show PiVal where
   show (MkPiVal q) = "(πv " ++ show q ++ ")"
 
 data PiProc : Type where
-  PiSend :   (ce : PiChan) -> (rc : PiChan) -> PiVal -> PiProc -> PiProc
-  PiGet :    PiChan -> PiVal -> PiProc -> PiProc
+  PiSend :   (callee : PiChan) -> PiVal -> PiProc -> PiProc
+  PiGet :    (caller : PiChan) -> PiVal -> PiProc -> PiProc
   -- PiPar :    PiProc -> PiProc -> PiProc
   -- PiBang :   PiProc -> PiProc
   PiEnd :    PiProc
 
 instance Show PiProc where
-  show (PiSend x y z pi) =
-    "(π! " ++ show x ++ " " ++ show y ++ " " ++ show z ++ ") . " ++ show pi
+  show (PiSend x y pi) =
+    "(π! " ++ show x ++ " " ++ show y ++ ") . " ++ show pi
   show (PiGet x y pi) =
     "(π? " ++ show x ++ " " ++ show y ++ ") . " ++ show pi
   show PiEnd = "0"
@@ -49,12 +49,12 @@ record PiProcs where
 
 instance Show PiProcs where
     show (MkPiProcs appPi alicePi dbPi fragsPi) =
-      show "App: " ++ show (appPi PiEnd) ++ "\n" ++
-      show "Alice: " ++ show (alicePi PiEnd) ++ "\n" ++
-      show "DB: " ++ show (dbPi PiEnd) ++ "\n" ++
+      "App: " ++ show (appPi PiEnd) ++ "\n\n" ++
+      "Alice: " ++ show (alicePi PiEnd) ++ "\n\n" ++
+      "DB: " ++ show (dbPi PiEnd) ++ "\n\n" ++
       unlines (map (\((AtFrag fId), fpi) =>
         "Frag" ++ (show $ finToNat fId) ++ ": " ++
-        show (fpi PiEnd)) fragsPi)
+        show (fpi PiEnd) ++ "\n") fragsPi)
 
 using (n : Nat, a : U, b : U, u : U,
        bctx : Vect n Ctx, bctx' : Vect m Ctx,
@@ -138,18 +138,18 @@ using (n : Nat, a : U, b : U, u : U,
 
   -- See if `q'` involves some variable. If yes, it means that DB
   -- requires data from App. So, take a look at the piproc of DB. If
-  -- there is no receiving of the data, then add it.
-  -- DB.
+  -- there is no receiving of the data, then add it. DB. I should also
+  -- parse the q inside a select to see if it involve some variables.
   piProcsForQ : (q : Query u bctx) -> (qvar : Query u bctx) ->
                 Process -> Eff () [STATE CTX]
   piProcsForQ q qvar (rc,cr,ce) = do
     -- Caller
-    setPiProcs cr (PiSend (MkPiChan ce) (MkPiChan rc) (MkPiVal qvar))
+    setPiProcs cr (PiSend (MkPiChan ce) (MkPiVal q))
     -- Callee
-    setPiProcs ce (PiGet (MkPiChan ce) (MkPiVal q))
-    setPiProcs ce (PiSend (MkPiChan rc) (MkPiChan rc) (MkPiVal qvar))
+    setPiProcs ce (PiGet (MkPiChan cr) (MkPiVal q))
+    setPiProcs ce (PiSend (MkPiChan rc) (MkPiVal qvar))
     -- Recipient
-    setPiProcs rc (PiGet (MkPiChan rc) (MkPiVal qvar))
+    setPiProcs rc (PiGet (MkPiChan ce) (MkPiVal qvar))
 
   genPi' : Guard cs cs' bctx (Query u bctx) -> Eff (Query u bctx) [STATE CTX]
   genPi' (Encrypt k a) {bctx}       = do
@@ -262,9 +262,9 @@ using (n : Nat, a : U, b : U, u : U,
   -- lala g = genPi g
 
 main : IO ()
-main = genPi (do placesF_2Let
-                 placesF_3Let
-                 meetingFDo' (encrypt "mykey" "toto"))
+main = genPi (do placesF_2Let)
+                 -- placesF_3Let
+                 -- meetingFDo' (encrypt "mykey" "toto"))
 
 -- Local Variables:
 -- idris-load-packages: ("effects")
