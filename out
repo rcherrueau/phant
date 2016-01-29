@@ -1,0 +1,33 @@
+       -- always add _in on a channel uses for receiving
+Frag0: (π? (πc *Frag0) (πv (QProject [("Date", NAT), ("Id", NAT)] (QSelect ("Date", NAT) (QVal (SCH [("Date", NAT), ("Id", NAT)])@(App, (App, Frag0))))))) .
+       -- always add _out on a channel uses for sending
+       (π! (πc App) (πv (QVar_ var_2:SCH [("Date", NAT), ("Id", NAT)]@(App, (App, App))))) . 0
+
+Frag1: (π? (πc *Frag1) (πv (QPrivy (QProject [("Addr", TEXT)] (QSelect ("Id", NAT) (QVal (SCH [("Name", CRYPT TEXT), ("Addr", TEXT), ("Id", NAT)])@(App, (App, Frag1)))))))) .
+       (π! (πc Alice) (πv (QVar_ var_5:SCH [("Addr", TEXT)]@(Alice, (Alice, Alice))))) . 0
+
+Alice: (π? (πc *Alice) (πv (QVar_ var_5:SCH [("Addr", TEXT)]@(Alice, (Alice, Alice))))) . 0
+
+App: (π! (πc Frag0) (πv (QProject [("Date", NAT), ("Id", NAT)] (QSelect ("Date", NAT) (QVal (SCH [("Date", NAT), ("Id", NAT)])@(App, (App, Frag0))))))) .
+     (π? (πc *app) (πv (QVar_ var_2:SCH [("Date", NAT), ("Id", NAT)]@(App, (App, App))))) .
+     (π! (πc Frag1) (πv (QPrivy (QProject [("Addr", TEXT)] (QSelect ("Id", NAT) (QVal (SCH [("Name", CRYPT TEXT), ("Addr", TEXT), ("Id", NAT)])@(App, (App, Frag1)))))))) . 0
+
+let frag0 () =
+    in (frag0, (?args));
+    out (app, *proj((d), select((d), (d, unit, unit))))
+
+let frag1 () =
+    in (frag1, (?args));
+    out (alice, *project((a), select((), (unit, senc(n,k), a))));
+
+let alice () =
+    in(alice, (var5));
+
+let app () =
+    out(frag0, (?args));
+    in(app, (var2 : bitstring))
+    out(frag1, (?args));
+
+π! :
+π? : si la val est une requête, je cherche les args. Si c'est une var,
+je set l'identifient.
