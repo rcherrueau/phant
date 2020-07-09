@@ -146,10 +146,10 @@ using (n : Nat, a : U, b : U, u : U,
     -- Caller
     setPiProcs cr (PiSend (MkPiChan ce) (MkPiVal q))
     -- Callee
-    setPiProcs ce (PiGet (MkPiChan cr) (MkPiVal q))
+    setPiProcs ce (PiGet (MkPiChan ce) (MkPiVal q))
     setPiProcs ce (PiSend (MkPiChan rc) (MkPiVal qvar))
     -- Recipient
-    setPiProcs rc (PiGet (MkPiChan ce) (MkPiVal qvar))
+    setPiProcs rc (PiGet (MkPiChan rc) (MkPiVal qvar))
 
   genPi' : Guard cs cs' bctx (Query u bctx) -> Eff (Query u bctx) [STATE CTX]
   genPi' (Encrypt k a) {bctx}       = do

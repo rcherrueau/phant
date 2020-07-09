@@ -28,6 +28,6 @@ let app () =
     in(app, (var2 : bitstring))
     out(frag1, (?args));
 
-π! :
+π! : s'il y a des arg dans la requête, je les evois.
 π? : si la val est une requête, je cherche les args. Si c'est une var,
 je set l'identifient.
